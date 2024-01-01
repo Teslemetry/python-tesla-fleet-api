@@ -98,19 +98,19 @@ class TeslaPreconditionFailed(TeslaError, aiohttp.web.HTTPPreconditionFailed):
     message = "A condition has not been met to process the request."
 
 
-class TeslaInvalidRegion(TeslaError, aiohttp.web.HTTPError):
+class TeslaInvalidRegion(TeslaError, aiohttp.web.HTTPMisdirectedRequest):
     """This user is not present in the current region."""
 
     message = "This user is not present in the current region."
 
 
-class TeslaInvalidResource(TeslaError, aiohttp.web.HTTPError):
+class TeslaInvalidResource(TeslaError, aiohttp.web.HTTPUnprocessableEntity):
     """There is a semantic problem with the data, e.g. missing or invalid data."""
 
     message = "There is a semantic problem with the data, e.g. missing or invalid data."
 
 
-class TeslaLocked(TeslaError, aiohttp.web.HTTPLocked):
+class TeslaLocked(TeslaError, aiohttp.web.HTTPClientError):
     """Account is locked, and must be unlocked by Tesla."""
 
     message = "Account is locked, and must be unlocked by Tesla."
@@ -130,7 +130,7 @@ class TeslaResourceUnavailableForLegalReasons(
     message = "Querying for a user/vehicle without proper privacy settings."
 
 
-class TeslaClientClosedRequest(TeslaError, aiohttp.web.HTTPClientClosedRequest):
+class TeslaClientClosedRequest(TeslaError, aiohttp.web.HTTPClientError):
     """Client has closed the request before the server could send a response."""
 
     message = "Client has closed the request before the server could send a response."
@@ -154,7 +154,7 @@ class TeslaGatewayTimeout(TeslaError, aiohttp.web.HTTPGatewayTimeout):
     message = "Server did not receive a response."
 
 
-class TeslaDeviceUnexpectedResponse(TeslaError, aiohttp.web.HTTPError):
+class TeslaDeviceUnexpectedResponse(TeslaError, aiohttp.web.HTTPServerError):
     """Vehicle responded with an error - might need a reboot, OTA update, or service."""
 
     message = (
@@ -162,7 +162,7 @@ class TeslaDeviceUnexpectedResponse(TeslaError, aiohttp.web.HTTPError):
     )
 
 
-async def RaiseForStatus(resp: aiohttp.ClientResponse) -> None:
+async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
