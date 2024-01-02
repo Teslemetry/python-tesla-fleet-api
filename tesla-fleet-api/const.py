@@ -2,7 +2,9 @@
 from enum import StrEnum
 
 
-class TeslaErrors(StrEnum):
+class Errors(StrEnum):
+    """Tesla Fleet API error codes."""
+
     INVALID_COMMAND = "invalid_command"
     INVALID_FIELD = "invalid_field"
     INVALID_REQUEST = "invalid_request"

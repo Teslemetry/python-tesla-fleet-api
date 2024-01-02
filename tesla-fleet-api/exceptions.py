@@ -1,5 +1,5 @@
 import aiohttp
-from .const import TeslaErrors
+from .const import Errors
 
 
 class TeslaError(aiohttp.web.HTTPError):
@@ -171,22 +171,22 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
 
     payload = await resp.json()
     if resp.status == 400:
-        if payload.error == TeslaErrors.INVALID_COMMAND:
+        if payload.error == Errors.INVALID_COMMAND:
             raise TeslaInvalidCommand()
-        elif payload.error == TeslaErrors.INVALID_FIELD:
+        elif payload.error == Errors.INVALID_FIELD:
             raise TeslaInvalidField()
-        elif payload.error == TeslaErrors.INVALID_REQUEST:
+        elif payload.error == Errors.INVALID_REQUEST:
             raise TeslaInvalidRequest()
-        elif payload.error == TeslaErrors.INVALID_AUTH_CODE:
+        elif payload.error == Errors.INVALID_AUTH_CODE:
             raise TeslaInvalidAuthCode()
-        elif payload.error == TeslaErrors.INVALID_REDIRECT_URL:
+        elif payload.error == Errors.INVALID_REDIRECT_URL:
             raise TeslaInvalidRedirectUrl()
-        elif payload.error == TeslaErrors.UNAUTHORIZED_CLIENT:
+        elif payload.error == Errors.UNAUTHORIZED_CLIENT:
             raise TeslaUnauthorizedClient()
     elif resp.status == 401:
-        if payload.error == TeslaErrors.MOBILE_ACCESS_DISABLED:
+        if payload.error == Errors.MOBILE_ACCESS_DISABLED:
             raise TeslaMobileAccessDisabled()
-        elif payload.error == TeslaErrors.NO_RESPONSE_BODY:
+        elif payload.error == Errors.NO_RESPONSE_BODY:
             raise TeslaNoResponseBody()
     elif resp.status == 402:
         raise TeslaPaymentRequired()
