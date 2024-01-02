@@ -8,7 +8,11 @@ class Teslemetry(TeslaFleetApi):
     ):
         """Initialize the Teslemetry API."""
         super().__init__(
-            session, access_token, "https://teslemetry.com", raise_for_status
+            session,
+            access_token,
+            use_commands_protocol=False,
+            server="https://teslemetry.com",
+            raise_for_status=raise_for_status,
         )
 
     async def find_server(self):
