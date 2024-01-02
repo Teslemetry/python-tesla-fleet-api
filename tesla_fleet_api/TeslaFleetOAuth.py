@@ -7,14 +7,15 @@ class TeslaFleetOAuth(TeslaFleetApi):
 
     def __init__(
         self,
+        session: aiohttp.ClientSession,
         refresh_token: str,
         client_id: str,
-        session: aiohttp.ClientSession,
+        server: str | None = None,
         raise_for_status: bool = True,
     ):
         super().__init__(
-            refresh_token,
-            "https://fleet-api.prd.na.vn.cloud.tesla.com",
             session,
+            refresh_token,
+            server,
             raise_for_status,
         )

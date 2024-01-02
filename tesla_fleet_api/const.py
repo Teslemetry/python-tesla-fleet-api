@@ -13,3 +13,10 @@ class Errors(StrEnum):
     UNAUTHORIZED_CLIENT = "unauthorized_client"
     MOBILE_ACCESS_DISABLED = "mobile_access_disabled"
     NO_RESPONSE_BODY = "no response body"
+
+
+SERVERS = {
+    "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
+    "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
+    "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
+}
