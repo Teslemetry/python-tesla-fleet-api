@@ -2,231 +2,263 @@ import aiohttp
 from .const import Errors
 
 
-class TeslaError:
+class TeslaFleetError:
     """Base class for all Tesla exceptions."""
 
-    message: str = "Something went wrong"
+    class Base(BaseException):
+        message: str
+        status: int
+        error: str | None
+        error_description: str | None
 
-    def __init__(self, status, error, error_message):
-        self.status = status
-        self.error = error
-        self.error_message = error_message
+        def __init__(
+            self, status: int, error: str | None, error_description: str | None
+        ):
+            self.status = status
+            self.error = error
+            self.error_description = error_description
 
+    class InvalidCommand(Base):
+        """The data request or command is unknown."""
 
-class TeslaInvalidCommand(TeslaError):
-    """The data request or command is unknown."""
+        message = "The data request or command is unknown."
 
-    message = "The data request or command is unknown."
+    class InvalidField(Base):
+        """A field in the input is not valid."""
 
+        message = "A field in the input is not valid."
 
-class TeslaInvalidField(TeslaError):
-    """A field in the input is not valid."""
+    class InvalidRequest(Base):
+        """The request body is not valid, a description giving a more specific error message may be returned."""
 
-    message = "A field in the input is not valid."
+        message = "The request body is not valid"
 
+    class InvalidAuthCode(Base):
+        """The "code" in request body is invalid, generate a new one and try again."""
 
-class TeslaInvalidRequest(TeslaError):
-    """The request body is not valid, a description giving a more specific error message may be returned."""
+        message = (
+            "The 'code' in request body is invalid, generate a new one and try again."
+        )
 
-    message = "The request body is not valid"
+    class InvalidRedirectUrl(Base):
+        """Invalid redirect URI/URL. The authorize redirect URI and token redirect URI must match."""
 
+        message = "Invalid redirect URI/URL. The authorize redirect URI and token redirect URI must match."
 
-class TeslaInvalidAuthCode(TeslaError):
-    """The "code" in request body is invalid, generate a new one and try again."""
+    class UnauthorizedClient(Base):
+        """We don't recognize this client_id and client_secret combination. Use the client_id and client_secret that has been granted for the application."""
 
-    message = "The 'code' in request body is invalid, generate a new one and try again."
+        message = "We don't recognize this client_id and client_secret combination. Use the client_id and client_secret that has been granted for the application."
 
+    class MobileAccessDisabled(Base):
+        """The vehicle has turned off remote access."""
 
-class TeslaInvalidRedirectUrl(TeslaError):
-    """Invalid redirect URI/URL. The authorize redirect URI and token redirect URI must match."""
+        message = "The vehicle has turned off remote access."
 
-    message = "Invalid redirect URI/URL. The authorize redirect URI and token redirect URI must match."
+    class NoResponseBody(Base):
+        """The OAuth token has expired."""
 
+        message = "The OAuth token has expired."
 
-class TeslaUnauthorizedClient(TeslaError):
-    """We don't recognize this client_id and client_secret combination. Use the client_id and client_secret that has been granted for the application."""
+    class PaymentRequired(Base):
+        """Payment is required in order to use the API (non-free account only)."""
 
-    message = "We don't recognize this client_id and client_secret combination. Use the client_id and client_secret that has been granted for the application."
+        message = "Payment is required in order to use the API (non-free account only)."
 
+    class Forbidden(Base):
+        """Access to this resource is not authorized, developers should check required scopes."""
 
-class TeslaMobileAccessDisabled(TeslaError):
-    """The vehicle has turned off remote access."""
+        message = "Access to this resource is not authorized, developers should check required scopes."
 
-    message = "The vehicle has turned off remote access."
+    class NotFound(Base):
+        """The requested resource does not exist."""
 
+        message = "The requested resource does not exist."
 
-class TeslaNoResponseBody(TeslaError):
-    """The OAuth token has expired."""
+    class NotAllowed(Base):
+        """The operation is not allowed."""
 
-    message = "The OAuth token has expired."
+        message = "The operation is not allowed."
 
+    class NotAcceptable(Base):
+        """The HTTP request does not have a Content-Type header set to application/json."""
 
-class TeslaPaymentRequired(TeslaError):
-    """Payment is required in order to use the API (non-free account only)."""
+        message = "The HTTP request does not have a Content-Type header set to application/json."
 
-    message = "Payment is required in order to use the API (non-free account only)."
+    class VehicleOffline(Base):
+        """The vehicle is not "online."""
 
+        message = "The vehicle is not 'online'."
 
-class TeslaForbidden(TeslaError):
-    """Access to this resource is not authorized, developers should check required scopes."""
+    class PreconditionFailed(Base):
+        """A condition has not been met to process the request."""
 
-    message = "Access to this resource is not authorized, developers should check required scopes."
+        message = "A condition has not been met to process the request."
 
+    class InvalidRegion(Base):
+        """This user is not present in the current region."""
 
-class TeslaNotFound(TeslaError):
-    """The requested resource does not exist."""
+        message = "This user is not present in the current region."
 
-    message = "The requested resource does not exist."
+    class InvalidResource(Base):
+        """There is a semantic problem with the data, e.g. missing or invalid data."""
 
+        message = (
+            "There is a semantic problem with the data, e.g. missing or invalid data."
+        )
 
-class TeslaNotAllowed(TeslaError):
-    """The operation is not allowed."""
+    class Locked(Base):
+        """Account is locked, and must be unlocked by Tesla."""
 
-    message = "The operation is not allowed."
+        message = "Account is locked, and must be unlocked by Tesla."
 
+    class RateLimited(Base):
+        """Account or server is rate limited."""
 
-class TeslaNotAcceptable(TeslaError):
-    """The HTTP request does not have a Content-Type header set to application/json."""
+        message = "Account or server is rate limited."
 
-    message = (
-        "The HTTP request does not have a Content-Type header set to application/json."
-    )
+    class ResourceUnavailableForLegalReasons(Base):
+        """Querying for a user/vehicle without proper privacy settings."""
 
+        message = "Querying for a user/vehicle without proper privacy settings."
 
-class TeslaVehicleOffline(TeslaError):
-    """The vehicle is not "online."""
+    class ClientClosedRequest(Base):
+        """Client has closed the request before the server could send a response."""
 
-    message = "The vehicle is not 'online'."
+        message = (
+            "Client has closed the request before the server could send a response."
+        )
 
+    class InternalServerError(Base):
+        """An error occurred while processing the request."""
 
-class TeslaPreconditionFailed(TeslaError):
-    """A condition has not been met to process the request."""
+        message = "An error occurred while processing the request."
 
-    message = "A condition has not been met to process the request."
+    class ServiceUnavailable(Base):
+        """Either an internal service or a vehicle did not respond (timeout)."""
 
+        message = "Either an internal service or a vehicle did not respond (timeout)."
 
-class TeslaInvalidRegion(TeslaError):
-    """This user is not present in the current region."""
+    class GatewayTimeout(Base):
+        """Server did not receive a response."""
 
-    message = "This user is not present in the current region."
+        message = "Server did not receive a response."
 
+    class DeviceUnexpectedResponse(Base):
+        """Vehicle responded with an error - might need a reboot, OTA update, or service."""
 
-class TeslaInvalidResource(TeslaError):
-    """There is a semantic problem with the data, e.g. missing or invalid data."""
-
-    message = "There is a semantic problem with the data, e.g. missing or invalid data."
-
-
-class TeslaLocked(TeslaError):
-    """Account is locked, and must be unlocked by Tesla."""
-
-    message = "Account is locked, and must be unlocked by Tesla."
-
-
-class TeslaRateLimited(TeslaError):
-    """Account or server is rate limited."""
-
-    message = "Account or server is rate limited."
-
-
-class TeslaResourceUnavailableForLegalReasons(TeslaError):
-    """Querying for a user/vehicle without proper privacy settings."""
-
-    message = "Querying for a user/vehicle without proper privacy settings."
-
-
-class TeslaClientClosedRequest(TeslaError):
-    """Client has closed the request before the server could send a response."""
-
-    message = "Client has closed the request before the server could send a response."
-
-
-class TeslaInternalServerError(TeslaError):
-    """An error occurred while processing the request."""
-
-    message = "An error occurred while processing the request."
-
-
-class TeslaServiceUnavailable(TeslaError):
-    """Either an internal service or a vehicle did not respond (timeout)."""
-
-    message = "Either an internal service or a vehicle did not respond (timeout)."
-
-
-class TeslaGatewayTimeout(TeslaError):
-    """Server did not receive a response."""
-
-    message = "Server did not receive a response."
-
-
-class TeslaDeviceUnexpectedResponse(TeslaError):
-    """Vehicle responded with an error - might need a reboot, OTA update, or service."""
-
-    message = (
-        "Vehicle responded with an error - might need a reboot, OTA update, or service."
-    )
+        message = "Vehicle responded with an error - might need a reboot, OTA update, or service."
 
 
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    payload = await resp.json()
+    data = await resp.json()
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
-        print(e)
         if e.status == 400:
-            if payload.error == Errors.INVALID_COMMAND:
-                raise TeslaInvalidCommand from e
-            elif payload.error == Errors.INVALID_FIELD:
-                raise TeslaInvalidField from e
-            elif payload.error == Errors.INVALID_REQUEST:
-                raise TeslaInvalidRequest from e
-            elif payload.error == Errors.INVALID_AUTH_CODE:
-                raise TeslaInvalidAuthCode from e
-            elif payload.error == Errors.INVALID_REDIRECT_URL:
-                raise TeslaInvalidRedirectUrl from e
-            elif payload.error == Errors.UNAUTHORIZED_CLIENT:
-                raise TeslaUnauthorizedClient from e
+            if data.error == Errors.INVALID_COMMAND:
+                raise TeslaFleetError.InvalidCommand(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.INVALID_FIELD:
+                raise TeslaFleetError.InvalidField(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.INVALID_REQUEST:
+                raise TeslaFleetError.InvalidRequest(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.INVALID_AUTH_CODE:
+                raise TeslaFleetError.InvalidAuthCode(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.INVALID_REDIRECT_URL:
+                raise TeslaFleetError.InvalidRedirectUrl(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.UNAUTHORIZED_CLIENT:
+                raise TeslaFleetError.UnauthorizedClient(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
         elif e.status == 401:
-            if payload.error == Errors.MOBILE_ACCESS_DISABLED:
-                raise TeslaMobileAccessDisabled from e
-            elif payload.error == Errors.NO_RESPONSE_BODY:
-                raise TeslaNoResponseBody from e
+            if data.error == Errors.MOBILE_ACCESS_DISABLED:
+                raise TeslaFleetError.MobileAccessDisabled(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
+            elif data.error == Errors.NO_RESPONSE_BODY:
+                raise TeslaFleetError.NoResponseBody(
+                    e.status, data.get("error"), data.get("error_description")
+                ) from e
         elif e.status == 402:
-            raise TeslaPaymentRequired from e
+            raise TeslaFleetError.PaymentRequired(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 403:
-            raise TeslaForbidden from e
+            raise TeslaFleetError.Forbidden(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 404:
-            raise TeslaNotFound from e
+            raise TeslaFleetError.NotFound(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 405:
-            raise TeslaNotAllowed from e
+            raise TeslaFleetError.NotAllowed(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 406:
-            raise TeslaNotAcceptable from e
+            raise TeslaFleetError.NotAcceptable(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 408:
-            raise TeslaVehicleOffline from e
+            raise TeslaFleetError.VehicleOffline(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 412:
-            raise TeslaPreconditionFailed from e
+            raise TeslaFleetError.PreconditionFailed(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 421:
-            raise TeslaInvalidRegion from e
+            raise TeslaFleetError.InvalidRegion(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 422:
-            raise TeslaInvalidResource from e
+            raise TeslaFleetError.InvalidResource(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 423:
-            raise TeslaLocked from e
+            raise TeslaFleetError.Locked(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 429:
-            raise TeslaRateLimited from e
+            raise TeslaFleetError.RateLimited(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 451:
-            raise TeslaResourceUnavailableForLegalReasons from e
+            raise TeslaFleetError.ResourceUnavailableForLegalReasons(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 499:
-            raise TeslaClientClosedRequest from e
+            raise TeslaFleetError.ClientClosedRequest(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 500:
-            raise TeslaInternalServerError from e
+            raise TeslaFleetError.InternalServerError(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 503:
-            raise TeslaServiceUnavailable from e
+            raise TeslaFleetError.ServiceUnavailable(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 504:
-            raise TeslaGatewayTimeout from e
+            raise TeslaFleetError.GatewayTimeout(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         elif e.status == 540:
-            raise TeslaDeviceUnexpectedResponse from e
+            raise TeslaFleetError.DeviceUnexpectedResponse(
+                e.status, data.get("error"), data.get("error_description")
+            ) from e
         else:
             raise e

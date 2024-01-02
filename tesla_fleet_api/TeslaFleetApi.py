@@ -31,9 +31,10 @@ class TeslaFleetApi:
         self.partner = self.Partner(self)
         self.vehicle = self.Vehicle(self)
 
-    async def _get(self, path, params: dict[str:Any] = {}):
+    async def _get(self, path, params: dict[str:Any] | None = None):
         """Get data from the Tesla Fleet API."""
-        params = {k: v for k, v in params.items() if v is not None}
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
 
         async with self.session.get(
             f"{self.server}/{path}",
