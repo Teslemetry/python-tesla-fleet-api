@@ -14,8 +14,9 @@ setuptools.setup(
     url="https://github.com/Teslemetry/tesla_fleet_api",
     packages=setuptools.find_packages(),
     classifiers=[
+        "Development Status :: 3 - Alpha",
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Apache Software Licence",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.8",
