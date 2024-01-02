@@ -11,12 +11,10 @@ class TeslaFleetError:
         error: str | None
         error_description: str | None
 
-        def __init__(
-            self, status: int, error: str | None, error_description: str | None
-        ):
+        def __init__(self, status: int, data: dict[str, str] | None = None):
             self.status = status
-            self.error = error
-            self.error_description = error_description
+            self.error = data.get("error") or data.get("message")
+            self.error_description = data.get("error_description")
 
     class InvalidCommand(Base):
         """The data request or command is unknown."""
@@ -154,111 +152,66 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    data = await resp.json()
+    try:
+        data = await resp.json()
+    except json.decoder.JSONDecodeError as error:
+        raise TeslaFleetError.NotFound() from error
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
         if e.status == 400:
             if data.error == Errors.INVALID_COMMAND:
-                raise TeslaFleetError.InvalidCommand(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.InvalidCommand(e.status, data) from e
             elif data.error == Errors.INVALID_FIELD:
-                raise TeslaFleetError.InvalidField(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.InvalidField(e.status, data) from e
             elif data.error == Errors.INVALID_REQUEST:
-                raise TeslaFleetError.InvalidRequest(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.InvalidRequest(e.status, data) from e
             elif data.error == Errors.INVALID_AUTH_CODE:
-                raise TeslaFleetError.InvalidAuthCode(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.InvalidAuthCode(e.status, data) from e
             elif data.error == Errors.INVALID_REDIRECT_URL:
-                raise TeslaFleetError.InvalidRedirectUrl(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.InvalidRedirectUrl(e.status, data) from e
             elif data.error == Errors.UNAUTHORIZED_CLIENT:
-                raise TeslaFleetError.UnauthorizedClient(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.UnauthorizedClient(e.status, data) from e
         elif e.status == 401:
             if data.error == Errors.MOBILE_ACCESS_DISABLED:
-                raise TeslaFleetError.MobileAccessDisabled(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.MobileAccessDisabled(e.status, data) from e
             elif data.error == Errors.NO_RESPONSE_BODY:
-                raise TeslaFleetError.NoResponseBody(
-                    e.status, data.get("error"), data.get("error_description")
-                ) from e
+                raise TeslaFleetError.NoResponseBody(e.status, data) from e
         elif e.status == 402:
-            raise TeslaFleetError.PaymentRequired(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.PaymentRequired(e.status, data) from e
         elif e.status == 403:
-            raise TeslaFleetError.Forbidden(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.Forbidden(e.status, data) from e
         elif e.status == 404:
-            raise TeslaFleetError.NotFound(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.NotFound(e.status, data) from e
         elif e.status == 405:
-            raise TeslaFleetError.NotAllowed(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.NotAllowed(e.status, data) from e
         elif e.status == 406:
-            raise TeslaFleetError.NotAcceptable(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.NotAcceptable(e.status, data) from e
         elif e.status == 408:
-            raise TeslaFleetError.VehicleOffline(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.VehicleOffline(e.status, data) from e
         elif e.status == 412:
-            raise TeslaFleetError.PreconditionFailed(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.PreconditionFailed(e.status, data) from e
         elif e.status == 421:
-            raise TeslaFleetError.InvalidRegion(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.InvalidRegion(e.status, data) from e
         elif e.status == 422:
-            raise TeslaFleetError.InvalidResource(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.InvalidResource(e.status, data) from e
         elif e.status == 423:
-            raise TeslaFleetError.Locked(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.Locked(e.status, data) from e
         elif e.status == 429:
-            raise TeslaFleetError.RateLimited(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.RateLimited(e.status, data) from e
         elif e.status == 451:
             raise TeslaFleetError.ResourceUnavailableForLegalReasons(
-                e.status, data.get("error"), data.get("error_description")
+                e.status, data
             ) from e
         elif e.status == 499:
-            raise TeslaFleetError.ClientClosedRequest(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.ClientClosedRequest(e.status, data) from e
         elif e.status == 500:
-            raise TeslaFleetError.InternalServerError(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.InternalServerError(e.status, data) from e
         elif e.status == 503:
-            raise TeslaFleetError.ServiceUnavailable(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.ServiceUnavailable(e.status, data) from e
         elif e.status == 504:
-            raise TeslaFleetError.GatewayTimeout(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.GatewayTimeout(e.status, data) from e
         elif e.status == 540:
-            raise TeslaFleetError.DeviceUnexpectedResponse(
-                e.status, data.get("error"), data.get("error_description")
-            ) from e
+            raise TeslaFleetError.DeviceUnexpectedResponse(e.status, data) from e
         else:
             raise e

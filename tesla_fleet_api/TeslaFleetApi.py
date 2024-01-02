@@ -46,9 +46,15 @@ class TeslaFleetApi:
             return await resp.json()
 
     async def _post(
-        self, path, data: dict[str:Any], params: dict[str:Any] | None = None
+        self,
+        path,
+        data: dict[str:Any] | None = None,
+        params: dict[str:Any] | None = None,
     ):
         """Post data to the Tesla Fleet API with URL encoded data."""
+
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
 
         async with self.session.post(
             f"{self.server}/{path}",
@@ -56,6 +62,7 @@ class TeslaFleetApi:
             data=data,
             params=params,
         ) as resp:
+            print(await resp.text())
             if self.raise_for_status:
                 await raise_for_status(resp)
             return await resp.json()
@@ -99,7 +106,15 @@ class TeslaFleetApi:
             """Returns the paginated charging history."""
             return await self._get(
                 "/api/1/dx/charging/history",
-                {vin, startTime, endTime, pageNo, pageSize, sortBy, sortOrder},
+                {
+                    vin: vin,
+                    startTime: startTime,
+                    endTime: endTime,
+                    pageNo: pageNo,
+                    pageSize: pageSize,
+                    sortBy: sortBy,
+                    sortOrder: sortOrder,
+                },
             )
 
         async def sessions(
@@ -112,7 +127,14 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the charging session information including pricing and energy data. This endpoint is only available for business accounts that own a fleet of vehicles."""
             return await self._get(
-                "/api/1/dx/charging/sessions", {vin, date_from, date_to, limit, offset}
+                "/api/1/dx/charging/sessions",
+                {
+                    vin: vin,
+                    date_from: date_from,
+                    date_to: date_to,
+                    limit: limit,
+                    offset: offset,
+                },
             )
 
     class Partner:
@@ -124,11 +146,13 @@ class TeslaFleetApi:
 
         async def public_key(self, domain: str | None = None) -> dict[str, Any]:
             """Returns the public key associated with a domain. It can be used to ensure the registration was successful."""
-            return await self._get("/api/1/partner_accounts/public_key", {domain})
+            return await self._get(
+                "/api/1/partner_accounts/public_key", {domain: domain}
+            )
 
         async def register(self, domain: str) -> dict[str, Any]:
             """Registers an existing account before it can be used for general API access. Each application from developer.tesla.com must complete this step."""
-            return await self._post("/api/1/partner_accounts", {domain})
+            return await self._post("/api/1/partner_accounts", {domain: domain})
 
     class User:
         """Class describing the Tesla Fleet API user endpoints"""
@@ -176,7 +200,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Controls the front or rear trunk."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/actuate_trunk", {which_trunk}
+                f"/api/1/vehicles/{vehicle_tag}/command/actuate_trunk",
+                {which_trunk: which_trunk},
             )
 
         async def adjust_volume(
@@ -186,7 +211,7 @@ class TeslaFleetApi:
             if volume < 0.0 or volume > 11.0:
                 raise ValueError("Volume must a number from 0.0 to 11.0")
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/adjust_volume", {volume}
+                f"/api/1/vehicles/{vehicle_tag}/command/adjust_volume", {volume: volume}
             )
 
         async def auto_conditioning_start(
@@ -333,7 +358,7 @@ class TeslaFleetApi:
             """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/navigation_gps_request",
-                {lat, lon, order},
+                {lat: lat, lon: lon, order: order},
             )
 
         async def navigation_request(
@@ -342,7 +367,7 @@ class TeslaFleetApi:
             """Sends a location to the in-vehicle navigation system."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/navigation_request",
-                {type, locale, timestamp_ms},
+                {type: type, locale: locale, timestamp_ms: timestamp_ms},
             )
 
         async def navigation_sc_request(
@@ -351,7 +376,7 @@ class TeslaFleetApi:
             """Sends a location to the in-vehicle navigation system."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/navigation_sc_request",
-                {type, id, order},
+                {type: type, id: id, order: order},
             )
 
         async def remote_auto_seat_climate_request(
@@ -360,7 +385,10 @@ class TeslaFleetApi:
             """Sets automatic seat heating and cooling."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/remote_auto_seat_climate_request",
-                {auto_seat_position, auto_climate_on},
+                {
+                    auto_seat_position: auto_seat_position,
+                    auto_climate_on: auto_climate_on,
+                },
             )
 
         async def remote_auto_steering_wheel_heat_climate_request(
@@ -369,7 +397,7 @@ class TeslaFleetApi:
             """Sets automatic steering wheel heating on/off."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/remote_auto_steering_wheel_heat_climate_request",
-                {on},
+                {on: on},
             )
 
         async def remote_boombox(
@@ -377,7 +405,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Plays a sound through the vehicle external speaker."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/remote_boombox", {sound}
+                f"/api/1/vehicles/{vehicle_tag}/command/remote_boombox", {sound: sound}
             )
 
         async def remote_seat_cooler_request(
@@ -386,7 +414,7 @@ class TeslaFleetApi:
             """Sets seat cooling."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/remote_seat_cooler_request",
-                {seat_position, seat_cooler_level},
+                {seat_position: seat_position, seat_cooler_level: seat_cooler_level},
             )
 
         async def remote_seat_heater_request(
@@ -409,7 +437,7 @@ class TeslaFleetApi:
             """Sets steering wheel heat level."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heat_level_request",
-                {level},
+                {level: level},
             )
 
         async def remote_steering_wheel_heater_request(
@@ -418,7 +446,7 @@ class TeslaFleetApi:
             """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heater_request",
-                {on},
+                {on: on},
             )
 
         async def reset_pin_to_drive_pin(
@@ -441,7 +469,7 @@ class TeslaFleetApi:
             """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/schedule_software_update",
-                {offset_sec},
+                {offset_sec: offset_sec},
             )
 
         async def set_bioweapon_mode(
@@ -450,7 +478,7 @@ class TeslaFleetApi:
             """Turns Bioweapon Defense Mode on and off."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_bioweapon_mode",
-                {on, manual_override},
+                {on: on, manual_override: manual_override},
             )
 
         async def set_cabin_overheat_protection(
@@ -459,7 +487,7 @@ class TeslaFleetApi:
             """Sets the vehicle overheat protection."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_cabin_overheat_protection",
-                {on, fan_only},
+                {on: on, fan_only: fan_only},
             )
 
         async def set_charge_limit(
@@ -467,7 +495,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Sets the vehicle charge limit."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/set_charge_limit", {percent}
+                f"/api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
+                {percent: percent},
             )
 
         async def set_charging_amps(
@@ -476,7 +505,7 @@ class TeslaFleetApi:
             """Sets the vehicle charging amps."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
-                {charging_amps},
+                {charging_amps: charging_amps},
             )
 
         class ClimateKeeperMode(IntEnum):
@@ -493,7 +522,7 @@ class TeslaFleetApi:
             """Enables climate keeper mode."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_climate_keeper_mode",
-                {climate_keeper_mode},
+                {climate_keeper_mode: climate_keeper_mode},
             )
 
         class CopTemp(IntEnum):
@@ -508,7 +537,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Adjusts the Cabin Overheat Protection temperature (COP)."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/set_cop_temp", {cop_temp}
+                f"/api/1/vehicles/{vehicle_tag}/command/set_cop_temp",
+                {cop_temp: cop_temp},
             )
 
         async def set_pin_to_drive(
@@ -517,7 +547,7 @@ class TeslaFleetApi:
             """Sets a four-digit passcode for PIN to Drive. This PIN must then be entered before the vehicle can be driven."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_pin_to_drive",
-                {on, str(password)},
+                {on: on, password: str(password)},
             )
 
         async def set_preconditioning_max(
@@ -526,7 +556,7 @@ class TeslaFleetApi:
             """Sets an override for preconditioning — it should default to empty if no override is used."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_preconditioning_max",
-                {on, manual_override},
+                {on: on, manual_override: manual_override},
             )
 
         async def set_scheduled_charging(
@@ -535,7 +565,7 @@ class TeslaFleetApi:
             """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_scheduled_charging",
-                {enable, time},
+                {enable: enable, time: time},
             )
 
         async def set_scheduled_departure(
@@ -544,7 +574,7 @@ class TeslaFleetApi:
             """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
-                {enable, time},
+                {enable: enable, time: time},
             )
 
         async def set_sentry_mode(
@@ -552,7 +582,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/set_sentry_mode", {on}
+                f"/api/1/vehicles/{vehicle_tag}/command/set_sentry_mode", {on: on}
             )
 
         async def set_temps(
@@ -561,7 +591,7 @@ class TeslaFleetApi:
             """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_temps",
-                {driver_temp, passenger_temp},
+                {driver_temp: driver_temp, passenger_temp: passenger_temp},
             )
 
         async def set_valet_mode(
@@ -570,7 +600,7 @@ class TeslaFleetApi:
             """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_valet_mode",
-                {on, str(password)},
+                {on: on, password: str(password)},
             )
 
         async def set_vehicle_name(
@@ -579,7 +609,7 @@ class TeslaFleetApi:
             """Changes the name of a vehicle. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/set_vehicle_name",
-                {vehicle_name},
+                {vehicle_name: vehicle_name},
             )
 
         async def speed_limit_activate(
@@ -588,7 +618,7 @@ class TeslaFleetApi:
             """Activates Speed Limit Mode with a four-digit PIN."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/speed_limit_activate",
-                {str(pin)},
+                {pin: str(pin)},
             )
 
         async def speed_limit_clear_pin(
@@ -597,7 +627,7 @@ class TeslaFleetApi:
             """Deactivates Speed Limit Mode and resets the associated PIN."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/speed_limit_clear_pin",
-                {str(pin)},
+                {pin: str(pin)},
             )
 
         async def speed_limit_clear_pin_admin(
@@ -614,7 +644,7 @@ class TeslaFleetApi:
             """Deactivates Speed Limit Mode."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/speed_limit_deactivate",
-                {str(pin)},
+                {pin: str(pin)},
             )
 
         async def speed_limit_set_limit(
@@ -623,7 +653,7 @@ class TeslaFleetApi:
             """Sets the maximum speed allowed when Speed Limit Mode is active."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/speed_limit_set_limit",
-                {limit_mph},
+                {limit_mph: limit_mph},
             )
 
         class SunRoof(StrEnum):
@@ -638,7 +668,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Controls the panoramic sunroof on the Model S."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/sun_roof_control", {state}
+                f"/api/1/vehicles/{vehicle_tag}/command/sun_roof_control",
+                {state: state},
             )
 
         async def take_drivenote(
@@ -646,7 +677,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Records a drive note. The note parameter is truncated to 80 characters in length."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/command/take_drivenote", {note}
+                f"/api/1/vehicles/{vehicle_tag}/command/take_drivenote", {note: note}
             )
 
         async def trigger_homelink(
@@ -655,7 +686,7 @@ class TeslaFleetApi:
             """Turns on HomeLink (used to open and close garage doors)."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/trigger_homelink",
-                {lat, lon, token},
+                {lat: lat, lon: lon, token: token},
             )
 
         async def upcoming_calendar_entries(
@@ -664,7 +695,7 @@ class TeslaFleetApi:
             """Upcoming calendar entries stored on the vehicle."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/upcoming_calendar_entries",
-                {calendar_data},
+                {calendar_data: calendar_data},
             )
 
         class WindowControl(StrEnum):
@@ -683,7 +714,7 @@ class TeslaFleetApi:
             """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
             return await self._post(
                 f"/api/1/vehicles/{vehicle_tag}/command/window_control",
-                {lat, lon, command},
+                {lat: lat, lon: lon, command: command},
             )
 
         async def drivers(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -695,14 +726,14 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
             return await self._delete(
-                f"/api/1/vehicles/{vehicle_tag}/drivers", {share_user_id}
+                f"/api/1/vehicles/{vehicle_tag}/drivers", {share_user_id: share_user_id}
             )
 
         async def list(
             self, page: int | None = None, per_page: int | None = None
         ) -> dict[str, Any]:
             """Returns vehicles belonging to the account."""
-            return await self._get("/api/1/vehicles", {page, per_page})
+            return await self._get("/api/1/vehicles", {page: page, per_page: per_page})
 
         async def mobile_enabled(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns whether or not mobile access is enabled for the vehicle."""
@@ -718,12 +749,12 @@ class TeslaFleetApi:
             """Returns the charging sites near the current location of the vehicle."""
             return await self._get(
                 f"/api/1/vehicles/{vehicle_tag}/nearby_charging_sites",
-                {count, radius, detail},
+                {count: count, radius: radius, detail: detail},
             )
 
         async def options(self, vin: str) -> dict[str, Any]:
             """Returns vehicle option details."""
-            return await self._get("/api/1/dx/vehicles/options", {vin})
+            return await self._get("/api/1/dx/vehicles/options", {vin: vin})
 
         async def recent_alerts(self, vehicle_tag: str | int) -> dict[str, Any]:
             """List of recent alerts"""
@@ -737,7 +768,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns firmware release notes."""
             return await self._get(
-                f"/api/1/vehicles/{vehicle_tag}/release_notes", {staged, language}
+                f"/api/1/vehicles/{vehicle_tag}/release_notes",
+                {staged: staged, language: language},
             )
 
         async def service_data(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -754,7 +786,7 @@ class TeslaFleetApi:
 
         async def share_invites_redeem(self, code: str) -> dict[str, Any]:
             """Redeems a share invite."""
-            return await self._post("/api/1/invitations/redeem", {code})
+            return await self._post("/api/1/invitations/redeem", {code: code})
 
         async def share_invites_revoke(
             self, vehicle_tag: str | int, id: str
@@ -769,7 +801,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Signed Commands is a generic endpoint replacing legacy commands."""
             return await self._post(
-                f"/api/1/vehicles/{vehicle_tag}/signed_command", {routable_message}
+                f"/api/1/vehicles/{vehicle_tag}/signed_command",
+                {routable_message: routable_message},
             )
 
         async def subscriptions(
@@ -808,7 +841,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
             return await self._get(
-                f"/api/1/vehicles/{vehicle_tag}/vehicle_data", {endpoints}
+                f"/api/1/vehicles/{vehicle_tag}/vehicle_data", {endpoints: endpoints}
             )
 
         class DeviceType(StrEnum):
@@ -825,7 +858,8 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
             return await self._get(
-                "/api/1/vehicle_subscriptions", {device_token, device_type}
+                "/api/1/vehicle_subscriptions",
+                {device_token: device_token, device_type: device_type},
             )
 
         async def vehicle_subscriptions_set(
@@ -833,8 +867,9 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Allows a mobile device to specify which vehicles to receive push notifications from."""
             return await self._post(
-                "/api/1/vehicle_subscriptions", {device_token, device_type}
-            )  # I do not expect this works
+                "/api/1/vehicle_subscriptions",
+                params={device_token: device_token, device_type: device_type},
+            )
 
         async def wake_up(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
@@ -842,4 +877,4 @@ class TeslaFleetApi:
 
         async def warranty_details(self, vin: str | None) -> dict[str, Any]:
             """Returns warranty details."""
-            return await self._get("/api/1/dx/warranty/details", {vin})
+            return await self._get("/api/1/dx/warranty/details", {vin: vin})
