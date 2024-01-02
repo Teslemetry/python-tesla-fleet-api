@@ -55,6 +55,38 @@ class TeslaFleetApi:
                 continue
         raise TeslaFleetError.Base("Could not find a valid server.")
 
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        data: dict[str:Any] | None = None,
+        json: dict[str:Any] | None = None,
+        params: dict[str:Any] | None = None,
+    ):
+        """Request data to the Tesla Fleet API with URL encoded data."""
+
+        if not self.server:
+            raise ValueError("Server was not set at init. Call find_server() first.")
+
+        if data:
+            data = {k: v for k, v in data.items() if v is not None}
+        if json:
+            json = {k: v for k, v in json.items() if v is not None}
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
+
+        async with self.session.request(
+            method,
+            f"{self.server}/{path}",
+            headers=self.headers,
+            data=data,
+            json=json,
+            params=params,
+        ) as resp:
+            if self.raise_for_status:
+                await raise_for_status(resp)
+            return await resp.json()
+
     async def _get(self, path, params: dict[str:Any] | None = None):
         """Get data from the Tesla Fleet API."""
 
@@ -97,7 +129,7 @@ class TeslaFleetApi:
         ) as resp:
             if self.raise_for_status:
                 await raise_for_status(resp)
-            return (await resp.json())["response"]
+            return await resp.json()
 
     async def _delete(self, path, params: dict[str:Any] | None = None):
         """Delete data from the Tesla Fleet API."""
@@ -115,7 +147,7 @@ class TeslaFleetApi:
         ) as resp:
             if self.raise_for_status:
                 await raise_for_status(resp)
-            return (await resp.json())["response"]
+            return await resp.json()
 
     async def status(self):
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
