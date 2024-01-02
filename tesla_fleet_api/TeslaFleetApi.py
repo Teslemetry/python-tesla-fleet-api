@@ -45,13 +45,30 @@ class TeslaFleetApi:
                 await raise_for_status(resp)
             return await resp.json()
 
-    async def _post(self, path, data: dict):
+    async def _post(
+        self, path, data: dict[str:Any], params: dict[str:Any] | None = None
+    ):
         """Post data to the Tesla Fleet API with URL encoded data."""
 
         async with self.session.post(
             f"{self.server}/{path}",
             headers=self.headers,
             data=data,
+            params=params,
+        ) as resp:
+            if self.raise_for_status:
+                await raise_for_status(resp)
+            return await resp.json()
+
+    async def _delete(self, path, params: dict[str:Any] | None = None):
+        """Delete data from the Tesla Fleet API."""
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
+
+        async with self.session.delete(
+            f"{self.server}/{path}",
+            headers=self.headers,
+            params=params,
         ) as resp:
             if self.raise_for_status:
                 await raise_for_status(resp)
@@ -146,6 +163,7 @@ class TeslaFleetApi:
         def __init__(self, parent):
             self._get = parent._get
             self._post = parent._post
+            self._delete = parent._delete
 
         class Trunk(StrEnum):
             """Trunk options"""
@@ -667,3 +685,161 @@ class TeslaFleetApi:
                 f"/api/1/vehicles/{vehicle_tag}/command/window_control",
                 {lat, lon, command},
             )
+
+        async def drivers(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}/drivers")
+
+        async def drivers_remove(
+            self, vehicle_tag: str | int, share_user_id: str | int | None = None
+        ) -> dict[str, Any]:
+            """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
+            return await self._delete(
+                f"/api/1/vehicles/{vehicle_tag}/drivers", {share_user_id}
+            )
+
+        async def list(
+            self, page: int | None = None, per_page: int | None = None
+        ) -> dict[str, Any]:
+            """Returns vehicles belonging to the account."""
+            return await self._get("/api/1/vehicles", {page, per_page})
+
+        async def mobile_enabled(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Returns whether or not mobile access is enabled for the vehicle."""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}/mobile_enabled")
+
+        async def nearby_charging_sites(
+            self,
+            vehicle_tag: str | int,
+            count: int | None = None,
+            radius: int | None = None,
+            detail: bool | None = None,
+        ) -> dict[str, Any]:
+            """Returns the charging sites near the current location of the vehicle."""
+            return await self._get(
+                f"/api/1/vehicles/{vehicle_tag}/nearby_charging_sites",
+                {count, radius, detail},
+            )
+
+        async def options(self, vin: str) -> dict[str, Any]:
+            """Returns vehicle option details."""
+            return await self._get("/api/1/dx/vehicles/options", {vin})
+
+        async def recent_alerts(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """List of recent alerts"""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}/recent_alerts")
+
+        async def release_notes(
+            self,
+            vehicle_tag: str | int,
+            staged: bool | None = None,
+            language: int | None = None,
+        ) -> dict[str, Any]:
+            """Returns firmware release notes."""
+            return await self._get(
+                f"/api/1/vehicles/{vehicle_tag}/release_notes", {staged, language}
+            )
+
+        async def service_data(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Returns service data."""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}/service_data")
+
+        async def share_invites(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Returns the share invites for a vehicle."""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}/invitations")
+
+        async def share_invites_create(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Creates a share invite for a vehicle."""
+            return await self._post(f"/api/1/vehicles/{vehicle_tag}/invitations")
+
+        async def share_invites_redeem(self, code: str) -> dict[str, Any]:
+            """Redeems a share invite."""
+            return await self._post("/api/1/invitations/redeem", {code})
+
+        async def share_invites_revoke(
+            self, vehicle_tag: str | int, id: str
+        ) -> dict[str, Any]:
+            """Revokes a share invite."""
+            return await self._post(
+                f"/api/1/vehicles/{vehicle_tag}/invitations/{id}/revoke"
+            )
+
+        async def signed_command(
+            self, vehicle_tag: str | int, routable_message: str
+        ) -> dict[str, Any]:
+            """Signed Commands is a generic endpoint replacing legacy commands."""
+            return await self._post(
+                f"/api/1/vehicles/{vehicle_tag}/signed_command", {routable_message}
+            )
+
+        async def subscriptions(
+            self, device_token: str, device_type: str
+        ) -> dict[str, Any]:
+            """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
+            return await self._get("/api/1/subscriptions")
+
+        async def subscriptions_set(
+            self, device_token: str, device_type: str
+        ) -> dict[str, Any]:
+            """Allows a mobile device to specify which vehicles to receive push notifications from."""
+            return await self._post("/api/1/subscriptions")
+
+        async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Returns information about a vehicle."""
+            return await self._get(f"/api/1/vehicles/{vehicle_tag}")
+
+        class Endpoints(StrEnum):
+            """Endpoints options"""
+
+            CHARGE_STATE = "charge_state"
+            CLIMATE_STATE = "climate_state"
+            CLOSURES_STATE = "closures_state"
+            DRIVE_STATE = "drive_state"
+            GUI_SETTINGS = "gui_settings"
+            LOCATION_DATA = "location_data"
+            VEHICLE_CONFIG = "vehicle_config"
+            VEHICLE_STATE = "vehicle_state"
+            VEHICLE_DATA_COMBO = "vehicle_data_combo"
+
+        async def vehicle_data(
+            self,
+            vehicle_tag: str | int,
+            endpoints: Endpoints | str | None = None,
+        ) -> dict[str, Any]:
+            """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
+            return await self._get(
+                f"/api/1/vehicles/{vehicle_tag}/vehicle_data", {endpoints}
+            )
+
+        class DeviceType(StrEnum):
+            """Device Type options"""
+
+            ANDROID = "android"
+            IOS_DEVELOPMENT = "ios-development"
+            IOS_ENTERPRISE = "ios-enterprise"
+            IOS_BETA = "ios-beta"
+            IOS_PRODUCTION = "ios-production"
+
+        async def vehicle_subscriptions(
+            self, device_token: str, device_type: DeviceType | str
+        ) -> dict[str, Any]:
+            """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
+            return await self._get(
+                "/api/1/vehicle_subscriptions", {device_token, device_type}
+            )
+
+        async def vehicle_subscriptions_set(
+            self, device_token: str, device_type: DeviceType | str
+        ) -> dict[str, Any]:
+            """Allows a mobile device to specify which vehicles to receive push notifications from."""
+            return await self._post(
+                "/api/1/vehicle_subscriptions", {device_token, device_type}
+            )  # I do not expect this works
+
+        async def wake_up(self, vehicle_tag: str | int) -> dict[str, Any]:
+            """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
+            return await self._post(f"/api/1/vehicles/{vehicle_tag}/wake_up")
+
+        async def warranty_details(self, vin: str | None) -> dict[str, Any]:
+            """Returns warranty details."""
+            return await self._get("/api/1/dx/warranty/details", {vin})
