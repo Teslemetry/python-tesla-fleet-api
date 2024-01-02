@@ -17,14 +17,19 @@ class TeslaFleetApi:
         self,
         access_token: str,
         server: str,
-        session: aiohttp.ClientSession | None = None,
+        session: aiohttp.ClientSession,
         raise_for_status: bool = True,
     ):
         """Initialize the Tesla Fleet API."""
         self.server = server
-        self.session = session or aiohttp.ClientSession()
+        self.session = session
         self.headers = {"Authorization": f"Bearer {access_token}"}
         self.raise_for_status = raise_for_status
+
+        self.user = self.User(self)
+        self.charging = self.Charging(self)
+        self.partner = self.Partner(self)
+        self.vehicle = self.Vehicle(self)
 
     async def _get(self, path, params: dict[str:Any] = {}):
         """Get data from the Tesla Fleet API."""
@@ -56,8 +61,12 @@ class TeslaFleetApi:
         async with self.session.get(f"{self.server}/status") as resp:
             return await resp.text()
 
-    class charging:
+    class Charging:
         """Class describing the Tesla Fleet API charging endpoints."""
+
+        def __init__(self, parent):
+            self._get = parent._get
+            self._post = parent._post
 
         async def history(
             self,
@@ -88,8 +97,12 @@ class TeslaFleetApi:
                 "/api/1/dx/charging/sessions", {vin, date_from, date_to, limit, offset}
             )
 
-    class partner:
+    class Partner:
         """Class describing the Tesla Fleet API partner endpoints"""
+
+        def __init__(self, parent):
+            self._get = parent._get
+            self._post = parent._post
 
         async def public_key(self, domain: str | None = None) -> dict[str, Any]:
             """Returns the public key associated with a domain. It can be used to ensure the registration was successful."""
@@ -99,8 +112,12 @@ class TeslaFleetApi:
             """Registers an existing account before it can be used for general API access. Each application from developer.tesla.com must complete this step."""
             return await self._post("/api/1/partner_accounts", {domain})
 
-    class user:
+    class User:
         """Class describing the Tesla Fleet API user endpoints"""
+
+        def __init__(self, parent):
+            self._get = parent._get
+            self._post = parent._post
 
         async def backup_key(self) -> dict[str, Any]:
             """Returns the public key associated with the user."""
@@ -122,8 +139,12 @@ class TeslaFleetApi:
             """Returns a user's region and appropriate fleet-api base URL. Accepts no parameters, response is based on the authentication token subject."""
             return await self._get("/api/1/users/region")
 
-    class vehicle:
+    class Vehicle:
         """Class describing the Tesla Fleet API vehicle endpoints and commands."""
+
+        def __init__(self, parent):
+            self._get = parent._get
+            self._post = parent._post
 
         class Trunk(StrEnum):
             """Trunk options"""
