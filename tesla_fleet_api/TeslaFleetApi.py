@@ -26,6 +26,7 @@ class TeslaFleetApi:
         """Initialize the Tesla Fleet API."""
 
         self.session = session
+        self.access_token = access_token
         self.use_command_protocol = use_command_protocol
 
         if region and not server and region not in SERVERS:
@@ -33,15 +34,17 @@ class TeslaFleetApi:
         self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
 
-        self.headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        }
-
         self.user = self.User(self)
         self.charging = self.Charging(self)
         self.partner = self.Partner(self)
         self.vehicle = self.Vehicle(self)
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
 
     async def find_server(self) -> None:
         """Find the server URL for the Tesla Fleet API."""
@@ -1044,3 +1047,11 @@ class TeslaFleetApi:
         async def warranty_details(self, vin: str | None) -> dict[str, Any]:
             """Returns warranty details."""
             return await self._get("api/1/dx/warranty/details", {vin: vin})
+
+        async def fleet_telemetry_config(
+            self, config: dict[str, Any]
+        ) -> dict[str, Any]:
+            """Configures fleet telemetry."""
+            return await self._post(
+                "api/1/vehicles/fleet_telemetry_config", json=config
+            )
