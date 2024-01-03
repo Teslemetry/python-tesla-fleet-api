@@ -8,6 +8,7 @@ GET = "GET"
 POST = "POST"
 DELETE = "DELETE"
 
+
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi:
     """Class describing the Tesla Fleet API."""
@@ -62,7 +63,7 @@ class TeslaFleetApi:
         json: dict[str:Any] | None = None,
         params: dict[str:Any] | None = None,
     ):
-        """Request data to the Tesla Fleet API with URL encoded data."""
+        """Send a request to the Tesla Fleet API."""
 
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
@@ -91,6 +92,8 @@ class TeslaFleetApi:
 
     async def status(self):
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
+        if not self.server:
+            raise ValueError("Server was not set at init. Call find_server() first.")
         async with self.session.get(f"{self.server}/status") as resp:
             return await resp.text()
 
@@ -938,9 +941,7 @@ class TeslaFleetApi:
 
         async def share_invites(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns the share invites for a vehicle."""
-            return await self._request(
-                GET, f"api/1/vehicles/{vehicle_tag}/invitations"
-            )
+            return await self._request(GET, f"api/1/vehicles/{vehicle_tag}/invitations")
 
         async def share_invites_create(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Creates a share invite for a vehicle."""
