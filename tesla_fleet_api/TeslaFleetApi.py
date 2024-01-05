@@ -1,5 +1,5 @@
 import aiohttp
-from .exceptions import raise_for_status, TeslaFleetError
+from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
 from enum import StrEnum, IntEnum
 from .const import SERVERS
@@ -50,10 +50,9 @@ class TeslaFleetApi:
             try:
                 await self.user.region()
                 return
-            except TeslaFleetError.Base:
-                print(f"not {server}")
+            except InvalidRegion:
                 continue
-        raise TeslaFleetError.Base("Could not find a valid server.")
+        raise LibraryError("Could not find a valid Tesla API server.")
 
     async def _request(
         self,

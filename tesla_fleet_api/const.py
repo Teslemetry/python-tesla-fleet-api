@@ -8,11 +8,11 @@ class Errors(StrEnum):
     INVALID_COMMAND = "invalid_command"
     INVALID_FIELD = "invalid_field"
     INVALID_REQUEST = "invalid_request"
+    INVALID_TOKEN = "invalid_token"  # Teslemetry specific
     INVALID_AUTH_CODE = "invalid_auth_code"
     INVALID_REDIRECT_URL = "invalid_redirect_url"
     UNAUTHORIZED_CLIENT = "unauthorized_client"
     MOBILE_ACCESS_DISABLED = "mobile_access_disabled"
-    NO_RESPONSE_BODY = "no response body"
 
 
 SERVERS = {
