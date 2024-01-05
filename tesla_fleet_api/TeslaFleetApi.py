@@ -58,21 +58,24 @@ class TeslaFleetApi:
         self,
         method: str,
         path: str,
+        params: dict[str:Any] | None = None,
         data: dict[str:Any] | None = None,
         json: dict[str:Any] | None = None,
-        params: dict[str:Any] | None = None,
     ):
         """Send a request to the Tesla Fleet API."""
 
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
 
+        if method == GET and (data is not None or json is not None):
+            raise ValueError("GET requests cannot have data or json parameters.")
+
+        if params:
+            params = {k: v for k, v in params.items() if v is not None}
         if data:
             data = {k: v for k, v in data.items() if v is not None}
         if json:
             json = {k: v for k, v in json.items() if v is not None}
-        if params:
-            params = {k: v for k, v in params.items() if v is not None}
 
         async with self.session.request(
             method,
