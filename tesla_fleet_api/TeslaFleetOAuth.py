@@ -17,6 +17,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         server: str | None = None,
         raise_for_status: bool = True,
     ):
+        raise NotImplementedError("This is not implemented yet")
         self.client_id = client_id
         self.refresh_token = refresh_token
         self.expires = datetime.now()
