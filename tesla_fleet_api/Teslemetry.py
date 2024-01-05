@@ -21,3 +21,7 @@ class Teslemetry(TeslaFleetApi):
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Teslemetry.")
+
+    def stream(self, vin: str, fields, alerts, expire: int):
+        """Stream data from the Tesla Fleet API."""
+        raise NotImplementedError("Not implemented yet")
