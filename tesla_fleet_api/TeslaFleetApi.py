@@ -1,12 +1,17 @@
 import aiohttp
 from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
-from enum import StrEnum, IntEnum
-from .const import SERVERS
-
-GET = "GET"
-POST = "POST"
-DELETE = "DELETE"
+from .const import (
+    SERVERS,
+    Methods,
+    Trunks,
+    ClimateKeeperMode,
+    CabinOverheatProtectionTemps,
+    VehicleDataEndpoints,
+    SunRoofCommands,
+    WindowCommands,
+    DeviceTypes,
+)
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -56,7 +61,7 @@ class TeslaFleetApi:
 
     async def _request(
         self,
-        method: str,
+        method: Methods,
         path: str,
         params: dict[str:Any] | None = None,
         data: dict[str:Any] | None = None,
@@ -67,7 +72,7 @@ class TeslaFleetApi:
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
 
-        if method == GET and (data is not None or json is not None):
+        if method == Methods.GET and (data is not None or json is not None):
             raise ValueError("GET requests cannot have data or json parameters.")
 
         if params:
@@ -117,7 +122,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the paginated charging history."""
             return await self._request(
-                GET,
+                Methods.GET,
                 "api/1/dx/charging/history",
                 {
                     vin: vin,
@@ -140,7 +145,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the charging session information including pricing and energy data. This endpoint is only available for business accounts that own a fleet of vehicles."""
             return await self._request(
-                GET,
+                Methods.GET,
                 "api/1/dx/charging/sessions",
                 {
                     vin: vin,
@@ -160,13 +165,13 @@ class TeslaFleetApi:
         async def public_key(self, domain: str | None = None) -> dict[str, Any]:
             """Returns the public key associated with a domain. It can be used to ensure the registration was successful."""
             return await self._request(
-                GET, "api/1/partner_accounts/public_key", data={domain: domain}
+                Methods.GET, "api/1/partner_accounts/public_key", data={domain: domain}
             )
 
         async def register(self, domain: str) -> dict[str, Any]:
             """Registers an existing account before it can be used for general API access. Each application from developer.tesla.com must complete this step."""
             return await self._request(
-                POST, "api/1/partner_accounts", data={domain: domain}
+                Methods.POST, "api/1/partner_accounts", data={domain: domain}
             )
 
     class User:
@@ -177,23 +182,23 @@ class TeslaFleetApi:
 
         async def backup_key(self) -> dict[str, Any]:
             """Returns the public key associated with the user."""
-            return await self._request(GET, "api/1/users/backup_key")
+            return await self._request(Methods.GET, "api/1/users/backup_key")
 
         async def feature_config(self) -> dict[str, Any]:
             """Returns any custom feature flag applied to a user."""
-            return await self._request(GET, "api/1/users/feature_config")
+            return await self._request(Methods.GET, "api/1/users/feature_config")
 
         async def me(self) -> dict[str, Any]:
             """Returns a summary of a user's account."""
-            return await self._request(GET, "api/1/users/me")
+            return await self._request(Methods.GET, "api/1/users/me")
 
         async def orders(self) -> dict[str, Any]:
             """Returns the active orders for a user."""
-            return await self._request(GET, "api/1/users/orders")
+            return await self._request(Methods.GET, "api/1/users/orders")
 
         async def region(self) -> dict[str, Any]:
             """Returns a user's region and appropriate fleet-api base URL. Accepts no parameters, response is based on the authentication token subject."""
-            return await self._request(GET, "api/1/users/region")
+            return await self._request(Methods.GET, "api/1/users/region")
 
     class Vehicle:
         """Class describing the Tesla Fleet API vehicle endpoints and commands."""
@@ -202,20 +207,14 @@ class TeslaFleetApi:
             self._request = parent._request
             self.use_command_protocol = parent.use_command_protocol
 
-        class Trunk(StrEnum):
-            """Trunk options"""
-
-            FRONT: "front"
-            REAR: "rear"
-
         async def actuate_trunk(
-            self, vehicle_tag: str | int, which_trunk: Trunk | str
+            self, vehicle_tag: str | int, which_trunk: Trunks | str
         ) -> dict[str, Any]:
             """Controls the front or rear trunk."""
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/actuate_trunk",
                 json={which_trunk: which_trunk},
             )
@@ -229,7 +228,7 @@ class TeslaFleetApi:
             if volume < 0.0 or volume > 11.0:
                 raise ValueError("Volume must a number from 0.0 to 11.0")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/adjust_volume",
                 json={volume: volume},
             )
@@ -241,7 +240,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_start"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_start",
             )
 
         async def auto_conditioning_stop(
@@ -251,7 +251,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_stop"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_stop",
             )
 
         async def cancel_software_update(
@@ -261,7 +262,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/cancel_software_update"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/cancel_software_update",
             )
 
         async def charge_max_range(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -269,7 +271,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_max_range"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_max_range"
             )
 
         async def charge_port_door_close(
@@ -279,7 +281,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_close"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_close",
             )
 
         async def charge_port_door_open(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -287,7 +290,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_open"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_open",
             )
 
         async def charge_standard(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -295,7 +299,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_standard"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_standard"
             )
 
         async def charge_start(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -303,7 +307,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_start"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_start"
             )
 
         async def charge_stop(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -311,13 +315,14 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/charge_stop"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_stop"
             )
 
         async def clear_pin_to_drive_admin(self, vehicle_tag: str | int):
             """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/clear_pin_to_drive_admin"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/clear_pin_to_drive_admin",
             )
 
         async def door_lock(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -325,7 +330,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/door_lock"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/door_lock"
             )
 
         async def door_unlock(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -333,13 +338,13 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/door_unlock"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/door_unlock"
             )
 
         async def erase_user_data(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Erases user's data from the user interface. Requires the vehicle to be in park."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/erase_user_data"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/erase_user_data"
             )
 
         async def flash_lights(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -347,7 +352,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/flash_lights"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/flash_lights"
             )
 
         async def guest_mode(
@@ -357,7 +362,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/guest_mode",
                 json={enable: enable},
             )
@@ -367,43 +372,44 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/honk_horn"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/honk_horn"
             )
 
         async def media_next_fav(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Advances media player to next favorite track."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_next_fav"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/media_next_fav"
             )
 
         async def media_next_track(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Advances media player to next track."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_next_track"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/media_next_track"
             )
 
         async def media_prev_fav(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Advances media player to previous favorite track."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_prev_fav"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/media_prev_fav"
             )
 
         async def media_prev_track(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Advances media player to previous track."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_prev_track"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/media_prev_track"
             )
 
         async def media_toggle_playback(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Toggles current play/pause state."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_toggle_playback"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/media_toggle_playback",
             )
 
         async def media_volume_down(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Turns the volume down by one."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/media_volume_down"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/media_volume_down"
             )
 
         async def navigation_gps_request(
@@ -413,7 +419,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/navigation_gps_request",
                 json={lat: lat, lon: lon, order: order},
             )
@@ -423,7 +429,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Sends a location to the in-vehicle navigation system."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/navigation_request",
                 json={type: type, locale: locale, timestamp_ms: timestamp_ms},
             )
@@ -433,7 +439,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Sends a location to the in-vehicle navigation system."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/navigation_sc_request",
                 json={type: type, id: id, order: order},
             )
@@ -445,7 +451,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_auto_seat_climate_request",
                 json={
                     auto_seat_position: auto_seat_position,
@@ -458,7 +464,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Sets automatic steering wheel heating on/off."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_auto_steering_wheel_heat_climate_request",
                 json={on: on},
             )
@@ -468,7 +474,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Plays a sound through the vehicle external speaker."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_boombox",
                 json={sound: sound},
             )
@@ -480,7 +486,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_seat_cooler_request",
                 json={
                     seat_position: seat_position,
@@ -495,7 +501,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_seat_heater_request",
             )
 
@@ -504,7 +510,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/remote_start_drive"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/remote_start_drive"
             )
 
         async def remote_steering_wheel_heat_level_request(
@@ -514,7 +520,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heat_level_request",
                 json={level: level},
             )
@@ -526,7 +532,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heater_request",
                 json={on: on},
             )
@@ -538,7 +544,8 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/reset_pin_to_drive_pin"
+                Methods.POST,
+                f"api/1/vehicles/{vehicle_tag}/command/reset_pin_to_drive_pin",
             )
 
         async def reset_valet_pin(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -546,7 +553,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/command/reset_valet_pin"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/reset_valet_pin"
             )
 
         async def schedule_software_update(
@@ -556,7 +563,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/schedule_software_update",
                 json={offset_sec: offset_sec},
             )
@@ -568,7 +575,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_bioweapon_mode",
                 json={on: on, manual_override: manual_override},
             )
@@ -580,7 +587,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_cabin_overheat_protection",
                 json={on: on, fan_only: fan_only},
             )
@@ -592,7 +599,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
                 json={percent: percent},
             )
@@ -604,18 +611,10 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
                 json={charging_amps: charging_amps},
             )
-
-        class ClimateKeeperMode(IntEnum):
-            """Climate Keeper Mode options"""
-
-            OFF = 0
-            KEEP_MODE = 1
-            DOG_MODE = 2
-            CAMP_MODE = 3
 
         async def set_climate_keeper_mode(
             self, vehicle_tag: str | int, climate_keeper_mode: ClimateKeeperMode | int
@@ -624,26 +623,19 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_climate_keeper_mode",
                 json={climate_keeper_mode: climate_keeper_mode},
             )
 
-        class CopTemp(IntEnum):
-            """COP Temp options"""
-
-            LOW = 0  # 30C 90F
-            MEDIUM = 1  # 35C 95F
-            HIGH = 2  # 40C 100F
-
         async def set_cop_temp(
-            self, vehicle_tag: str | int, cop_temp: CopTemp | int
+            self, vehicle_tag: str | int, cop_temp: CabinOverheatProtectionTemps | int
         ) -> dict[str, Any]:
             """Adjusts the Cabin Overheat Protection temperature (COP)."""
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_cop_temp",
                 json={cop_temp: cop_temp},
             )
@@ -655,7 +647,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_pin_to_drive",
                 json={on: on, password: str(password)},
             )
@@ -667,7 +659,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_preconditioning_max",
                 json={on: on, manual_override: manual_override},
             )
@@ -679,7 +671,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_charging",
                 json={enable: enable, time: time},
             )
@@ -691,7 +683,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
                 json={enable: enable, time: time},
             )
@@ -703,7 +695,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_sentry_mode",
                 json={on: on},
             )
@@ -715,7 +707,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_temps",
                 json={driver_temp: driver_temp, passenger_temp: passenger_temp},
             )
@@ -727,7 +719,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_valet_mode",
                 json={on: on, password: str(password)},
             )
@@ -739,7 +731,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/set_vehicle_name",
                 json={vehicle_name: vehicle_name},
             )
@@ -751,7 +743,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/speed_limit_activate",
                 json={pin: str(pin)},
             )
@@ -763,7 +755,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/speed_limit_clear_pin",
                 json={pin: str(pin)},
             )
@@ -773,7 +765,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Deactivates Speed Limit Mode and resets the associated PIN for vehicles running firmware versions 2023.38+. This command is only accessible to fleet managers or owners."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/speed_limit_clear_pin_admin",
             )
 
@@ -784,7 +776,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/speed_limit_deactivate",
                 json={pin: str(pin)},
             )
@@ -796,24 +788,17 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/speed_limit_set_limit",
                 json={limit_mph: limit_mph},
             )
 
-        class SunRoof(StrEnum):
-            """Sunroof options"""
-
-            STOP = "stop"
-            CLOSE = "close"
-            VENT = "vent"
-
         async def sun_roof_control(
-            self, vehicle_tag: str | int, state: str | SunRoof
+            self, vehicle_tag: str | int, state: str | SunRoofCommands
         ) -> dict[str, Any]:
             """Controls the panoramic sunroof on the Model S."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/sun_roof_control",
                 {state: state},
             )
@@ -823,7 +808,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Records a drive note. The note parameter is truncated to 80 characters in length."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/take_drivenote",
                 {note: note},
             )
@@ -835,7 +820,7 @@ class TeslaFleetApi:
             if self.use_command_protocol:
                 raise NotImplementedError("Command Protocol not implemented")
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/trigger_homelink",
                 {lat: lat, lon: lon, token: token},
             )
@@ -845,41 +830,37 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Upcoming calendar entries stored on the vehicle."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/upcoming_calendar_entries",
                 {calendar_data: calendar_data},
             )
-
-        class WindowControl(StrEnum):
-            """Window Control options"""
-
-            VENT = "vent"
-            CLOSE = "close"
 
         async def window_control(
             self,
             vehicle_tag: str | int,
             lat: float,
             lon: float,
-            command: str | WindowControl,
+            command: str | WindowCommands,
         ) -> dict[str, Any]:
             """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/command/window_control",
                 {lat: lat, lon: lon, command: command},
             )
 
         async def drivers(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""
-            return await self._request(GET, f"api/1/vehicles/{vehicle_tag}/drivers")
+            return await self._request(
+                Methods.GET, f"api/1/vehicles/{vehicle_tag}/drivers"
+            )
 
         async def drivers_remove(
             self, vehicle_tag: str | int, share_user_id: str | int | None = None
         ) -> dict[str, Any]:
             """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
             return await self._request(
-                DELETE,
+                Methods.DELETE,
                 f"api/1/vehicles/{vehicle_tag}/drivers",
                 {share_user_id: share_user_id},
             )
@@ -889,13 +870,13 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns vehicles belonging to the account."""
             return await self._request(
-                GET, "api/1/vehicles", {page: page, per_page: per_page}
+                Methods.GET, "api/1/vehicles", {page: page, per_page: per_page}
             )
 
         async def mobile_enabled(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns whether or not mobile access is enabled for the vehicle."""
             return await self._request(
-                GET, f"api/1/vehicles/{vehicle_tag}/mobile_enabled"
+                Methods.GET, f"api/1/vehicles/{vehicle_tag}/mobile_enabled"
             )
 
         async def nearby_charging_sites(
@@ -907,19 +888,21 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the charging sites near the current location of the vehicle."""
             return await self._request(
-                GET,
+                Methods.GET,
                 f"api/1/vehicles/{vehicle_tag}/nearby_charging_sites",
                 {count: count, radius: radius, detail: detail},
             )
 
         async def options(self, vin: str) -> dict[str, Any]:
             """Returns vehicle option details."""
-            return await self._request(GET, "api/1/dx/vehicles/options", {vin: vin})
+            return await self._request(
+                Methods.GET, "api/1/dx/vehicles/options", {vin: vin}
+            )
 
         async def recent_alerts(self, vehicle_tag: str | int) -> dict[str, Any]:
             """List of recent alerts"""
             return await self._request(
-                GET, f"api/1/vehicles/{vehicle_tag}/recent_alerts"
+                Methods.GET, f"api/1/vehicles/{vehicle_tag}/recent_alerts"
             )
 
         async def release_notes(
@@ -930,7 +913,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns firmware release notes."""
             return await self._request(
-                GET,
+                Methods.GET,
                 f"api/1/vehicles/{vehicle_tag}/release_notes",
                 {staged: staged, language: language},
             )
@@ -938,29 +921,33 @@ class TeslaFleetApi:
         async def service_data(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns service data."""
             return await self._request(
-                GET, f"api/1/vehicles/{vehicle_tag}/service_data"
+                Methods.GET, f"api/1/vehicles/{vehicle_tag}/service_data"
             )
 
         async def share_invites(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns the share invites for a vehicle."""
-            return await self._request(GET, f"api/1/vehicles/{vehicle_tag}/invitations")
+            return await self._request(
+                Methods.GET, f"api/1/vehicles/{vehicle_tag}/invitations"
+            )
 
         async def share_invites_create(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Creates a share invite for a vehicle."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/invitations"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/invitations"
             )
 
         async def share_invites_redeem(self, code: str) -> dict[str, Any]:
             """Redeems a share invite."""
-            return await self._request(POST, "api/1/invitations/redeem", {code: code})
+            return await self._request(
+                Methods.POST, "api/1/invitations/redeem", {code: code}
+            )
 
         async def share_invites_revoke(
             self, vehicle_tag: str | int, id: str
         ) -> dict[str, Any]:
             """Revokes a share invite."""
             return await self._request(
-                POST, f"api/1/vehicles/{vehicle_tag}/invitations/{id}/revoke"
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/invitations/{id}/revoke"
             )
 
         async def signed_command(
@@ -968,7 +955,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Signed Commands is a generic endpoint replacing legacy commands."""
             return await self._request(
-                POST,
+                Methods.POST,
                 f"api/1/vehicles/{vehicle_tag}/signed_command",
                 {routable_message: routable_message},
             )
@@ -978,7 +965,7 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
             return await self._request(
-                GET,
+                Methods.GET,
                 "api/1/subscriptions",
                 query={device_token: device_token, device_type: device_type},
             )
@@ -988,81 +975,515 @@ class TeslaFleetApi:
         ) -> dict[str, Any]:
             """Allows a mobile device to specify which vehicles to receive push notifications from."""
             return await self._request(
-                POST,
+                Methods.POST,
                 "api/1/subscriptions",
                 query={device_token: device_token, device_type: device_type},
             )
 
         async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Returns information about a vehicle."""
-            return await self._request(GET, f"api/1/vehicles/{vehicle_tag}")
-
-        class Endpoints(StrEnum):
-            """Endpoints options"""
-
-            CHARGE_STATE = "charge_state"
-            CLIMATE_STATE = "climate_state"
-            CLOSURES_STATE = "closures_state"
-            DRIVE_STATE = "drive_state"
-            GUI_SETTINGS = "gui_settings"
-            LOCATION_DATA = "location_data"
-            VEHICLE_CONFIG = "vehicle_config"
-            VEHICLE_STATE = "vehicle_state"
-            VEHICLE_DATA_COMBO = "vehicle_data_combo"
+            return await self._request(Methods.GET, f"api/1/vehicles/{vehicle_tag}")
 
         async def vehicle_data(
             self,
             vehicle_tag: str | int,
-            endpoints: Endpoints | str | None = None,
+            endpoints: VehicleDataEndpoints | str | None = None,
         ) -> dict[str, Any]:
             """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
             return await self._request(
-                GET,
+                Methods.GET,
                 f"api/1/vehicles/{vehicle_tag}/vehicle_data",
                 {endpoints: endpoints},
             )
 
-        class DeviceType(StrEnum):
-            """Device Type options"""
-
-            ANDROID = "android"
-            IOS_DEVELOPMENT = "ios-development"
-            IOS_ENTERPRISE = "ios-enterprise"
-            IOS_BETA = "ios-beta"
-            IOS_PRODUCTION = "ios-production"
-
         async def vehicle_subscriptions(
-            self, device_token: str, device_type: DeviceType | str
+            self, device_token: str, device_type: DeviceTypes | str
         ) -> dict[str, Any]:
             """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
             return await self._request(
-                GET,
+                Methods.GET,
                 "api/1/vehicle_subscriptions",
                 {device_token: device_token, device_type: device_type},
             )
 
         async def vehicle_subscriptions_set(
-            self, device_token: str, device_type: DeviceType | str
+            self, device_token: str, device_type: DeviceTypes | str
         ) -> dict[str, Any]:
             """Allows a mobile device to specify which vehicles to receive push notifications from."""
             return await self._request(
-                POST,
+                Methods.POST,
                 "api/1/vehicle_subscriptions",
                 params={device_token: device_token, device_type: device_type},
             )
 
         async def wake_up(self, vehicle_tag: str | int) -> dict[str, Any]:
             """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
-            return await self._request(POST, f"api/1/vehicles/{vehicle_tag}/wake_up")
+            return await self._request(
+                Methods.POST, f"api/1/vehicles/{vehicle_tag}/wake_up"
+            )
 
         async def warranty_details(self, vin: str | None) -> dict[str, Any]:
             """Returns warranty details."""
-            return await self._request(GET, "api/1/dx/warranty/details", {vin: vin})
+            return await self._request(
+                Methods.GET, "api/1/dx/warranty/details", {vin: vin}
+            )
 
         async def fleet_telemetry_config(
             self, config: dict[str, Any]
         ) -> dict[str, Any]:
             """Configures fleet telemetry."""
             return await self._request(
-                POST, "api/1/vehicles/fleet_telemetry_config", json=config
+                Methods.POST, "api/1/vehicles/fleet_telemetry_config", json=config
             )
+
+        class Specific:
+            """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle."""
+
+            def __init__(self, parent, vin: str | None = None):
+                self.parent = parent
+                self.vin = vin
+
+            async def actuate_trunk(self, which_trunk: Trunks | str) -> dict[str, Any]:
+                """Controls the front or rear trunk."""
+                return await self.parent.actuate_trunk(self.vin, which_trunk)
+
+            async def adjust_volume(self, volume: float) -> dict[str, Any]:
+                """Adjusts vehicle media playback volume."""
+                return await self.parent.adjust_volume(self.vin, volume)
+
+            async def auto_conditioning_start(self) -> dict[str, Any]:
+                """Starts climate preconditioning."""
+                return await self.parent.auto_conditioning_start(self.vin)
+
+            async def auto_conditioning_stop(self) -> dict[str, Any]:
+                """Stops climate preconditioning."""
+                return await self.parent.auto_conditioning_stop(self.vin)
+
+            async def cancel_software_update(self) -> dict[str, Any]:
+                """Cancels the countdown to install the vehicle software update."""
+                return await self.parent.cancel_software_update(self.vin)
+
+            async def charge_max_range(self) -> dict[str, Any]:
+                """Charges in max range mode -- we recommend limiting the use of this mode to long trips."""
+                return await self.parent.charge_max_range(self.vin)
+
+            async def charge_port_door_close(self) -> dict[str, Any]:
+                """Closes the charge port door."""
+                return await self.parent.charge_port_door_close(self.vin)
+
+            async def charge_port_door_open(self) -> dict[str, Any]:
+                """Opens the charge port door."""
+                return await self.parent.charge_port_door_open(self.vin)
+
+            async def charge_standard(self) -> dict[str, Any]:
+                """Charges in Standard mode."""
+                return await self.parent.charge_standard(self.vin)
+
+            async def charge_start(self) -> dict[str, Any]:
+                """Starts charging the vehicle."""
+                return await self.parent.charge_start(self.vin)
+
+            async def charge_stop(self) -> dict[str, Any]:
+                """Stops charging the vehicle."""
+                return await self.parent.charge_stop(self.vin)
+
+            async def clear_pin_to_drive_admin(self):
+                """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
+                return await self.parent.clear_pin_to_drive_admin(self.vin)
+
+            async def door_lock(self) -> dict[str, Any]:
+                """Locks the vehicle."""
+                return await self.parent.door_lock(self.vin)
+
+            async def door_unlock(self) -> dict[str, Any]:
+                """Unlocks the vehicle."""
+                return await self.parent.door_unlock(self.vin)
+
+            async def erase_user_data(self) -> dict[str, Any]:
+                """Erases user's data from the user interface. Requires the vehicle to be in park."""
+                return await self.parent.erase_user_data(self.vin)
+
+            async def flash_lights(self) -> dict[str, Any]:
+                """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
+                return await self.parent.flash_lights(self.vin)
+
+            async def guest_mode(self, enable: bool) -> dict[str, Any]:
+                """Restricts certain vehicle UI functionality from guest users"""
+                return await self.parent.guest_mode(self.vin, enable)
+
+            async def honk_horn(self) -> dict[str, Any]:
+                """Honks the vehicle horn. Requires the vehicle to be in park."""
+                return await self.parent.honk_horn(self.vin)
+
+            async def media_next_fav(self) -> dict[str, Any]:
+                """Advances media player to next favorite track."""
+                return await self.parent.media_next_fav(self.vin)
+
+            async def media_next_track(self) -> dict[str, Any]:
+                """Advances media player to next track."""
+                return await self.parent.media_next_track(self.vin)
+
+            async def media_prev_fav(self) -> dict[str, Any]:
+                """Advances media player to previous favorite track."""
+                return await self.parent.media_prev_fav(self.vin)
+
+            async def media_prev_track(self) -> dict[str, Any]:
+                """Advances media player to previous track."""
+                return await self.parent.media_prev_track(self.vin)
+
+            async def media_toggle_playback(self) -> dict[str, Any]:
+                """Toggles current play/pause state."""
+                return await self.parent.media_toggle_playback(self.vin)
+
+            async def media_volume_down(self) -> dict[str, Any]:
+                """Turns the volume down by one."""
+                return await self.parent.media_volume_down(self.vin)
+
+            async def navigation_gps_request(
+                self, lat: float, lon: float, order: int
+            ) -> dict[str, Any]:
+                """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
+                self.parent.navigation_gps_request(self.vin, lat, lon, order)
+
+            async def navigation_request(
+                self, type: str, locale: str, timestamp_ms: str
+            ) -> dict[str, Any]:
+                """Sends a location to the in-vehicle navigation system."""
+                return await self.parent.navigation_request(
+                    self.vin, type, locale, timestamp_ms
+                )
+
+            async def navigation_sc_request(
+                self, id: int, order: int
+            ) -> dict[str, Any]:
+                """Sends a location to the in-vehicle navigation system."""
+                return await self.parent.navigation_sc_request(self.vin, id, order)
+
+            async def remote_auto_seat_climate_request(
+                self, auto_seat_position: int, auto_climate_on: bool
+            ) -> dict[str, Any]:
+                """Sets automatic seat heating and cooling."""
+                return await self.parent.remote_auto_seat_climate_request(
+                    self.vin, auto_seat_position, auto_climate_on
+                )
+
+            async def remote_auto_steering_wheel_heat_climate_request(
+                self, on: bool
+            ) -> dict[str, Any]:
+                """Sets automatic steering wheel heating on/off."""
+                return (
+                    await self.parent.remote_auto_steering_wheel_heat_climate_request(
+                        self.vin, on
+                    )
+                )
+
+            async def remote_boombox(self, sound: int) -> dict[str, Any]:
+                """Plays a sound through the vehicle external speaker."""
+                return await self.parent.remote_boombox(self.vin, sound)
+
+            async def remote_seat_cooler_request(
+                self, seat_position: int, seat_cooler_level: int
+            ) -> dict[str, Any]:
+                """Sets seat cooling."""
+                return await self.parent.remote_seat_cooler_request(
+                    self.vin, seat_position, seat_cooler_level
+                )
+
+            async def remote_seat_heater_request(self) -> dict[str, Any]:
+                """Sets seat heating."""
+                return await self.parent.remote_seat_heater_request(self.vin)
+
+            async def remote_start_drive(self) -> dict[str, Any]:
+                """Starts the vehicle remotely. Requires keyless driving to be enabled."""
+                return await self.parent.remote_start_drive(self.vin)
+
+            async def remote_steering_wheel_heat_level_request(
+                self, level: int
+            ) -> dict[str, Any]:
+                """Sets steering wheel heat level."""
+                return await self.parent.remote_steering_wheel_heat_level_request(
+                    self.vin, level
+                )
+
+            async def remote_steering_wheel_heater_request(
+                self, on: bool
+            ) -> dict[str, Any]:
+                """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
+                return await self.parent.remote_steering_wheel_heater_request(
+                    self.vin, on
+                )
+
+            async def reset_pin_to_drive_pin(self) -> dict[str, Any]:
+                """Removes PIN to Drive. Requires the car to be in Pin to Drive mode and not in Valet mode. Note that this only works if PIN to Drive is not active. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
+                return await self.parent.reset_pin_to_drive_pin(self.vin)
+
+            async def reset_valet_pin(self) -> dict[str, Any]:
+                """Removes PIN for Valet Mode."""
+                return await self.parent.reset_valet_pin(self.vin)
+
+            async def schedule_software_update(self, offset_sec: int) -> dict[str, Any]:
+                """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
+                return await self.parent.schedule_software_update(self.vin, offset_sec)
+
+            async def set_bioweapon_mode(
+                self, on: bool, manual_override: bool
+            ) -> dict[str, Any]:
+                """Turns Bioweapon Defense Mode on and off."""
+                return await self.parent.set_bioweapon_mode(
+                    self.vin, on, manual_override
+                )
+
+            async def set_cabin_overheat_protection(
+                self, on: bool, fan_only: bool
+            ) -> dict[str, Any]:
+                """Sets the vehicle overheat protection."""
+                return await self.parent.set_cabin_overheat_protection(
+                    self.vin, on, fan_only
+                )
+
+            async def set_charge_limit(self, percent: int) -> dict[str, Any]:
+                """Sets the vehicle charge limit."""
+                return await self.parent.set_charge_limit(self.vin, percent)
+
+            async def set_charging_amps(self, charging_amps: int) -> dict[str, Any]:
+                """Sets the vehicle charging amps."""
+                return await self.parent.set_charging_amps(self.vin, charging_amps)
+
+            async def set_climate_keeper_mode(
+                self, climate_keeper_mode: ClimateKeeperMode | int
+            ) -> dict[str, Any]:
+                """Enables climate keeper mode."""
+                return await self.parent.set_climate_keeper_mode(
+                    self.vin, climate_keeper_mode
+                )
+
+            async def set_cop_temp(
+                self, cop_temp: CabinOverheatProtectionTemps | int
+            ) -> dict[str, Any]:
+                """Adjusts the Cabin Overheat Protection temperature (COP)."""
+                return await self.parent.set_cop_temp(self.vin, cop_temp)
+
+            async def set_pin_to_drive(
+                self, on: bool, password: str | int
+            ) -> dict[str, Any]:
+                """Sets a four-digit passcode for PIN to Drive. This PIN must then be entered before the vehicle can be driven."""
+                return await self.parent.set_pin_to_drive(self.vin, on, password)
+
+            async def set_preconditioning_max(
+                self, on: bool, manual_override: bool
+            ) -> dict[str, Any]:
+                """Sets an override for preconditioning — it should default to empty if no override is used."""
+                return await self.parent.set_preconditioning_max(
+                    self.vin, on, manual_override
+                )
+
+            async def set_scheduled_charging(
+                self, enable: bool, time: int
+            ) -> dict[str, Any]:
+                """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
+                return await self.parent.set_scheduled_charging(self.vin, enable, time)
+
+            async def set_scheduled_departure(
+                self, enable: bool, time: int
+            ) -> dict[str, Any]:
+                """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
+                return await self.parent.set_scheduled_departure(self.vin, enable, time)
+
+            async def set_sentry_mode(self, on: bool) -> dict[str, Any]:
+                """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
+                return await self.parent.set_sentry_mode(self.vin, on)
+
+            async def set_temps(
+                self, driver_temp: int, passenger_temp: int
+            ) -> dict[str, Any]:
+                """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
+                return await self.parent.set_temps(
+                    self.vin, driver_temp, passenger_temp
+                )
+
+            async def set_valet_mode(
+                self, on: bool, password: str | int
+            ) -> dict[str, Any]:
+                """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
+                return await self.parent.set_valet_mode(self.vin, on, password)
+
+            async def set_vehicle_name(self, vehicle_name: str) -> dict[str, Any]:
+                """Changes the name of a vehicle. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
+                return await self.parent.set_vehicle_name(self.vin, vehicle_name)
+
+            async def speed_limit_activate(self, pin: str | int) -> dict[str, Any]:
+                """Activates Speed Limit Mode with a four-digit PIN."""
+                return await self.parent.speed_limit_activate(self.vin, pin)
+
+            async def speed_limit_clear_pin(self, pin: str | int) -> dict[str, Any]:
+                """Deactivates Speed Limit Mode and resets the associated PIN."""
+                return await self.parent.speed_limit_clear_pin(self.vin, pin)
+
+            async def speed_limit_clear_pin_admin(self) -> dict[str, Any]:
+                """Deactivates Speed Limit Mode and resets the associated PIN for vehicles running firmware versions 2023.38+. This command is only accessible to fleet managers or owners."""
+                return await self.parent.speed_limit_clear_pin_admin(self.vin)
+
+            async def speed_limit_deactivate(self, pin: str | int) -> dict[str, Any]:
+                """Deactivates Speed Limit Mode."""
+                return await self.parent.speed_limit_deactivate(self.vin, pin)
+
+            async def speed_limit_set_limit(self, limit_mph: int) -> dict[str, Any]:
+                """Sets the maximum speed allowed when Speed Limit Mode is active."""
+                return await self.parent.speed_limit_set_limit(self.vin, limit_mph)
+
+            async def sun_roof_control(
+                self, state: str | SunRoofCommands
+            ) -> dict[str, Any]:
+                """Controls the panoramic sunroof on the Model S."""
+                return await self.parent.sun_roof_control(self.vin, state)
+
+            async def take_drivenote(self, note: str) -> dict[str, Any]:
+                """Records a drive note. The note parameter is truncated to 80 characters in length."""
+                return await self.parent.take_drivenote(self.vin, note)
+
+            async def trigger_homelink(
+                self, lat: float, lon: float, token: str
+            ) -> dict[str, Any]:
+                """Turns on HomeLink (used to open and close garage doors)."""
+                return await self.parent.trigger_homelink(self.vin, lat, lon, token)
+
+            async def upcoming_calendar_entries(
+                self, calendar_data: str
+            ) -> dict[str, Any]:
+                """Upcoming calendar entries stored on the vehicle."""
+                return await self.parent.upcoming_calendar_entries(
+                    self.vin, calendar_data
+                )
+
+            async def window_control(
+                self,
+                vehicle_tag: str | int,
+                lat: float,
+                lon: float,
+                command: str | WindowCommands,
+            ) -> dict[str, Any]:
+                """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
+                return await self.parent.window_control(self.vin, lat, lon, command)
+
+            async def drivers(self) -> dict[str, Any]:
+                """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""
+                return await self.parent.drivers(self.vin)
+
+            async def drivers_remove(
+                self, share_user_id: str | int | None = None
+            ) -> dict[str, Any]:
+                """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
+                return await self.parent.drivers_remove(self.vin, share_user_id)
+
+            async def mobile_enabled(self) -> dict[str, Any]:
+                """Returns whether or not mobile access is enabled for the vehicle."""
+                return await self.parent.mobile_enabled(self.vin)
+
+            async def nearby_charging_sites(
+                self,
+                vehicle_tag: str | int,
+                count: int | None = None,
+                radius: int | None = None,
+                detail: bool | None = None,
+            ) -> dict[str, Any]:
+                """Returns the charging sites near the current location of the vehicle."""
+                return await self.parent.nearby_charging_sites(
+                    self.vin, count, radius, detail
+                )
+
+            async def options(self, vin: str) -> dict[str, Any]:
+                """Returns vehicle option details."""
+                return await self.parent.options(self.vin)
+
+            async def recent_alerts(self) -> dict[str, Any]:
+                """List of recent alerts"""
+                return await self.parent.recent_alerts(self.vin)
+
+            async def release_notes(
+                self,
+                vehicle_tag: str | int,
+                staged: bool | None = None,
+                language: int | None = None,
+            ) -> dict[str, Any]:
+                """Returns firmware release notes."""
+                return await self.parent.release_notes(self.vin, staged, language)
+
+            async def service_data(self) -> dict[str, Any]:
+                """Returns service data."""
+                return await self.parent.service_data(self.vin)
+
+            async def share_invites(self) -> dict[str, Any]:
+                """Returns the share invites for a vehicle."""
+                return await self.parent.share_invites(self.vin)
+
+            async def share_invites_create(self) -> dict[str, Any]:
+                """Creates a share invite for a vehicle."""
+                return await self.parent.share_invites_create(self.vin)
+
+            async def share_invites_redeem(self, code: str) -> dict[str, Any]:
+                """Redeems a share invite."""
+                return await self.parent.share_invites_redeem(code)
+
+            async def share_invites_revoke(self, id: str) -> dict[str, Any]:
+                """Revokes a share invite."""
+                return await self.parent.share_invites_revoke(self.vin, id)
+
+            async def signed_command(self, routable_message: str) -> dict[str, Any]:
+                """Signed Commands is a generic endpoint replacing legacy commands."""
+                return await self.parent.signed_command(self.vin, routable_message)
+
+            async def subscriptions(
+                self, device_token: str, device_type: str
+            ) -> dict[str, Any]:
+                """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
+                return await self.parent.subscriptions(
+                    self.vin, device_token, device_type
+                )
+
+            async def subscriptions_set(
+                self, device_token: str, device_type: str
+            ) -> dict[str, Any]:
+                """Allows a mobile device to specify which vehicles to receive push notifications from."""
+                return await self.parent.subscriptions_set(
+                    self.vin, device_token, device_type
+                )
+
+            async def vehicle(self) -> dict[str, Any]:
+                """Returns information about a vehicle."""
+                return await self.parent.vehicle(self.vin)
+
+            async def vehicle_data(
+                self,
+                endpoints: VehicleDataEndpoints | str | None = None,
+            ) -> dict[str, Any]:
+                """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
+                return await self.parent.vehicle_data(self.vin, endpoints)
+
+            async def vehicle_subscriptions(
+                self, device_token: str, device_type: DeviceTypes | str
+            ) -> dict[str, Any]:
+                """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
+                return await self.parent.vehicle_subscriptions(
+                    self.vin, device_token, device_type
+                )
+
+            async def vehicle_subscriptions_set(
+                self, device_token: str, device_type: DeviceTypes | str
+            ) -> dict[str, Any]:
+                """Allows a mobile device to specify which vehicles to receive push notifications from."""
+                return await self.parent.vehicle_subscriptions_set(
+                    self.vin, device_token, device_type
+                )
+
+            async def wake_up(self) -> dict[str, Any]:
+                """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
+                return await self.parent.wake_up(self.vin)
+
+            async def warranty_details(self) -> dict[str, Any]:
+                """Returns warranty details."""
+                return await self.parent.warranty_details(self.vin)
+
+        async def create(self) -> [Specific]:
+            """Creates a class for each vehicle."""
+            list = await self.list()
+            return [self.Specific(self, x["vin"]) for x in list["response"]]

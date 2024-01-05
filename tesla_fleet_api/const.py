@@ -1,5 +1,13 @@
 """Tesla Fleet API constants."""
-from enum import StrEnum
+from enum import StrEnum, IntEnum
+
+
+class Methods(StrEnum):
+    """HTTP methods."""
+
+    GET = "GET"
+    POST = "POST"
+    DELETE = "DELETE"
 
 
 class Errors(StrEnum):
@@ -20,6 +28,69 @@ SERVERS = {
     "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
     "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
 }
+
+
+class Trunks(StrEnum):
+    """Trunk options"""
+
+    FRONT: "front"
+    REAR: "rear"
+
+
+class ClimateKeeperMode(IntEnum):
+    """Climate Keeper Mode options"""
+
+    OFF = 0
+    KEEP_MODE = 1
+    DOG_MODE = 2
+    CAMP_MODE = 3
+
+
+class CabinOverheatProtectionTemps(IntEnum):
+    """COP Temp options"""
+
+    LOW = 0  # 30C 90F
+    MEDIUM = 1  # 35C 95F
+    HIGH = 2  # 40C 100F
+
+
+class VehicleDataEndpoints(StrEnum):
+    """Endpoints options"""
+
+    CHARGE_STATE = "charge_state"
+    CLIMATE_STATE = "climate_state"
+    CLOSURES_STATE = "closures_state"
+    DRIVE_STATE = "drive_state"
+    GUI_SETTINGS = "gui_settings"
+    LOCATION_DATA = "location_data"
+    VEHICLE_CONFIG = "vehicle_config"
+    VEHICLE_STATE = "vehicle_state"
+    VEHICLE_DATA_COMBO = "vehicle_data_combo"
+
+
+class SunRoofCommands(StrEnum):
+    """Sunroof options"""
+
+    STOP = "stop"
+    CLOSE = "close"
+    VENT = "vent"
+
+
+class WindowCommands(StrEnum):
+    """Window Control options"""
+
+    VENT = "vent"
+    CLOSE = "close"
+
+
+class DeviceTypes(StrEnum):
+    """Device Type options"""
+
+    ANDROID = "android"
+    IOS_DEVELOPMENT = "ios-development"
+    IOS_ENTERPRISE = "ios-enterprise"
+    IOS_BETA = "ios-beta"
+    IOS_PRODUCTION = "ios-production"
 
 
 class TelemetryFields(StrEnum):
