@@ -204,6 +204,7 @@ class TeslaFleetApi:
         """Class describing the Tesla Fleet API vehicle endpoints and commands."""
 
         def __init__(self, parent):
+            self._parent = parent
             self._request = parent._request
             self.use_command_protocol = parent.use_command_protocol
 
