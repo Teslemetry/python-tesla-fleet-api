@@ -10,6 +10,7 @@ from .energy import Energy
 from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
+from .vehiclespecific import VehicleSpecific
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -20,6 +21,7 @@ class TeslaFleetApi:
     session: aiohttp.ClientSession
     headers: dict[str, str]
     raise_for_status: bool
+    vehicles: list[VehicleSpecific]
 
     def __init__(
         self,
@@ -29,6 +31,11 @@ class TeslaFleetApi:
         region: str | None = None,
         server: str | None = None,
         raise_for_status: bool = True,
+        charging_scope: bool = True,
+        energy_scope: bool = True,
+        partner_scope: bool = True,
+        user_scope: bool = True,
+        vehicle_scope: bool = True,
     ):
         """Initialize the Tesla Fleet API."""
 
@@ -41,11 +48,16 @@ class TeslaFleetApi:
         self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
 
-        self.charging = Charging(self)
-        self.energy = Energy(self)
-        self.user = User(self)
-        self.partner = Partner(self)
-        self.vehicle = Vehicle(self)
+        if charging_scope:
+            self.charging = Charging(self)
+        if energy_scope:
+            self.energy = Energy(self)
+        if user_scope:
+            self.user = User(self)
+        if partner_scope:
+            self.partner = Partner(self)
+        if vehicle_scope:
+            self.vehicle = Vehicle(self)
 
     async def find_server(self) -> None:
         """Find the server URL for the Tesla Fleet API."""

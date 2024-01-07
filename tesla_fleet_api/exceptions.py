@@ -211,16 +211,16 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    if e.status == 401 and resp.content_length == 0:
+    if resp.status == 401 and resp.content_length == 0:
         # This error does not return a body
-        raise OAuthExpired() from e
+        raise OAuthExpired()
 
     data = await resp.json()
 
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
-        if e.status == 400:
+        if resp.status == 400:
             if data.error == Errors.INVALID_COMMAND:
                 raise InvalidCommand(data) from e
             elif data.error == Errors.INVALID_FIELD:
@@ -233,44 +233,44 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                 raise InvalidRedirectUrl(data) from e
             elif data.error == Errors.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
-        elif e.status == 401:
+        elif resp.status == 401:
             if data.error == Errors.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
             elif data.error == Errors.INVALID_TOKEN:
                 raise InvalidToken(data) from e
-        elif e.status == 402:
+        elif resp.status == 402:
             raise PaymentRequired(data) from e
-        elif e.status == 403:
+        elif resp.status == 403:
             raise Forbidden(data) from e
-        elif e.status == 404:
+        elif resp.status == 404:
             raise NotFound(data) from e
-        elif e.status == 405:
+        elif resp.status == 405:
             raise NotAllowed(data) from e
-        elif e.status == 406:
+        elif resp.status == 406:
             raise NotAcceptable(data) from e
-        elif e.status == 408:
+        elif resp.status == 408:
             raise VehicleOffline(data) from e
-        elif e.status == 412:
+        elif resp.status == 412:
             raise PreconditionFailed(data) from e
-        elif e.status == 421:
+        elif resp.status == 421:
             raise InvalidRegion(data) from e
-        elif e.status == 422:
+        elif resp.status == 422:
             raise InvalidResource(data) from e
-        elif e.status == 423:
+        elif resp.status == 423:
             raise Locked(data) from e
-        elif e.status == 429:
+        elif resp.status == 429:
             raise RateLimited(data) from e
-        elif e.status == 451:
+        elif resp.status == 451:
             raise ResourceUnavailableForLegalReasons(data) from e
-        elif e.status == 499:
+        elif resp.status == 499:
             raise ClientClosedRequest(data) from e
-        elif e.status == 500:
+        elif resp.status == 500:
             raise InternalServerError(data) from e
-        elif e.status == 503:
+        elif resp.status == 503:
             raise ServiceUnavailable(data) from e
-        elif e.status == 504:
+        elif resp.status == 504:
             raise GatewayTimeout(data) from e
-        elif e.status == 540:
+        elif resp.status == 540:
             raise DeviceUnexpectedResponse(data) from e
         else:
             raise e

@@ -22,8 +22,9 @@ class Vehicle:
 
     async def create(self) -> [VehicleSpecific]:
         """Creates a class for each vehicle."""
-        if vehicles := await self.list()["response"]:
-            return [VehicleSpecific(self, x["vin"]) for x in vehicles]
+        if vehicles := (await self.list()).get("response"):
+            self._parent.vehicles = [VehicleSpecific(self, x["vin"]) for x in vehicles]
+            return self._parent.vehicles
         return []
 
     async def actuate_trunk(
