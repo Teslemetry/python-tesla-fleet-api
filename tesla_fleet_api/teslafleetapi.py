@@ -59,13 +59,15 @@ class TeslaFleetApi:
         if vehicle_scope:
             self.vehicle = Vehicle(self)
 
-    async def find_server(self) -> None:
+    async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""
         for server in SERVERS.values():
             self.server = server
             try:
-                await self.user.region()
-                return
+                response = await (self.user.region()).get("response")
+                if response:
+                    self.server = response["fleet_api_base_url"]
+                    return response["region"]
             except InvalidRegion:
                 continue
         raise LibraryError("Could not find a valid Tesla API server.")
