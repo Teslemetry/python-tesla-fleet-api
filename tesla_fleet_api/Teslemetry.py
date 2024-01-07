@@ -30,10 +30,6 @@ class Teslemetry(TeslaFleetApi):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Teslemetry.")
 
-    def stream(self, vin: str, fields, alerts, expire: int):
-        """Stream data from the Tesla Fleet API."""
-        raise NotImplementedError("Not implemented yet")
-
     class Vehicle(TeslaFleetApi.Vehicle):
         """Tesla Fleet API Vehicle."""
 
