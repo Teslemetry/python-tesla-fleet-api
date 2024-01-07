@@ -1,3 +1,3 @@
-from .TeslaFleetApi import TeslaFleetApi
-from .TeslaFleetOAuth import TeslaFleetOAuth
-from .Teslemetry import Teslemetry
+from .teslafleetapi import TeslaFleetApi
+from .teslafleetoauth import TeslaFleetOAuth
+from .teslemetry import Teslemetry

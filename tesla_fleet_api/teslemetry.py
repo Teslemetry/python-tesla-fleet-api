@@ -1,5 +1,7 @@
 import aiohttp
-from .TeslaFleetApi import TeslaFleetApi
+from .teslafleetapi import TeslaFleetApi
+from .vehicle import Vehicle
+from .vehiclespecific import VehicleSpecific
 from .const import Methods
 
 
@@ -30,15 +32,13 @@ class Teslemetry(TeslaFleetApi):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Teslemetry.")
 
-    class Vehicle(TeslaFleetApi.Vehicle):
+    class Vehicle(Vehicle):
         """Tesla Fleet API Vehicle."""
 
-        async def create(
-            self, only_subscribed=True
-        ) -> [TeslaFleetApi.Vehicle.Specific]:
+        async def create(self, only_subscribed=True) -> [VehicleSpecific]:
             """Creates a class for each vehicle."""
             if only_subscribed:
                 return [
-                    self.Specific(self, vin) for vin in await self._parent.vehicles()
+                    VehicleSpecific(self, vin) for vin in await self._parent.vehicles()
                 ]
             return await super().create()

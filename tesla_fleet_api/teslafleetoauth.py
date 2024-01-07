@@ -1,6 +1,6 @@
 import aiohttp
 import datetime
-from .TeslaFleetApi import TeslaFleetApi
+from .teslafleetapi import TeslaFleetApi
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
