@@ -211,7 +211,7 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    if resp.status == 401 and resp.content_length == 0:
+    if resp.status == 401 and not resp.content_length:
         # This error does not return a body
         raise OAuthExpired()
 
