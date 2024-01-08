@@ -1,26 +1,29 @@
 import aiohttp
-import datetime
+import time
 from .teslafleetapi import TeslaFleetApi
+from .const import Scopes, SERVERS
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
     """Tesla Fleet OAuth API."""
 
-    expires: datetime
+    expires: int
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
         client_id: str,
-        refresh_token: str,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        expires: int = 0,
         region: str | None = None,
         server: str | None = None,
         raise_for_status: bool = True,
     ):
-        raise NotImplementedError("This is not implemented yet")
         self.client_id = client_id
+        self.access_token = access_token
         self.refresh_token = refresh_token
-        self.expires = datetime.now()
+        self.expires = expires
 
         super().__init__(
             session,
@@ -30,16 +33,43 @@ class TeslaFleetOAuth(TeslaFleetApi):
             raise_for_status=raise_for_status,
         )
 
-    async def check_access_token(self) -> None:
+    def get_login_url(
+        self, redirect_uri: str, scopes: [Scopes], state: str = "login"
+    ) -> str:
+        """Get the login URL."""
+        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(scopes)}&state={state}"
+
+    async def get_refresh_token(self, client_secret: str, code: str, redirect_uri: str):
+        """Get the refresh token."""
+        async with self.session.post(
+            "https://auth.tesla.com/oauth2/v3/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": self.client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "audience": self.server,
+                "redirect_uri": redirect_uri,
+            },
+        ) as resp:
+            if resp.ok:
+                data = await resp.json()
+                self.refresh_token = data["refresh_token"]
+                self.access_token = data["access_token"]
+                self.expires = int(time.time()) + data["expires_in"]
+                region = code.split("_")[0].lower()
+                self.server = SERVERS.get(region)
+
+    async def check_access_token(self) -> str | None:
         """Get the access token."""
-        if self.expires > datetime.now():
+        if self.access_token and self.expires > time.time():
             return
-        await self.refresh_access_token()
+        return await self.refresh_access_token()
 
     async def refresh_access_token(self) -> str:
         if not self.refresh_token:
             raise ValueError("Refresh token is missing")
-        with self.session.post(
+        async with self.session.post(
             "https://auth.tesla.com/oauth2/v3/token",
             data={
                 "grant_type": "refresh_token",
@@ -49,19 +79,6 @@ class TeslaFleetOAuth(TeslaFleetApi):
         ) as resp:
             data = await resp.json()
             self.access_token = data["access_token"]
-            self.expires = datetime.now() + datetime.timedelta(
-                seconds=data["expires_in"]
-            )
-
-    async def get_refresh_token(self, client_secret: str, code: str):
-        """Get the refresh token."""
-        data = {
-            "grant_type": "authorization_code",
-            "client_id": self.client_id,
-            "code": code,
-            "audience": self.region,
-        }
-
-        self.session.post(
-            "https://auth.tesla.com/oauth2/v3/token",
-        )
+            self.refresh_token = data["refresh_token"]
+            self.expires = int(time.time()) + data["expires_in"]
+            return {"refresh_token": self.refresh_token, "expires": self.expires}
