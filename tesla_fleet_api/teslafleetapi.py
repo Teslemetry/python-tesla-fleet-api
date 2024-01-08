@@ -1,10 +1,7 @@
 import aiohttp
 from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
-from .const import (
-    SERVERS,
-    Methods,
-)
+from .const import SERVERS, Methods, Errors
 from .charging import Charging
 from .energy import Energy
 from .partner import Partner
@@ -108,6 +105,13 @@ class TeslaFleetApi:
         ) as resp:
             if self.raise_for_status:
                 await raise_for_status(resp)
+            elif not resp.content_length:
+                # Manufacture a response since Tesla doesn't provide a body for token expiration.
+                return {
+                    "response": None,
+                    "error": Errors.INVALID_TOKEN,
+                    "error_message": "The OAuth token has expired.",
+                }
             return await resp.json()
 
     async def status(self):

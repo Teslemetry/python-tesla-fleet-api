@@ -16,7 +16,7 @@ class Errors(StrEnum):
     INVALID_COMMAND = "invalid_command"
     INVALID_FIELD = "invalid_field"
     INVALID_REQUEST = "invalid_request"
-    INVALID_TOKEN = "invalid_token"  # Teslemetry specific
+    INVALID_TOKEN = "invalid_token"  # Manufactured error for token expiration.
     INVALID_AUTH_CODE = "invalid_auth_code"
     INVALID_REDIRECT_URL = "invalid_redirect_url"
     UNAUTHORIZED_CLIENT = "unauthorized_client"
@@ -91,6 +91,19 @@ class DeviceTypes(StrEnum):
     IOS_ENTERPRISE = "ios-enterprise"
     IOS_BETA = "ios-beta"
     IOS_PRODUCTION = "ios-production"
+
+
+class Scopes(StrEnum):
+    """Fleet API Scopes"""
+
+    OPENID = "openid"
+    OFFLINE_ACCESS = "offline_access"
+    USER_DATA = "user_data"
+    VEHICLE_DEVICE_DATA = "vehicle_device_data"
+    VEHICLE_CMDS = "vehicle_cmds"
+    VEHICLE_CHARGING_CMDS = "vehicle_charging_cmds"
+    ENERGY_DEVICE_DATA = "energy_device_data"
+    ENERGY_CMDS = "energy_cmds"
 
 
 class TelemetryFields(StrEnum):
