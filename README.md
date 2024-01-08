@@ -37,6 +37,41 @@ asyncio.run(main())
 ## TeslaFleetOAuth
 This extends TeslaFleetApi to support OAuth, and requires a client_id, and either a refresh_token or initial authentication code.
 
+```
+import json
+
+async def main():
+    with open("auth.json", "r") as f:
+        auth = json.load(f)
+    async with aiohttp.ClientSession() as session:
+        api = TeslaFleetOAuth(
+            session,
+            client_id=<client_id>,
+            access_token=auth["access_token"],
+            refresh_token=auth["refresh_token"],
+            expires=auth["expires"],
+            region="na",
+            raise_for_status=True,
+        )
+        try:
+            data = await api.vehicle.list()
+            print(data)
+        except TeslaFleetError.Base as e:
+            print(e.message, e.error)
+
+    with open("auth.json", "w") as f:
+        json.dump(
+            {
+                "access_token": api.access_token,
+                "refresh_token": api.refresh_token,
+                "expires": api.expires,
+            },
+            f,
+        )
+
+asyncio.run(main())
+```
+
 ## Teslemetry
 This extends TeslaFleetApi to send requests through Teslemetry, which manages all aspects of Tesla OAuth. This class only requires an access_token from the Teslemetry console.
 
