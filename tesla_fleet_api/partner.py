@@ -11,7 +11,7 @@ class Partner:
     async def public_key(self, domain: str | None = None) -> dict[str, Any]:
         """Returns the public key associated with a domain. It can be used to ensure the registration was successful."""
         return await self._request(
-            Methods.GET, "api/1/partner_accounts/public_key", data={domain: domain}
+            Methods.GET, "api/1/partner_accounts/public_key", {domain: domain}
         )
 
     async def register(self, domain: str) -> dict[str, Any]:
