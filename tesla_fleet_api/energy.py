@@ -107,13 +107,6 @@ class Energy:
             data={default_real_mode: default_real_mode},
         )
 
-    async def products(self) -> dict[str, Any]:
-        """Returns products mapped to user."""
-        return await self._request(
-            Methods.GET,
-            "api/1/products",
-        )
-
     async def site_info(self, energy_site_id: int) -> dict[str, Any]:
         """Returns information about the site. Things like assets (has solar, etc), settings (backup reserve, etc), and features (storm_mode_capable, etc)."""
         return await self._request(

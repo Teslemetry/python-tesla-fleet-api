@@ -120,3 +120,10 @@ class TeslaFleetApi:
             raise ValueError("Server was not set at init. Call find_server() first.")
         async with self.session.get(f"{self.server}/status") as resp:
             return await resp.text()
+
+    async def products(self) -> dict[str, Any]:
+        """Returns products mapped to user."""
+        return await self._request(
+            Methods.GET,
+            "api/1/products",
+        )
