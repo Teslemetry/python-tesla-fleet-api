@@ -79,7 +79,8 @@ This extends TeslaFleetApi to send requests through Teslemetry, which manages al
 import asyncio
 import aiohttp
 
-from tesla_fleet_api import Teslemetry, TeslaFleetError
+from tesla_fleet_api import Teslemetry
+from tesla_fleet_api.exceptions import TeslaFleetError
 
 
 async def main():
@@ -93,7 +94,7 @@ async def main():
         try:
             data = await api.vehicle.list()
             print(data)
-        except TeslaFleetError.Base as e:
+        except TeslaFleetError as e:
             print(e.message, e.error)
 
 asyncio.run(main())

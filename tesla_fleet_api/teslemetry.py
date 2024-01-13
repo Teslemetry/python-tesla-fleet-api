@@ -21,11 +21,11 @@ class Teslemetry(TeslaFleetApi):
             user_scope=False,
         )
 
-    async def subscription(self):
+    async def subscription_status(self) -> bool:
         """Get the subscribed vehicles."""
         return await self._request(
             Methods.GET,
-            "/meta/subscription",
+            "/api/subscription/active",
         )
 
     async def find_server(self):

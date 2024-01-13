@@ -41,7 +41,7 @@ class TeslaFleetApi:
         self.use_command_protocol = use_command_protocol
 
         if region and not server and region not in SERVERS:
-            raise ValueError(f"Region must be one of {", ".join(SERVERS.keys())}")
+            raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
         self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
 

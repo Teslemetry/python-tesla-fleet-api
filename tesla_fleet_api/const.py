@@ -1,5 +1,13 @@
 """Tesla Fleet API constants."""
-from enum import StrEnum, IntEnum
+from enum import Enum
+
+
+class IntEnum(int, Enum):
+    pass
+
+
+class StrEnum(str, Enum):
+    pass
 
 
 class Methods(StrEnum):
