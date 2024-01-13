@@ -28,6 +28,10 @@ class Vehicle:
             return self._parent.vehicles
         return []
 
+    async def specific(self, vehicle_tag: str | int) -> VehicleSpecific:
+        """Creates a class for each vehicle."""
+        return self._parent.vehicles(self, vehicle_tag)
+
     async def actuate_trunk(
         self, vehicle_tag: str | int, which_trunk: Trunks | str
     ) -> dict[str, Any]:
