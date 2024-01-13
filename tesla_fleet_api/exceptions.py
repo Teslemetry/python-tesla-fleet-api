@@ -274,5 +274,4 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
             raise GatewayTimeout(data) from e
         elif resp.status == 540:
             raise DeviceUnexpectedResponse(data) from e
-        else:
-            raise e
+        raise e
