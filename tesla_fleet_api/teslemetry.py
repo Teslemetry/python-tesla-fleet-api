@@ -21,11 +21,18 @@ class Teslemetry(TeslaFleetApi):
             user_scope=False,
         )
 
-    async def subscription_status(self) -> bool:
-        """Get the subscribed vehicles."""
+    async def ping(self) -> bool:
+        """Send a ping."""
         return await self._request(
             Methods.GET,
-            "/api/subscription/active",
+            "/api/ping",
+        )
+
+    async def test(self) -> bool:
+        """Test API Authentication."""
+        return await self._request(
+            Methods.GET,
+            "/api/test",
         )
 
     async def find_server(self):
