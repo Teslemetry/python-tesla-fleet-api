@@ -221,22 +221,24 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
         if resp.status == 400:
-            if data.error == Errors.INVALID_COMMAND:
+            error = data.get("error")
+            if error == Errors.INVALID_COMMAND:
                 raise InvalidCommand(data) from e
-            elif data.error == Errors.INVALID_FIELD:
+            elif error == Errors.INVALID_FIELD:
                 raise InvalidField(data) from e
-            elif data.error == Errors.INVALID_REQUEST:
+            elif error == Errors.INVALID_REQUEST:
                 raise InvalidRequest(data) from e
-            elif data.error == Errors.INVALID_AUTH_CODE:
+            elif error == Errors.INVALID_AUTH_CODE:
                 raise InvalidAuthCode(data) from e
-            elif data.error == Errors.INVALID_REDIRECT_URL:
+            elif error == Errors.INVALID_REDIRECT_URL:
                 raise InvalidRedirectUrl(data) from e
-            elif data.error == Errors.UNAUTHORIZED_CLIENT:
+            elif error == Errors.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
         elif resp.status == 401:
-            if data.error == Errors.MOBILE_ACCESS_DISABLED:
+            error = data.get("error")
+            if error == Errors.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
-            elif data.error == Errors.INVALID_TOKEN:
+            elif error == Errors.INVALID_TOKEN:
                 raise InvalidToken(data) from e
         elif resp.status == 402:
             raise PaymentRequired(data) from e
