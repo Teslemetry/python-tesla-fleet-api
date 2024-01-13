@@ -1,4 +1,4 @@
-# tesla_fleet_api
+# Tesla Fleet Api
 Python library for Tesla Fleet API and Teslemetry.
 
 Currently does not support the end to end encrypted telemetry or command API.
