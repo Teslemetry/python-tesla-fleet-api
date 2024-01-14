@@ -25,13 +25,13 @@ class Charging:
             Methods.GET,
             "api/1/dx/charging/history",
             {
-                vin: vin,
-                startTime: startTime,
-                endTime: endTime,
-                pageNo: pageNo,
-                pageSize: pageSize,
-                sortBy: sortBy,
-                sortOrder: sortOrder,
+                "vin": vin,
+                "startTime": startTime,
+                "endTime": endTime,
+                "pageNo": pageNo,
+                "pageSize": pageSize,
+                "sortBy": sortBy,
+                "sortOrder": sortOrder,
             },
         )
 
@@ -48,10 +48,10 @@ class Charging:
             Methods.GET,
             "api/1/dx/charging/sessions",
             {
-                vin: vin,
-                date_from: date_from,
-                date_to: date_to,
-                limit: limit,
-                offset: offset,
+                "vin": vin,
+                "date_from": date_from,
+                "date_to": date_to,
+                "limit": limit,
+                "offset": offset,
             },
         )

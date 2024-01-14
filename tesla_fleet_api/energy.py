@@ -15,7 +15,7 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/backup",
-            data={backup_reserve_percent: backup_reserve_percent},
+            data={"backup_reserve_percent": backup_reserve_percent},
         )
 
     async def backup_history(
@@ -30,7 +30,14 @@ class Energy:
         """Returns the backup (off-grid) event history of the site in duration of seconds."""
         return await self._request(
             Methods.GET,
-            f"api/1/energy_sites/{energy_site_id}/calendar_history?kind={kind}&start_date={start_date}&end_date={end_date}&period={period}&time_zone={time_zone}",
+            f"api/1/energy_sites/{energy_site_id}/calendar_history",
+            {
+                "kind": kind,
+                "start_date": start_date,
+                "end_date": end_date,
+                "period": period,
+                "time_zone": time_zone,
+            },
         )
 
     async def charge_history(
@@ -44,7 +51,13 @@ class Energy:
         """Returns the charging history of a wall connector."""
         return await self._request(
             Methods.GET,
-            f"api/1/energy_sites/{energy_site_id}/telemetry_history?kind={kind}&start_date={start_date}&end_date={end_date}&time_zone={time_zone}",
+            f"api/1/energy_sites/{energy_site_id}/telemetry_history",
+            {
+                "kind": kind,
+                "start_date": start_date,
+                "end_date": end_date,
+                "time_zone": time_zone,
+            },
         )
 
     async def energy_history(
@@ -59,7 +72,14 @@ class Energy:
         """Returns the energy measurements of the site, aggregated to the requested period."""
         return await self._request(
             Methods.GET,
-            f"api/1/energy_sites/{energy_site_id}/calendar_history?kind={kind}&start_date={start_date}&end_date={end_date}&period={period}&time_zone={time_zone}",
+            f"api/1/energy_sites/{energy_site_id}/calendar_history",
+            {
+                "kind": kind,
+                "start_date": start_date,
+                "end_date": end_date,
+                "period": period,
+                "time_zone": time_zone,
+            },
         )
 
     async def grid_import_export(
@@ -73,8 +93,8 @@ class Energy:
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/grid_import_export",
             data={
-                disallow_charge_from_grid_with_solar_installed: disallow_charge_from_grid_with_solar_installed,
-                customer_preferred_export_rule: customer_preferred_export_rule,
+                "disallow_charge_from_grid_with_solar_installed": disallow_charge_from_grid_with_solar_installed,
+                "customer_preferred_export_rule": customer_preferred_export_rule,
             },
         )
 
@@ -93,7 +113,7 @@ class Energy:
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/off_grid_vehicle_charging_reserve",
             data={
-                off_grid_vehicle_charging_reserve_percent: off_grid_vehicle_charging_reserve_percent
+                "off_grid_vehicle_charging_reserve_percent": off_grid_vehicle_charging_reserve_percent
             },
         )
 
@@ -104,7 +124,7 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/operation",
-            data={default_real_mode: default_real_mode},
+            data={"default_real_mode": default_real_mode},
         )
 
     async def site_info(self, energy_site_id: int) -> dict[str, Any]:
@@ -119,5 +139,5 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/storm_mode",
-            data={enabled: enabled},
+            data={"enabled": enabled},
         )
