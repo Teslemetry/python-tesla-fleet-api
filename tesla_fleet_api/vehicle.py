@@ -41,7 +41,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/actuate_trunk",
-            json={which_trunk: which_trunk},
+            json={"which_trunk": which_trunk},
         )
 
     async def adjust_volume(
@@ -55,7 +55,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/adjust_volume",
-            json={volume: volume},
+            json={"volume": volume},
         )
 
     async def auto_conditioning_start(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -179,7 +179,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/guest_mode",
-            json={enable: enable},
+            json={"enable": enable},
         )
 
     async def honk_horn(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -236,7 +236,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/navigation_gps_request",
-            json={lat: lat, lon: lon, order: order},
+            json={"lat": lat, "lon": lon, "order": order},
         )
 
     async def navigation_request(
@@ -246,7 +246,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/navigation_request",
-            json={type: type, locale: locale, timestamp_ms: timestamp_ms},
+            json={"type": type, "locale": locale, "timestamp_ms": timestamp_ms},
         )
 
     async def navigation_sc_request(
@@ -256,7 +256,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/navigation_sc_request",
-            json={type: type, id: id, order: order},
+            json={"type": type, "id": id, "order": order},
         )
 
     async def remote_auto_seat_climate_request(
@@ -269,8 +269,8 @@ class Vehicle:
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_auto_seat_climate_request",
             json={
-                auto_seat_position: auto_seat_position,
-                auto_climate_on: auto_climate_on,
+                "auto_seat_position": auto_seat_position,
+                "auto_climate_on": auto_climate_on,
             },
         )
 
@@ -281,7 +281,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_auto_steering_wheel_heat_climate_request",
-            json={on: on},
+            json={"on": on},
         )
 
     async def remote_boombox(
@@ -291,7 +291,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_boombox",
-            json={sound: sound},
+            json={"sound": sound},
         )
 
     async def remote_seat_cooler_request(
@@ -304,8 +304,8 @@ class Vehicle:
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_seat_cooler_request",
             json={
-                seat_position: seat_position,
-                seat_cooler_level: seat_cooler_level,
+                "seat_position": seat_position,
+                "seat_cooler_level": seat_cooler_level,
             },
         )
 
@@ -337,7 +337,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heat_level_request",
-            json={level: level},
+            json={"level": level},
         )
 
     async def remote_steering_wheel_heater_request(
@@ -349,7 +349,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heater_request",
-            json={on: on},
+            json={"on": on},
         )
 
     async def reset_pin_to_drive_pin(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -378,7 +378,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/schedule_software_update",
-            json={offset_sec: offset_sec},
+            json={"offset_sec": offset_sec},
         )
 
     async def set_bioweapon_mode(
@@ -390,7 +390,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_bioweapon_mode",
-            json={on: on, manual_override: manual_override},
+            json={"on": on, "manual_override": manual_override},
         )
 
     async def set_cabin_overheat_protection(
@@ -402,7 +402,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_cabin_overheat_protection",
-            json={on: on, fan_only: fan_only},
+            json={"on": on, "fan_only": fan_only},
         )
 
     async def set_charge_limit(
@@ -414,7 +414,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
-            json={percent: percent},
+            json={"percent": percent},
         )
 
     async def set_charging_amps(
@@ -426,7 +426,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
-            json={charging_amps: charging_amps},
+            json={"charging_amps": charging_amps},
         )
 
     async def set_climate_keeper_mode(
@@ -438,7 +438,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_climate_keeper_mode",
-            json={climate_keeper_mode: climate_keeper_mode},
+            json={"climate_keeper_mode": climate_keeper_mode},
         )
 
     async def set_cop_temp(
@@ -450,7 +450,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_cop_temp",
-            json={cop_temp: cop_temp},
+            json={"cop_temp": cop_temp},
         )
 
     async def set_pin_to_drive(
@@ -462,7 +462,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_pin_to_drive",
-            json={on: on, password: str(password)},
+            json={"on": on, "password": str(password)},
         )
 
     async def set_preconditioning_max(
@@ -474,7 +474,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_preconditioning_max",
-            json={on: on, manual_override: manual_override},
+            json={"on": on, "manual_override": manual_override},
         )
 
     async def set_scheduled_charging(
@@ -486,7 +486,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_charging",
-            json={enable: enable, time: time},
+            json={"enable": enable, "time": time},
         )
 
     async def set_scheduled_departure(
@@ -498,7 +498,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
-            json={enable: enable, time: time},
+            json={"enable": enable, "time": time},
         )
 
     async def set_sentry_mode(self, vehicle_tag: str | int, on: bool) -> dict[str, Any]:
@@ -508,11 +508,14 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_sentry_mode",
-            json={on: on},
+            json={"on": on},
         )
 
     async def set_temps(
-        self, vehicle_tag: str | int, driver_temp: int, passenger_temp: int
+        self,
+        vehicle_tag: str | int,
+        driver_temp: float,
+        passenger_temp: float,
     ) -> dict[str, Any]:
         """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
         if self.use_command_protocol:
@@ -520,7 +523,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_temps",
-            json={driver_temp: driver_temp, passenger_temp: passenger_temp},
+            json={"driver_temp": driver_temp, "passenger_temp": passenger_temp},
         )
 
     async def set_valet_mode(
@@ -532,7 +535,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_valet_mode",
-            json={on: on, password: str(password)},
+            json={"on": on, "password": str(password)},
         )
 
     async def set_vehicle_name(
@@ -544,7 +547,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_vehicle_name",
-            json={vehicle_name: vehicle_name},
+            json={"vehicle_name": vehicle_name},
         )
 
     async def speed_limit_activate(
@@ -556,7 +559,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_activate",
-            json={pin: str(pin)},
+            json={"pin": str(pin)},
         )
 
     async def speed_limit_clear_pin(
@@ -568,7 +571,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_clear_pin",
-            json={pin: str(pin)},
+            json={"pin": str(pin)},
         )
 
     async def speed_limit_clear_pin_admin(
@@ -589,7 +592,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_deactivate",
-            json={pin: str(pin)},
+            json={"pin": str(pin)},
         )
 
     async def speed_limit_set_limit(
@@ -601,7 +604,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_set_limit",
-            json={limit_mph: limit_mph},
+            json={"limit_mph": limit_mph},
         )
 
     async def sun_roof_control(
@@ -611,7 +614,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/sun_roof_control",
-            {state: state},
+            {"state": state},
         )
 
     async def take_drivenote(self, vehicle_tag: str | int, note: str) -> dict[str, Any]:
@@ -619,7 +622,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/take_drivenote",
-            {note: note},
+            {"note": note},
         )
 
     async def trigger_homelink(
@@ -631,7 +634,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/trigger_homelink",
-            {lat: lat, lon: lon, token: token},
+            {"lat": lat, "lon": lon, "token": token},
         )
 
     async def upcoming_calendar_entries(
@@ -641,7 +644,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/upcoming_calendar_entries",
-            {calendar_data: calendar_data},
+            {"calendar_data": calendar_data},
         )
 
     async def window_control(
@@ -655,7 +658,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/window_control",
-            {lat: lat, lon: lon, command: command},
+            {"lat": lat, "lon": lon, "command": command},
         )
 
     async def drivers(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -669,7 +672,7 @@ class Vehicle:
         return await self._request(
             Methods.DELETE,
             f"api/1/vehicles/{vehicle_tag}/drivers",
-            {share_user_id: share_user_id},
+            {"share_user_id": share_user_id},
         )
 
     async def list(
@@ -677,7 +680,7 @@ class Vehicle:
     ) -> dict[str, Any]:
         """Returns vehicles belonging to the account."""
         return await self._request(
-            Methods.GET, "api/1/vehicles", {page: page, per_page: per_page}
+            Methods.GET, "api/1/vehicles", {"page": page, "per_page": per_page}
         )
 
     async def mobile_enabled(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -697,12 +700,14 @@ class Vehicle:
         return await self._request(
             Methods.GET,
             f"api/1/vehicles/{vehicle_tag}/nearby_charging_sites",
-            {count: count, radius: radius, detail: detail},
+            {"count": count, "radius": radius, "detail": detail},
         )
 
     async def options(self, vin: str) -> dict[str, Any]:
         """Returns vehicle option details."""
-        return await self._request(Methods.GET, "api/1/dx/vehicles/options", {vin: vin})
+        return await self._request(
+            Methods.GET, "api/1/dx/vehicles/options", {"vin": vin}
+        )
 
     async def recent_alerts(self, vehicle_tag: str | int) -> dict[str, Any]:
         """List of recent alerts"""
@@ -720,7 +725,7 @@ class Vehicle:
         return await self._request(
             Methods.GET,
             f"api/1/vehicles/{vehicle_tag}/release_notes",
-            {staged: staged, language: language},
+            {"staged": staged, "language": language},
         )
 
     async def service_data(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -762,7 +767,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/signed_command",
-            {routable_message: routable_message},
+            {"routable_message": routable_message},
         )
 
     async def subscriptions(
@@ -772,7 +777,7 @@ class Vehicle:
         return await self._request(
             Methods.GET,
             "api/1/subscriptions",
-            query={device_token: device_token, device_type: device_type},
+            query={"device_token": device_token, "device_type": device_type},
         )
 
     async def subscriptions_set(
@@ -782,7 +787,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             "api/1/subscriptions",
-            query={device_token: device_token, device_type: device_type},
+            query={"device_token": device_token, "device_type": device_type},
         )
 
     async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
@@ -800,7 +805,7 @@ class Vehicle:
         return await self._request(
             Methods.GET,
             f"api/1/vehicles/{vehicle_tag}/vehicle_data",
-            {endpoints: endpoints},
+            {"endpoints": endpoints},
         )
 
     async def vehicle_subscriptions(
@@ -810,7 +815,7 @@ class Vehicle:
         return await self._request(
             Methods.GET,
             "api/1/vehicle_subscriptions",
-            {device_token: device_token, device_type: device_type},
+            {"device_token": device_token, "device_type": device_type},
         )
 
     async def vehicle_subscriptions_set(
@@ -820,7 +825,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             "api/1/vehicle_subscriptions",
-            params={device_token: device_token, device_type: device_type},
+            params={"device_token": device_token, "device_type": device_type},
         )
 
     async def wake_up(self, vehicle_tag: str | int) -> dict[str, Any]:
