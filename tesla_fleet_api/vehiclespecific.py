@@ -245,7 +245,9 @@ class VehicleSpecific:
         """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
         return await self._parent.set_sentry_mode(self.vin, on)
 
-    async def set_temps(self, driver_temp: int, passenger_temp: int) -> dict[str, Any]:
+    async def set_temps(
+        self, driver_temp: float, passenger_temp: float
+    ) -> dict[str, Any]:
         """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
         return await self._parent.set_temps(self.vin, driver_temp, passenger_temp)
 
