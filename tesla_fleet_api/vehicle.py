@@ -36,8 +36,6 @@ class Vehicle:
         self, vehicle_tag: str | int, which_trunk: Trunks | str
     ) -> dict[str, Any]:
         """Controls the front or rear trunk."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/actuate_trunk",
@@ -48,8 +46,6 @@ class Vehicle:
         self, vehicle_tag: str | int, volume: float
     ) -> dict[str, Any]:
         """Adjusts vehicle media playback volume."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         if volume < 0.0 or volume > 11.0:
             raise ValueError("Volume must a number from 0.0 to 11.0")
         return await self._request(
@@ -60,8 +56,6 @@ class Vehicle:
 
     async def auto_conditioning_start(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Starts climate preconditioning."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_start",
@@ -69,8 +63,6 @@ class Vehicle:
 
     async def auto_conditioning_stop(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Stops climate preconditioning."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/auto_conditioning_stop",
@@ -78,8 +70,6 @@ class Vehicle:
 
     async def cancel_software_update(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Cancels the countdown to install the vehicle software update."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/cancel_software_update",
@@ -87,16 +77,12 @@ class Vehicle:
 
     async def charge_max_range(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Charges in max range mode -- we recommend limiting the use of this mode to long trips."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_max_range"
         )
 
     async def charge_port_door_close(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Closes the charge port door."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_close",
@@ -104,8 +90,6 @@ class Vehicle:
 
     async def charge_port_door_open(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Opens the charge port door."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/charge_port_door_open",
@@ -113,24 +97,18 @@ class Vehicle:
 
     async def charge_standard(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Charges in Standard mode."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_standard"
         )
 
     async def charge_start(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Starts charging the vehicle."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_start"
         )
 
     async def charge_stop(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Stops charging the vehicle."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/charge_stop"
         )
@@ -144,16 +122,12 @@ class Vehicle:
 
     async def door_lock(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Locks the vehicle."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/door_lock"
         )
 
     async def door_unlock(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Unlocks the vehicle."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/door_unlock"
         )
@@ -166,16 +140,12 @@ class Vehicle:
 
     async def flash_lights(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/flash_lights"
         )
 
     async def guest_mode(self, vehicle_tag: str | int, enable: bool) -> dict[str, Any]:
         """Restricts certain vehicle UI functionality from guest users"""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/guest_mode",
@@ -184,8 +154,6 @@ class Vehicle:
 
     async def honk_horn(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Honks the vehicle horn. Requires the vehicle to be in park."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/honk_horn"
         )
@@ -231,8 +199,6 @@ class Vehicle:
         self, vehicle_tag: str | int, lat: float, lon: float, order: int
     ) -> dict[str, Any]:
         """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/navigation_gps_request",
@@ -263,8 +229,6 @@ class Vehicle:
         self, vehicle_tag: str | int, auto_seat_position: int, auto_climate_on: bool
     ) -> dict[str, Any]:
         """Sets automatic seat heating and cooling."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_auto_seat_climate_request",
@@ -298,8 +262,6 @@ class Vehicle:
         self, vehicle_tag: str | int, seat_position: int, seat_cooler_level: int
     ) -> dict[str, Any]:
         """Sets seat cooling."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_seat_cooler_request",
@@ -313,8 +275,6 @@ class Vehicle:
         self, vehicle_tag: str | int
     ) -> dict[str, Any]:
         """Sets seat heating."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_seat_heater_request",
@@ -322,8 +282,6 @@ class Vehicle:
 
     async def remote_start_drive(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Starts the vehicle remotely. Requires keyless driving to be enabled."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/remote_start_drive"
         )
@@ -332,8 +290,6 @@ class Vehicle:
         self, vehicle_tag: str | int, level: int
     ) -> dict[str, Any]:
         """Sets steering wheel heat level."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heat_level_request",
@@ -344,8 +300,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool
     ) -> dict[str, Any]:
         """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_steering_wheel_heater_request",
@@ -354,8 +308,6 @@ class Vehicle:
 
     async def reset_pin_to_drive_pin(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Removes PIN to Drive. Requires the car to be in Pin to Drive mode and not in Valet mode. Note that this only works if PIN to Drive is not active. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/reset_pin_to_drive_pin",
@@ -363,8 +315,6 @@ class Vehicle:
 
     async def reset_valet_pin(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Removes PIN for Valet Mode."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST, f"api/1/vehicles/{vehicle_tag}/command/reset_valet_pin"
         )
@@ -373,8 +323,6 @@ class Vehicle:
         self, vehicle_tag: str | int, offset_sec: int
     ) -> dict[str, Any]:
         """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/schedule_software_update",
@@ -385,8 +333,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool, manual_override: bool
     ) -> dict[str, Any]:
         """Turns Bioweapon Defense Mode on and off."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_bioweapon_mode",
@@ -397,8 +343,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool, fan_only: bool
     ) -> dict[str, Any]:
         """Sets the vehicle overheat protection."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_cabin_overheat_protection",
@@ -409,8 +353,6 @@ class Vehicle:
         self, vehicle_tag: str | int, percent: int
     ) -> dict[str, Any]:
         """Sets the vehicle charge limit."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_charge_limit",
@@ -421,8 +363,6 @@ class Vehicle:
         self, vehicle_tag: str | int, charging_amps: int
     ) -> dict[str, Any]:
         """Sets the vehicle charging amps."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_charging_amps",
@@ -433,8 +373,6 @@ class Vehicle:
         self, vehicle_tag: str | int, climate_keeper_mode: ClimateKeeperMode | int
     ) -> dict[str, Any]:
         """Enables climate keeper mode."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_climate_keeper_mode",
@@ -445,8 +383,6 @@ class Vehicle:
         self, vehicle_tag: str | int, cop_temp: CabinOverheatProtectionTemps | int
     ) -> dict[str, Any]:
         """Adjusts the Cabin Overheat Protection temperature (COP)."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_cop_temp",
@@ -457,8 +393,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool, password: str | int
     ) -> dict[str, Any]:
         """Sets a four-digit passcode for PIN to Drive. This PIN must then be entered before the vehicle can be driven."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_pin_to_drive",
@@ -469,8 +403,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool, manual_override: bool
     ) -> dict[str, Any]:
         """Sets an override for preconditioning — it should default to empty if no override is used."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_preconditioning_max",
@@ -481,8 +413,6 @@ class Vehicle:
         self, vehicle_tag: str | int, enable: bool, time: int
     ) -> dict[str, Any]:
         """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_charging",
@@ -493,8 +423,6 @@ class Vehicle:
         self, vehicle_tag: str | int, enable: bool, time: int
     ) -> dict[str, Any]:
         """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
@@ -503,8 +431,6 @@ class Vehicle:
 
     async def set_sentry_mode(self, vehicle_tag: str | int, on: bool) -> dict[str, Any]:
         """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_sentry_mode",
@@ -518,8 +444,6 @@ class Vehicle:
         passenger_temp: float,
     ) -> dict[str, Any]:
         """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_temps",
@@ -530,8 +454,6 @@ class Vehicle:
         self, vehicle_tag: str | int, on: bool, password: str | int
     ) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_valet_mode",
@@ -542,8 +464,6 @@ class Vehicle:
         self, vehicle_tag: str | int, vehicle_name: str
     ) -> dict[str, Any]:
         """Changes the name of a vehicle. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_vehicle_name",
@@ -554,8 +474,6 @@ class Vehicle:
         self, vehicle_tag: str | int, pin: str | int
     ) -> dict[str, Any]:
         """Activates Speed Limit Mode with a four-digit PIN."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_activate",
@@ -566,8 +484,6 @@ class Vehicle:
         self, vehicle_tag: str | int, pin: str | int
     ) -> dict[str, Any]:
         """Deactivates Speed Limit Mode and resets the associated PIN."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_clear_pin",
@@ -587,8 +503,6 @@ class Vehicle:
         self, vehicle_tag: str | int, pin: str | int
     ) -> dict[str, Any]:
         """Deactivates Speed Limit Mode."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_deactivate",
@@ -599,8 +513,6 @@ class Vehicle:
         self, vehicle_tag: str | int, limit_mph: int
     ) -> dict[str, Any]:
         """Sets the maximum speed allowed when Speed Limit Mode is active."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/speed_limit_set_limit",
@@ -629,8 +541,6 @@ class Vehicle:
         self, vehicle_tag: str | int, lat: float, lon: float, token: str
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
-        if self.use_command_protocol:
-            raise NotImplementedError("Command Protocol not implemented")
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/trigger_homelink",

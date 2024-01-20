@@ -24,7 +24,6 @@ class TeslaFleetApi:
         self,
         session: aiohttp.ClientSession,
         access_token: str,
-        use_command_protocol: bool = False,
         region: str | None = None,
         server: str | None = None,
         raise_for_status: bool = True,
@@ -38,7 +37,6 @@ class TeslaFleetApi:
 
         self.session = session
         self.access_token = access_token
-        self.use_command_protocol = use_command_protocol
 
         if region and not server and region not in SERVERS:
             raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
