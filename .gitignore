@@ -1,4 +1,5 @@
 test.py
+register.py
 *.pyc
 __pycache__
 auth.json

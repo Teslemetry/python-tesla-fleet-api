@@ -19,14 +19,6 @@ class Vehicle:
     def __init__(self, parent):
         self._parent = parent
         self._request = parent._request
-        self.use_command_protocol = parent.use_command_protocol
-
-    async def create(self) -> [VehicleSpecific]:
-        """Creates a class for each vehicle."""
-        if vehicles := (await self.list()).get("response"):
-            self._parent.vehicles = [VehicleSpecific(self, x["vin"]) for x in vehicles]
-            return self._parent.vehicles
-        return []
 
     def specific(self, vehicle_tag: str | int) -> VehicleSpecific:
         """Creates a class for each vehicle."""

@@ -14,7 +14,7 @@ class Teslemetry(TeslaFleetApi):
         super().__init__(
             session,
             access_token,
-            server="https://teslemetry.com",
+            server="https://api.teslemetry.com",
             raise_for_status=raise_for_status,
             partner_scope=False,
             user_scope=False,

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="tesla_fleet_api",
-    version="0.2.0",
+    version="0.2.1",
     author="Brett Adams",
     author_email="hello@teslemetry.com",
     description="Tesla Fleet API library for Python",

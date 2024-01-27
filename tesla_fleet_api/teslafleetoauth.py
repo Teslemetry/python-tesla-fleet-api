@@ -82,10 +82,12 @@ class TeslaFleetOAuth(TeslaFleetApi):
             },
         ) as resp:
             data = await resp.json()
-            self.access_token = data["access_token"]
-            self.refresh_token = data["refresh_token"]
-            self.expires = int(time.time()) + data["expires_in"]
-            return {"refresh_token": self.refresh_token, "expires": self.expires}
+            if resp.ok:
+                self.access_token = data["access_token"]
+                self.refresh_token = data["refresh_token"]
+                self.expires = int(time.time()) + data["expires_in"]
+                return {"refresh_token": self.refresh_token, "expires": self.expires}
+            raise ValueError(data)
 
     async def _request(
         self,
