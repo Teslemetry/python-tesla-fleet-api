@@ -1,5 +1,4 @@
 from typing import Any
-from .energy import Energy
 
 
 class EnergySpecific:
@@ -7,7 +6,7 @@ class EnergySpecific:
 
     def __init__(
         self,
-        parent: Energy,
+        parent,
         energy_site_id: int,
     ):
         self._parent = parent

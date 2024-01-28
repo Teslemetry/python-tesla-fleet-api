@@ -7,7 +7,6 @@ from .energy import Energy
 from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
-from .vehiclespecific import VehicleSpecific
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -18,7 +17,6 @@ class TeslaFleetApi:
     session: aiohttp.ClientSession
     headers: dict[str, str]
     raise_for_status: bool
-    vehicles: list[VehicleSpecific]
 
     def __init__(
         self,
