@@ -1,5 +1,6 @@
 from typing import Any
 from .const import Methods
+from .energyspecific import EnergySpecific
 
 
 class Energy:
@@ -7,6 +8,10 @@ class Energy:
 
     def __init__(self, parent):
         self._request = parent._request
+
+    def specific(self, energy_site_id: int) -> EnergySpecific:
+        """Create a specific energy site."""
+        return EnergySpecific(self, energy_site_id)
 
     async def backup(
         self, energy_site_id: int, backup_reserve_percent: int
