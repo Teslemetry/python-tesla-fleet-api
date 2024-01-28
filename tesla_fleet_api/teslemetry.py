@@ -24,14 +24,14 @@ class Teslemetry(TeslaFleetApi):
         """Send a ping."""
         return await self._request(
             Methods.GET,
-            "/api/ping",
+            "api/ping",
         )
 
     async def test(self) -> bool:
         """Test API Authentication."""
         return await self._request(
             Methods.GET,
-            "/api/test",
+            "api/test",
         )
 
     async def find_server(self):
