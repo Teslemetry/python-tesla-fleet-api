@@ -518,7 +518,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/sun_roof_control",
-            {"state": state},
+            json={"state": state},
         )
 
     async def take_drivenote(self, vehicle_tag: str | int, note: str) -> dict[str, Any]:
@@ -526,7 +526,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/take_drivenote",
-            {"note": note},
+            json={"note": note},
         )
 
     async def trigger_homelink(
@@ -536,7 +536,7 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/trigger_homelink",
-            {"lat": lat, "lon": lon, "token": token},
+            json={"lat": lat, "lon": lon, "token": token},
         )
 
     async def upcoming_calendar_entries(
@@ -546,21 +546,21 @@ class Vehicle:
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/upcoming_calendar_entries",
-            {"calendar_data": calendar_data},
+            json={"calendar_data": calendar_data},
         )
 
     async def window_control(
         self,
         vehicle_tag: str | int,
-        lat: float,
-        lon: float,
         command: str | WindowCommands,
+        lat: float | None = None,
+        lon: float | None = None,
     ) -> dict[str, Any]:
         """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/window_control",
-            {"lat": lat, "lon": lon, "command": command},
+            json={"lat": lat, "lon": lon, "command": command},
         )
 
     async def drivers(self, vehicle_tag: str | int) -> dict[str, Any]:
