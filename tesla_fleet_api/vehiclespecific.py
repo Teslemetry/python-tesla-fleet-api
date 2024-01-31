@@ -288,10 +288,18 @@ class VehicleSpecific:
         return await self._parent.take_drivenote(self.vin, note)
 
     async def trigger_homelink(
-        self, lat: float, lon: float, token: str
+        self,
+        token: str,
+        lat: float | None = None,
+        lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
-        return await self._parent.trigger_homelink(self.vin, lat, lon, token)
+        return await self._parent.trigger_homelink(
+            self.vin,
+            token,
+            lat,
+            lon,
+        )
 
     async def upcoming_calendar_entries(self, calendar_data: str) -> dict[str, Any]:
         """Upcoming calendar entries stored on the vehicle."""
@@ -299,12 +307,12 @@ class VehicleSpecific:
 
     async def window_control(
         self,
-        lat: float,
-        lon: float,
         command: str | WindowCommands,
+        lat: float | None = None,
+        lon: float | None = None,
     ) -> dict[str, Any]:
         """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
-        return await self._parent.window_control(self.vin, lat, lon, command)
+        return await self._parent.window_control(self.vin, command, lat, lon)
 
     async def drivers(self) -> dict[str, Any]:
         """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""

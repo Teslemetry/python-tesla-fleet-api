@@ -530,7 +530,11 @@ class Vehicle:
         )
 
     async def trigger_homelink(
-        self, vehicle_tag: str | int, lat: float, lon: float, token: str
+        self,
+        vehicle_tag: str | int,
+        token: str,
+        lat: float | None = None,
+        lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
         return await self._request(
