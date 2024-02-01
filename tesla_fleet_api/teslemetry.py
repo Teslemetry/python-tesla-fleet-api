@@ -34,6 +34,13 @@ class Teslemetry(TeslaFleetApi):
             "api/test",
         )
 
+    async def metadata(self) -> bool:
+        """Test API Authentication."""
+        return await self._request(
+            Methods.GET,
+            "api/metadata",
+        )
+
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Teslemetry.")
