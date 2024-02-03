@@ -264,12 +264,16 @@ class Vehicle:
         )
 
     async def remote_seat_heater_request(
-        self, vehicle_tag: str | int
+        self, vehicle_tag: str | int, seat_position: int, level: int
     ) -> dict[str, Any]:
         """Sets seat heating."""
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/remote_seat_heater_request",
+            json={
+                "seat_position": seat_position,
+                "level": level,
+            },
         )
 
     async def remote_start_drive(self, vehicle_tag: str | int) -> dict[str, Any]:

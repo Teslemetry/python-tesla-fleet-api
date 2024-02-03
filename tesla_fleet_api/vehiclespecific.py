@@ -159,9 +159,13 @@ class VehicleSpecific:
             self.vin, seat_position, seat_cooler_level
         )
 
-    async def remote_seat_heater_request(self) -> dict[str, Any]:
+    async def remote_seat_heater_request(
+        self, seat_position: int, level: int
+    ) -> dict[str, Any]:
         """Sets seat heating."""
-        return await self._parent.remote_seat_heater_request(self.vin)
+        return await self._parent.remote_seat_heater_request(
+            self.vin, seat_position, level
+        )
 
     async def remote_start_drive(self) -> dict[str, Any]:
         """Starts the vehicle remotely. Requires keyless driving to be enabled."""
