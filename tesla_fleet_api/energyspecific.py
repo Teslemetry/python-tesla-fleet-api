@@ -99,7 +99,7 @@ class EnergySpecific:
 
     async def site_info(self) -> dict[str, Any]:
         """Returns information about the site. Things like assets (has solar, etc), settings (backup reserve, etc), and features (storm_mode_capable, etc)."""
-        return await self._parent.site_info()
+        return await self._parent.site_info(self.energy_site_id)
 
     async def storm_mode(self, enabled: bool) -> dict[str, Any]:
         """Update storm watch participation."""
