@@ -399,7 +399,7 @@ class VehicleSpecific:
 
     async def vehicle_data(
         self,
-        endpoints: VehicleDataEndpoints | str | None = None,
+        endpoints: list[VehicleDataEndpoints] | str | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         return await self._parent.vehicle_data(self.vin, endpoints)
