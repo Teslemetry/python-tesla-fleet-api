@@ -29,6 +29,7 @@ class Errors(StrEnum):
     INVALID_REDIRECT_URL = "invalid_redirect_url"
     UNAUTHORIZED_CLIENT = "unauthorized_client"
     MOBILE_ACCESS_DISABLED = "mobile_access_disabled"
+    TOKEN_EXPIRED = "token expired (401)"
 
 
 SERVERS = {

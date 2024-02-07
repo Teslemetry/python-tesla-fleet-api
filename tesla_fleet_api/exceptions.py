@@ -244,11 +244,15 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                 raise InvalidRedirectUrl(data) from e
             elif error == Errors.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
+            else:
+                raise TeslaFleetError(data) from e
         elif resp.status == 401:
             error = data.get("error")
-            if error == Errors.MOBILE_ACCESS_DISABLED:
+            if error == Errors.TOKEN_EXPIRED:
+                raise OAuthExpired(data) from e
+            elif error == Errors.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
-            elif error == Errors.INVALID_TOKEN:
+            else:
                 raise InvalidToken(data) from e
         elif resp.status == 402:
             raise PaymentRequired(data) from e
