@@ -747,8 +747,32 @@ class Vehicle:
         """Returns warranty details."""
         return await self._request(Methods.GET, "api/1/dx/warranty/details", {vin: vin})
 
-    async def fleet_telemetry_config(self, config: dict[str, Any]) -> dict[str, Any]:
+    async def fleet_status(self, vins: list[str]) -> dict[str, Any]:
+        """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
+        return await self._request(
+            Methods.GET, "api/1/vehicles/fleet_status", json=vins
+        )
+
+    async def fleet_telemetry_config_create(
+        self, config: dict[str, Any]
+    ) -> dict[str, Any]:
         """Configures fleet telemetry."""
         return await self._request(
             Methods.POST, "api/1/vehicles/fleet_telemetry_config", json=config
+        )
+
+    async def fleet_telemetry_config_get(
+        self, vehicle_tag: str | int
+    ) -> dict[str, Any]:
+        """Configures fleet telemetry."""
+        return await self._request(
+            Methods.GET, f"api/1/vehicles/{vehicle_tag}/fleet_telemetry_config"
+        )
+
+    async def fleet_telemetry_config_delete(
+        self, vehicle_tag: str | int
+    ) -> dict[str, Any]:
+        """Configures fleet telemetry."""
+        return await self._request(
+            Methods.DELETE, f"api/1/vehicles/{vehicle_tag}/fleet_telemetry_config"
         )

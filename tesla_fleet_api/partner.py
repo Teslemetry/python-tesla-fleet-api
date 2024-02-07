@@ -19,3 +19,9 @@ class Partner:
         return await self._request(
             Methods.POST, "api/1/partner_accounts", json={"domain": domain}
         )
+
+    async def fleet_telemetry_errors(self) -> dict[str, Any]:
+        """Returns recent fleet telemetry errors reported by vehicles after receiving the config."""
+        return await self._request(
+            Methods.GET, "api/1/fleet_telemetry/fleet_telemetry_errors"
+        )

@@ -427,3 +427,15 @@ class VehicleSpecific:
     async def warranty_details(self) -> dict[str, Any]:
         """Returns warranty details."""
         return await self._parent.warranty_details(self.vin)
+
+    async def fleet_status(self) -> dict[str, Any]:
+        """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
+        return await self._parent.fleet_status([self.vin])
+
+    async def fleet_telemetry_config_get(self) -> dict[str, Any]:
+        """Configures fleet telemetry."""
+        return await self._parent.fleet_telemetry_config_get(self.vin)
+
+    async def fleet_telemetry_config_delete(self) -> dict[str, Any]:
+        """Configures fleet telemetry."""
+        return await self._parent.fleet_telemetry_config_delete(self.vin)
