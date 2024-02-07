@@ -17,6 +17,12 @@ class TeslaFleetError(BaseException):
             self.error_description = data.get("error_description")
 
 
+class ResponseError(TeslaFleetError):
+    """The response from the server was not JSON."""
+
+    message = "The response from the server was not JSON."
+
+
 class InvalidCommand(TeslaFleetError):
     """The data request or command is unknown."""
 
@@ -211,9 +217,13 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    if resp.status == 401 and not resp.content_length:
+    if resp.status == 401 and resp.content_type != "application/json":
         # This error does not return a body
         raise OAuthExpired()
+
+    if resp.content_type != "application/json":
+        text = await resp.text()
+        return ResponseError({"error": text, "status": resp.status})
 
     data = await resp.json()
 
