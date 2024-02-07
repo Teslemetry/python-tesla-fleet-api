@@ -747,7 +747,7 @@ class Vehicle:
         """Returns warranty details."""
         return await self._request(Methods.GET, "api/1/dx/warranty/details", {vin: vin})
 
-    async def fleet_status(self, vins: list[str]) -> dict[str, Any]:
+    async def fleet_status(self, vins: List[str]) -> dict[str, Any]:
         """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
         return await self._request(
             Methods.GET, "api/1/vehicles/fleet_status", json=vins
