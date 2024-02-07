@@ -10,7 +10,6 @@ from .const import (
     DeviceTypes,
 )
 from .vehiclespecific import VehicleSpecific
-from urllib.parse import quote
 
 
 class Vehicle:
@@ -711,7 +710,8 @@ class Vehicle:
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         if isinstance(endpoints, list):
-            endpoints = quote(";".join(endpoints))
+            endpoints = ";".join(endpoints)
+        print(endpoints)
         return await self._request(
             Methods.GET,
             f"api/1/vehicles/{vehicle_tag}/vehicle_data",
