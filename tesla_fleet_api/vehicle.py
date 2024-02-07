@@ -711,7 +711,6 @@ class Vehicle:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         if isinstance(endpoints, list):
             endpoints = ";".join(endpoints)
-        print(endpoints)
         return await self._request(
             Methods.GET,
             f"api/1/vehicles/{vehicle_tag}/vehicle_data",
