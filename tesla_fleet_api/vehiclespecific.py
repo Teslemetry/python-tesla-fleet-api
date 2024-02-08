@@ -1,12 +1,12 @@
 from typing import Any
 from .const import (
-    Trunks,
+    Trunk,
     ClimateKeeperMode,
-    CabinOverheatProtectionTemps,
-    VehicleDataEndpoints,
-    SunRoofCommands,
-    WindowCommands,
-    DeviceTypes,
+    CabinOverheatProtectionTemp,
+    VehicleDataEndpoint,
+    SunRoofCommand,
+    WindowCommand,
+    DeviceType,
 )
 
 
@@ -17,7 +17,7 @@ class VehicleSpecific:
         self._parent = parent
         self.vin = vin
 
-    async def actuate_trunk(self, which_trunk: Trunks | str) -> dict[str, Any]:
+    async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
         return await self._parent.actuate_trunk(self.vin, which_trunk)
 
@@ -160,11 +160,11 @@ class VehicleSpecific:
         )
 
     async def remote_seat_heater_request(
-        self, seat_position: int, level: int
+        self, seat_position: int, seat_heater_level: int
     ) -> dict[str, Any]:
         """Sets seat heating."""
         return await self._parent.remote_seat_heater_request(
-            self.vin, seat_position, level
+            self.vin, seat_position, seat_heater_level
         )
 
     async def remote_start_drive(self) -> dict[str, Any]:
@@ -222,7 +222,7 @@ class VehicleSpecific:
         return await self._parent.set_climate_keeper_mode(self.vin, climate_keeper_mode)
 
     async def set_cop_temp(
-        self, cop_temp: CabinOverheatProtectionTemps | int
+        self, cop_temp: CabinOverheatProtectionTemp | int
     ) -> dict[str, Any]:
         """Adjusts the Cabin Overheat Protection temperature (COP)."""
         return await self._parent.set_cop_temp(self.vin, cop_temp)
@@ -283,7 +283,7 @@ class VehicleSpecific:
         """Sets the maximum speed allowed when Speed Limit Mode is active."""
         return await self._parent.speed_limit_set_limit(self.vin, limit_mph)
 
-    async def sun_roof_control(self, state: str | SunRoofCommands) -> dict[str, Any]:
+    async def sun_roof_control(self, state: str | SunRoofCommand) -> dict[str, Any]:
         """Controls the panoramic sunroof on the Model S."""
         return await self._parent.sun_roof_control(self.vin, state)
 
@@ -311,7 +311,7 @@ class VehicleSpecific:
 
     async def window_control(
         self,
-        command: str | WindowCommands,
+        command: str | WindowCommand,
         lat: float | None = None,
         lon: float | None = None,
     ) -> dict[str, Any]:
@@ -399,13 +399,13 @@ class VehicleSpecific:
 
     async def vehicle_data(
         self,
-        endpoints: list[VehicleDataEndpoints] | str | None = None,
+        endpoints: list[VehicleDataEndpoint] | str | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         return await self._parent.vehicle_data(self.vin, endpoints)
 
     async def vehicle_subscriptions(
-        self, device_token: str, device_type: DeviceTypes | str
+        self, device_token: str, device_type: DeviceType | str
     ) -> dict[str, Any]:
         """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
         return await self._parent.vehicle_subscriptions(
@@ -413,7 +413,7 @@ class VehicleSpecific:
         )
 
     async def vehicle_subscriptions_set(
-        self, device_token: str, device_type: DeviceTypes | str
+        self, device_token: str, device_type: DeviceType | str
     ) -> dict[str, Any]:
         """Allows a mobile device to specify which vehicles to receive push notifications from."""
         return await self._parent.vehicle_subscriptions_set(

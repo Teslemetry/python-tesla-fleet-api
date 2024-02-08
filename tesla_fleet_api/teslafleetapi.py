@@ -1,7 +1,7 @@
 import aiohttp
 from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
-from .const import SERVERS, Methods, Errors
+from .const import SERVERS, Method, Error
 from .charging import Charging
 from .energy import Energy
 from .partner import Partner
@@ -67,7 +67,7 @@ class TeslaFleetApi:
 
     async def _request(
         self,
-        method: Methods,
+        method: Method,
         path: str,
         params: dict[str:Any] | None = None,
         json: dict[str:Any] | None = None,
@@ -77,7 +77,7 @@ class TeslaFleetApi:
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
 
-        if method == Methods.GET and json is not None:
+        if method == Method.GET and json is not None:
             raise ValueError("GET requests cannot have a body.")
 
         if params:
@@ -101,7 +101,7 @@ class TeslaFleetApi:
                 # Manufacture a response since Tesla doesn't provide a body for token expiration.
                 return {
                     "response": None,
-                    "error": Errors.INVALID_TOKEN,
+                    "error": Error.INVALID_TOKEN,
                     "error_message": "The OAuth token has expired.",
                 }
             if resp.content_type == "application/json":
@@ -118,6 +118,6 @@ class TeslaFleetApi:
     async def products(self) -> dict[str, Any]:
         """Returns products mapped to user."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/1/products",
         )

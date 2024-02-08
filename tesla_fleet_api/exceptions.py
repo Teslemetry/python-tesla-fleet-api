@@ -1,5 +1,5 @@
 import aiohttp
-from .const import Errors
+from .const import Error
 
 
 class TeslaFleetError(BaseException):
@@ -87,9 +87,9 @@ class PaymentRequired(TeslaFleetError):
 
 
 class Forbidden(TeslaFleetError):
-    """Access to this resource is not authorized, developers should check required scopes."""
+    """Access to this resource is not authorized, developers should check required Scope."""
 
-    message = "Access to this resource is not authorized, developers should check required scopes."
+    message = "Access to this resource is not authorized, developers should check required Scope."
     status = 403
 
 
@@ -232,25 +232,25 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     except aiohttp.ClientResponseError as e:
         if resp.status == 400:
             error = data.get("error")
-            if error == Errors.INVALID_COMMAND:
+            if error == Error.INVALID_COMMAND:
                 raise InvalidCommand(data) from e
-            elif error == Errors.INVALID_FIELD:
+            elif error == Error.INVALID_FIELD:
                 raise InvalidField(data) from e
-            elif error == Errors.INVALID_REQUEST:
+            elif error == Error.INVALID_REQUEST:
                 raise InvalidRequest(data) from e
-            elif error == Errors.INVALID_AUTH_CODE:
+            elif error == Error.INVALID_AUTH_CODE:
                 raise InvalidAuthCode(data) from e
-            elif error == Errors.INVALID_REDIRECT_URL:
+            elif error == Error.INVALID_REDIRECT_URL:
                 raise InvalidRedirectUrl(data) from e
-            elif error == Errors.UNAUTHORIZED_CLIENT:
+            elif error == Error.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
             else:
                 raise TeslaFleetError(data) from e
         elif resp.status == 401:
             error = data.get("error")
-            if error == Errors.TOKEN_EXPIRED:
+            if error == Error.TOKEN_EXPIRED:
                 raise OAuthExpired(data) from e
-            elif error == Errors.MOBILE_ACCESS_DISABLED:
+            elif error == Error.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
             else:
                 raise InvalidToken(data) from e

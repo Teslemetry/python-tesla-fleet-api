@@ -1,6 +1,6 @@
 import aiohttp
 from .teslafleetapi import TeslaFleetApi
-from .const import Methods
+from .const import Method
 
 
 class Teslemetry(TeslaFleetApi):
@@ -23,21 +23,21 @@ class Teslemetry(TeslaFleetApi):
     async def ping(self) -> bool:
         """Send a ping."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/ping",
         )
 
     async def test(self) -> bool:
         """Test API Authentication."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/test",
         )
 
     async def metadata(self) -> bool:
         """Test API Authentication."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/metadata",
         )
 

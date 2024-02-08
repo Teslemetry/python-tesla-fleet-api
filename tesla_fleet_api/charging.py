@@ -1,7 +1,5 @@
 from typing import Any
-from .const import (
-    Methods,
-)
+from .const import Method
 
 
 class Charging:
@@ -22,7 +20,7 @@ class Charging:
     ) -> dict[str, Any]:
         """Returns the paginated charging history."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/1/dx/charging/history",
             {
                 "vin": vin,
@@ -45,7 +43,7 @@ class Charging:
     ) -> dict[str, Any]:
         """Returns the charging session information including pricing and energy data. This endpoint is only available for business accounts that own a fleet of vehicles."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             "api/1/dx/charging/sessions",
             {
                 "vin": vin,

@@ -3,22 +3,22 @@ from enum import Enum
 
 
 class IntEnum(int, Enum):
-    pass
+    """Integer Enum."""
 
 
 class StrEnum(str, Enum):
-    pass
+    """String Enum."""
 
 
-class Methods(StrEnum):
-    """HTTP methods."""
+class Method(StrEnum):
+    """HTTP Methods."""
 
     GET = "GET"
     POST = "POST"
     DELETE = "DELETE"
 
 
-class Errors(StrEnum):
+class Error(StrEnum):
     """Tesla Fleet API error codes."""
 
     INVALID_COMMAND = "invalid_command"
@@ -39,11 +39,30 @@ SERVERS = {
 }
 
 
-class Trunks(StrEnum):
+class Trunk(StrEnum):
     """Trunk options"""
 
     FRONT: "front"
     REAR: "rear"
+
+
+class Seat(IntEnum):
+    """Seat positions"""
+
+    FRONT_LEFT = 0
+    FRONT_RIGHT = 1
+    REAR_LEFT = 2
+    REAR_CENTER = 4
+    REAR_RIGHT = 5
+
+
+class Level(IntEnum):
+    """Level options"""
+
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
 
 
 class ClimateKeeperMode(IntEnum):
@@ -55,7 +74,7 @@ class ClimateKeeperMode(IntEnum):
     CAMP_MODE = 3
 
 
-class CabinOverheatProtectionTemps(IntEnum):
+class CabinOverheatProtectionTemp(IntEnum):
     """COP Temp options"""
 
     LOW = 0  # 30C 90F
@@ -63,7 +82,7 @@ class CabinOverheatProtectionTemps(IntEnum):
     HIGH = 2  # 40C 100F
 
 
-class VehicleDataEndpoints(StrEnum):
+class VehicleDataEndpoint(StrEnum):
     """Endpoints options"""
 
     CHARGE_STATE = "charge_state"
@@ -77,7 +96,7 @@ class VehicleDataEndpoints(StrEnum):
     VEHICLE_DATA_COMBO = "vehicle_data_combo"
 
 
-class SunRoofCommands(StrEnum):
+class SunRoofCommand(StrEnum):
     """Sunroof options"""
 
     STOP = "stop"
@@ -85,14 +104,14 @@ class SunRoofCommands(StrEnum):
     VENT = "vent"
 
 
-class WindowCommands(StrEnum):
+class WindowCommand(StrEnum):
     """Window Control options"""
 
     VENT = "vent"
     CLOSE = "close"
 
 
-class DeviceTypes(StrEnum):
+class DeviceType(StrEnum):
     """Device Type options"""
 
     ANDROID = "android"
@@ -102,8 +121,8 @@ class DeviceTypes(StrEnum):
     IOS_PRODUCTION = "ios-production"
 
 
-class Scopes(StrEnum):
-    """Fleet API Scopes"""
+class Scope(StrEnum):
+    """Fleet API Scope"""
 
     OPENID = "openid"
     OFFLINE_ACCESS = "offline_access"
@@ -115,7 +134,7 @@ class Scopes(StrEnum):
     ENERGY_CMDS = "energy_cmds"
 
 
-class TelemetryFields(StrEnum):
+class TelemetryField(StrEnum):
     """Fields available in telemetry streams"""
 
     AC_CHARGING_ENERGY_IN = "ACChargingEnergyIn"
@@ -270,7 +289,7 @@ class TelemetryFields(StrEnum):
     VERSION = "Version"
 
 
-class TelemetryAlerts(StrEnum):
+class TelemetryAlert(StrEnum):
     """Alerts available in telemetry streams"""
 
     CUSTOMER = "Customer"

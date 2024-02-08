@@ -2,9 +2,9 @@ from typing import Any
 import aiohttp
 import time
 
-from tesla_fleet_api.const import Methods
+from tesla_fleet_api.const import Method
 from .teslafleetapi import TeslaFleetApi
-from .const import Scopes, SERVERS
+from .const import Scope, SERVERS
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
@@ -37,10 +37,10 @@ class TeslaFleetOAuth(TeslaFleetApi):
         )
 
     def get_login_url(
-        self, redirect_uri: str, scopes: [Scopes], state: str = "login"
+        self, redirect_uri: str, Scope: [Scope], state: str = "login"
     ) -> str:
         """Get the login URL."""
-        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(scopes)}&state={state}"
+        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(Scope)}&state={state}"
 
     async def get_refresh_token(self, client_secret: str, code: str, redirect_uri: str):
         """Get the refresh token."""
@@ -91,7 +91,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
 
     async def _request(
         self,
-        method: Methods,
+        method: Method,
         path: str,
         params: dict | None = None,
         data: dict | None = None,

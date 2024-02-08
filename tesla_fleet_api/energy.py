@@ -1,5 +1,5 @@
 from typing import Any
-from .const import Methods
+from .const import Method
 from .energyspecific import EnergySpecific
 
 
@@ -18,7 +18,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Adjust the site's backup reserve."""
         return await self._request(
-            Methods.POST,
+            Method.POST,
             f"api/1/energy_sites/{energy_site_id}/backup",
             json={"backup_reserve_percent": backup_reserve_percent},
         )
@@ -34,7 +34,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Returns the backup (off-grid) event history of the site in duration of seconds."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
             json={
                 "kind": kind,
@@ -55,7 +55,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Returns the charging history of a wall connector."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             f"api/1/energy_sites/{energy_site_id}/telemetry_history",
             query={
                 "kind": kind,
@@ -76,7 +76,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Returns the energy measurements of the site, aggregated to the requested period."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
             query={
                 "kind": kind,
@@ -106,7 +106,7 @@ class Energy:
                 "At least one of disallow_charge_from_grid_with_solar_installed or customer_preferred_export_rule must be set."
             )
         return await self._request(
-            Methods.POST,
+            Method.POST,
             f"api/1/energy_sites/{energy_site_id}/grid_import_export",
             json=data,
         )
@@ -114,7 +114,7 @@ class Energy:
     async def live_status(self, energy_site_id: int) -> dict[str, Any]:
         """Returns the live status of the site (power, state of energy, grid status, storm mode)."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             f"api/1/energy_sites/{energy_site_id}/live_status",
         )
 
@@ -123,7 +123,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Adjust the site's off-grid vehicle charging backup reserve."""
         return await self._request(
-            Methods.POST,
+            Method.POST,
             f"api/1/energy_sites/{energy_site_id}/off_grid_vehicle_charging_reserve",
             json={
                 "off_grid_vehicle_charging_reserve_percent": off_grid_vehicle_charging_reserve_percent
@@ -135,7 +135,7 @@ class Energy:
     ) -> dict[str, Any]:
         """Set the site's mode."""
         return await self._request(
-            Methods.POST,
+            Method.POST,
             f"api/1/energy_sites/{energy_site_id}/operation",
             json={"default_real_mode": default_real_mode},
         )
@@ -143,14 +143,14 @@ class Energy:
     async def site_info(self, energy_site_id: int) -> dict[str, Any]:
         """Returns information about the site. Things like assets (has solar, etc), settings (backup reserve, etc), and features (storm_mode_capable, etc)."""
         return await self._request(
-            Methods.GET,
+            Method.GET,
             f"api/1/energy_sites/{energy_site_id}/site_info",
         )
 
     async def storm_mode(self, energy_site_id: int, enabled: bool) -> dict[str, Any]:
         """Update storm watch participation."""
         return await self._request(
-            Methods.POST,
+            Method.POST,
             f"api/1/energy_sites/{energy_site_id}/storm_mode",
             json={"enabled": enabled},
         )
