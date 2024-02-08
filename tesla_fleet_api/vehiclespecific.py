@@ -293,7 +293,7 @@ class VehicleSpecific:
 
     async def trigger_homelink(
         self,
-        token: str,
+        token: str | None = None,
         lat: float | None = None,
         lon: float | None = None,
     ) -> dict[str, Any]:

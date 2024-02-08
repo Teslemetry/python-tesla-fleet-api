@@ -535,15 +535,21 @@ class Vehicle:
     async def trigger_homelink(
         self,
         vehicle_tag: str | int,
-        token: str,
+        token: str | None = None,
         lat: float | None = None,
         lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
+        data = {}
+        if token:
+            data["token"] = token
+        if lat and lon:
+            data["lat"] = lat
+            data["lon"] = lon
         return await self._request(
             Methods.POST,
             f"api/1/vehicles/{vehicle_tag}/command/trigger_homelink",
-            json={"lat": lat, "lon": lon, "token": token},
+            json=data,
         )
 
     async def upcoming_calendar_entries(
