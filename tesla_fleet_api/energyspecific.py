@@ -16,7 +16,7 @@ class EnergySpecific:
         """Adjust the site's backup reserve."""
         return await self._parent.backup(
             self.energy_site_id,
-            data={"backup_reserve_percent": backup_reserve_percent},
+            backup_reserve_percent,
         )
 
     async def backup_history(
@@ -68,8 +68,8 @@ class EnergySpecific:
 
     async def grid_import_export(
         self,
-        disallow_charge_from_grid_with_solar_installed: bool,
-        customer_preferred_export_rule: str,
+        disallow_charge_from_grid_with_solar_installed: bool | None = None,
+        customer_preferred_export_rule: str | None = None,
     ) -> dict[str, Any]:
         """Allow/disallow charging from the grid and exporting energy to the grid."""
         return await self._parent.grid_import_export(

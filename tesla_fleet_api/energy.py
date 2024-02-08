@@ -20,7 +20,7 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/backup",
-            data={"backup_reserve_percent": backup_reserve_percent},
+            json={"backup_reserve_percent": backup_reserve_percent},
         )
 
     async def backup_history(
@@ -36,7 +36,7 @@ class Energy:
         return await self._request(
             Methods.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
-            {
+            json={
                 "kind": kind,
                 "start_date": start_date,
                 "end_date": end_date,
@@ -90,17 +90,25 @@ class Energy:
     async def grid_import_export(
         self,
         energy_site_id: int,
-        disallow_charge_from_grid_with_solar_installed: bool,
-        customer_preferred_export_rule: str,
+        disallow_charge_from_grid_with_solar_installed: bool | None = None,
+        customer_preferred_export_rule: str | None = None,
     ) -> dict[str, Any]:
         """Allow/disallow charging from the grid and exporting energy to the grid."""
+        data = {}
+        if disallow_charge_from_grid_with_solar_installed is not None:
+            data[
+                "disallow_charge_from_grid_with_solar_installed"
+            ] = disallow_charge_from_grid_with_solar_installed
+        if customer_preferred_export_rule is not None:
+            data["customer_preferred_export_rule"] = customer_preferred_export_rule
+        if not data:
+            raise ValueError(
+                "At least one of disallow_charge_from_grid_with_solar_installed or customer_preferred_export_rule must be set."
+            )
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/grid_import_export",
-            data={
-                "disallow_charge_from_grid_with_solar_installed": disallow_charge_from_grid_with_solar_installed,
-                "customer_preferred_export_rule": customer_preferred_export_rule,
-            },
+            json=data,
         )
 
     async def live_status(self, energy_site_id: int) -> dict[str, Any]:
@@ -117,7 +125,7 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/off_grid_vehicle_charging_reserve",
-            data={
+            json={
                 "off_grid_vehicle_charging_reserve_percent": off_grid_vehicle_charging_reserve_percent
             },
         )
@@ -129,7 +137,7 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/operation",
-            data={"default_real_mode": default_real_mode},
+            json={"default_real_mode": default_real_mode},
         )
 
     async def site_info(self, energy_site_id: int) -> dict[str, Any]:
@@ -144,5 +152,5 @@ class Energy:
         return await self._request(
             Methods.POST,
             f"api/1/energy_sites/{energy_site_id}/storm_mode",
-            data={"enabled": enabled},
+            json={"enabled": enabled},
         )

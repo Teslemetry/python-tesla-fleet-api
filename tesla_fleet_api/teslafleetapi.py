@@ -70,7 +70,6 @@ class TeslaFleetApi:
         method: Methods,
         path: str,
         params: dict[str:Any] | None = None,
-        data: dict[str:Any] | None = None,
         json: dict[str:Any] | None = None,
     ):
         """Send a request to the Tesla Fleet API."""
@@ -78,13 +77,11 @@ class TeslaFleetApi:
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
 
-        if method == Methods.GET and (data is not None or json is not None):
-            raise ValueError("GET requests cannot have data or json parameters.")
+        if method == Methods.GET and json is not None:
+            raise ValueError("GET requests cannot have a body.")
 
         if params:
             params = {k: v for k, v in params.items() if v is not None}
-        if data:
-            data = {k: v for k, v in data.items() if v is not None}
         if json:
             json = {k: v for k, v in json.items() if v is not None}
 
@@ -95,7 +92,6 @@ class TeslaFleetApi:
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
             },
-            data=data,
             json=json,
             params=params,
         ) as resp:
