@@ -1,3 +1,4 @@
+import logging
 import aiohttp
 from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
@@ -7,6 +8,8 @@ from .energy import Energy
 from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
+
+LOGGER = logging.getLogger(__package__)
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -40,6 +43,8 @@ class TeslaFleetApi:
             raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
         self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
+
+        LOGGER.debug("Using server %s", self.server)
 
         if charging_scope:
             self.charging = Charging(self)
@@ -80,10 +85,15 @@ class TeslaFleetApi:
         if method == Method.GET and json is not None:
             raise ValueError("GET requests cannot have a body.")
 
+        LOGGER.debug("Sending request to %s", path)
+
+        # Remove None values from params and json
         if params:
             params = {k: v for k, v in params.items() if v is not None}
+            LOGGER.debug("Parameters: %s", params)
         if json:
             json = {k: v for k, v in json.items() if v is not None}
+            LOGGER.debug("Body: %s", json)
 
         async with self.session.request(
             method,
@@ -95,6 +105,7 @@ class TeslaFleetApi:
             json=json,
             params=params,
         ) as resp:
+            LOGGER.debug("Response Status: %s", resp.status)
             if self.raise_for_status and not resp.ok:
                 await raise_for_status(resp)
             elif resp.status == 401 and resp.content_type != "application/json":
@@ -105,8 +116,13 @@ class TeslaFleetApi:
                     "error_message": "The OAuth token has expired.",
                 }
             if resp.content_type == "application/json":
-                return await resp.json()
-            return await resp.text()
+                data = await resp.json()
+                LOGGER.debug("Response JSON: %s", data)
+                return data
+
+            data = await resp.text()
+            LOGGER.debug("Response Text: %s", data)
+            return data
 
     async def status(self):
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
