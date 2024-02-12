@@ -54,6 +54,8 @@ class Seat(IntEnum):
     REAR_LEFT = 2
     REAR_CENTER = 4
     REAR_RIGHT = 5
+    THIRD_LEFT = 6
+    THIRD_RIGHT = 7
 
 
 class Level(IntEnum):
