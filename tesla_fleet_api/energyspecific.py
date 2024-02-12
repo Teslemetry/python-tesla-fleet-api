@@ -1,4 +1,5 @@
 from typing import Any
+from .const import EnergyExportMode, EnergyOperationMode
 
 
 class EnergySpecific:
@@ -69,7 +70,7 @@ class EnergySpecific:
     async def grid_import_export(
         self,
         disallow_charge_from_grid_with_solar_installed: bool | None = None,
-        customer_preferred_export_rule: str | None = None,
+        customer_preferred_export_rule: EnergyExportMode | str | None = None,
     ) -> dict[str, Any]:
         """Allow/disallow charging from the grid and exporting energy to the grid."""
         return await self._parent.grid_import_export(
@@ -90,7 +91,9 @@ class EnergySpecific:
             self.energy_site_id, off_grid_vehicle_charging_reserve_percent
         )
 
-    async def operation(self, default_real_mode: str) -> dict[str, Any]:
+    async def operation(
+        self, default_real_mode: EnergyOperationMode | str
+    ) -> dict[str, Any]:
         """Set the site's mode."""
         return await self._parent.operation(
             self.energy_site_id,

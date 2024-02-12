@@ -136,6 +136,22 @@ class Scope(StrEnum):
     ENERGY_CMDS = "energy_cmds"
 
 
+class EnergyOperationMode(StrEnum):
+    """Energy Operation Mode options"""
+
+    AUTONOMOUS = "autonomous"
+    SELF_CONSUMPTION = "self_consumption"
+    BACKUP = "backup"
+
+
+class EnergyExportMode(StrEnum):
+    """Energy Export Mode options"""
+
+    BATTERY_OK = "battery_ok"
+    PV_ONLY = "pv_only"
+    NEVER = "never"
+
+
 class TelemetryField(StrEnum):
     """Fields available in telemetry streams"""
 

@@ -6,7 +6,7 @@ class TeslaFleetError(BaseException):
     """Base class for all Tesla exceptions."""
 
     message: str
-    status: int
+    status: int = 0
     error: str | None
     error_description: str | None
 
@@ -245,7 +245,7 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
             elif error == Error.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
             else:
-                raise TeslaFleetError(data) from e
+                raise InvalidRequest({error: e.message}) from e
         elif resp.status == 401:
             error = data.get("error")
             if error == Error.TOKEN_EXPIRED:
@@ -253,7 +253,7 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
             elif error == Error.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
             else:
-                raise InvalidToken(data) from e
+                raise InvalidToken({error: e.message}) from e
         elif resp.status == 402:
             raise PaymentRequired(data) from e
         elif resp.status == 403:

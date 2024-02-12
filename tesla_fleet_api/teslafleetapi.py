@@ -1,5 +1,6 @@
 import logging
 import aiohttp
+from json import dumps
 from .exceptions import raise_for_status, InvalidRegion, LibraryError
 from typing import Any
 from .const import SERVERS, Method, Error
@@ -93,7 +94,7 @@ class TeslaFleetApi:
             LOGGER.debug("Parameters: %s", params)
         if json:
             json = {k: v for k, v in json.items() if v is not None}
-            LOGGER.debug("Body: %s", json)
+            LOGGER.debug("Body: %s", dumps(json))
 
         async with self.session.request(
             method,

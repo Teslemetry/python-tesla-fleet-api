@@ -1,5 +1,5 @@
 from typing import Any
-from .const import Method
+from .const import Method, EnergyOperationMode, EnergyExportMode
 from .energyspecific import EnergySpecific
 
 
@@ -91,24 +91,16 @@ class Energy:
         self,
         energy_site_id: int,
         disallow_charge_from_grid_with_solar_installed: bool | None = None,
-        customer_preferred_export_rule: str | None = None,
+        customer_preferred_export_rule: EnergyExportMode|str | None = None,
     ) -> dict[str, Any]:
         """Allow/disallow charging from the grid and exporting energy to the grid."""
-        data = {}
-        if disallow_charge_from_grid_with_solar_installed is not None:
-            data[
-                "disallow_charge_from_grid_with_solar_installed"
-            ] = disallow_charge_from_grid_with_solar_installed
-        if customer_preferred_export_rule is not None:
-            data["customer_preferred_export_rule"] = customer_preferred_export_rule
-        if not data:
-            raise ValueError(
-                "At least one of disallow_charge_from_grid_with_solar_installed or customer_preferred_export_rule must be set."
-            )
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{energy_site_id}/grid_import_export",
-            json=data,
+            json={
+                "disallow_charge_from_grid_with_solar_installed": disallow_charge_from_grid_with_solar_installed,
+                "customer_preferred_export_rule": customer_preferred_export_rule,
+            },
         )
 
     async def live_status(self, energy_site_id: int) -> dict[str, Any]:
@@ -131,7 +123,7 @@ class Energy:
         )
 
     async def operation(
-        self, energy_site_id: int, default_real_mode: str
+        self, energy_site_id: int, default_real_mode: EnergyOperationMode | str
     ) -> dict[str, Any]:
         """Set the site's mode."""
         return await self._request(
