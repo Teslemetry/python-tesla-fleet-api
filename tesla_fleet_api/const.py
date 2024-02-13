@@ -42,8 +42,8 @@ SERVERS = {
 class Trunk(StrEnum):
     """Trunk options"""
 
-    FRONT: "front"
-    REAR: "rear"
+    FRONT = "front"
+    REAR = "rear"
 
 
 class Seat(IntEnum):
