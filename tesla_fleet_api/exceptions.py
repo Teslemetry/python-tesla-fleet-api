@@ -15,6 +15,8 @@ class TeslaFleetError(BaseException):
             self.status = data.get("status", self.status)
             self.error = data.get("error") or data.get("message")
             self.error_description = data.get("error_description")
+            self.message = self.message or self.error_description
+        super().__init__(self.message)
 
 
 class ResponseError(TeslaFleetError):
