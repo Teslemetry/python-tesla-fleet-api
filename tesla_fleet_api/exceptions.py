@@ -221,39 +221,35 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         # This error does not return a body
         raise OAuthExpired()
 
-    if resp.content_type != "application/json":
-        text = await resp.text()
-        return ResponseError({"error": text, "status": resp.status})
-
-    data = await resp.json()
-
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
+        if resp.content_type != "application/json":
+            data = await resp.json()
+        else:
+            data = {}
         if resp.status == 400:
             error = data.get("error")
             if error == Error.INVALID_COMMAND:
                 raise InvalidCommand(data) from e
-            elif error == Error.INVALID_FIELD:
+            if error == Error.INVALID_FIELD:
                 raise InvalidField(data) from e
-            elif error == Error.INVALID_REQUEST:
+            if error == Error.INVALID_REQUEST:
                 raise InvalidRequest(data) from e
-            elif error == Error.INVALID_AUTH_CODE:
+            if error == Error.INVALID_AUTH_CODE:
                 raise InvalidAuthCode(data) from e
-            elif error == Error.INVALID_REDIRECT_URL:
+            if error == Error.INVALID_REDIRECT_URL:
                 raise InvalidRedirectUrl(data) from e
-            elif error == Error.UNAUTHORIZED_CLIENT:
+            if error == Error.UNAUTHORIZED_CLIENT:
                 raise UnauthorizedClient(data) from e
-            else:
-                raise InvalidRequest({error: e.message}) from e
+            raise InvalidRequest({error: e.message}) from e
         elif resp.status == 401:
             error = data.get("error")
             if error == Error.TOKEN_EXPIRED:
                 raise OAuthExpired(data) from e
-            elif error == Error.MOBILE_ACCESS_DISABLED:
+            if error == Error.MOBILE_ACCESS_DISABLED:
                 raise MobileAccessDisabled(data) from e
-            else:
-                raise InvalidToken({error: e.message}) from e
+            raise InvalidToken({error: e.message}) from e
         elif resp.status == 402:
             raise PaymentRequired(data) from e
         elif resp.status == 403:
@@ -289,3 +285,12 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         elif resp.status == 540:
             raise DeviceUnexpectedResponse(data) from e
         raise e
+    finally:
+        if resp.content_type != "application/json":
+            raise ResponseError(
+                {
+                    "status": resp.status,
+                    "error": "Invalid response from Tesla",
+                    "error_description": await resp.text(),
+                }
+            )
