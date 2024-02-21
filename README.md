@@ -13,7 +13,8 @@ This is the base class, however can also be used directly if you have a valid us
 import asyncio
 import aiohttp
 
-from tesla_fleet_api import TeslaFleetApi, TeslaFleetError
+from tesla_fleet_api import TeslaFleetApi
+from tesla_fleet_api.exceptions import TeslaFleetError
 
 
 async def main():
@@ -28,7 +29,7 @@ async def main():
         try:
             data = await api.vehicle.list()
             print(data)
-        except TeslaFleetError.Base as e:
+        except TeslaFleetError as e:
             print(e.message, e.error)
 
 asyncio.run(main())
@@ -38,6 +39,8 @@ asyncio.run(main())
 This extends TeslaFleetApi to support OAuth, and requires a client_id, and either a refresh_token or initial authentication code.
 
 ```
+from tesla_fleet_api import TeslaFleetOAuth
+from tesla_fleet_api.exceptions import TeslaFleetError
 import json
 
 async def main():
@@ -56,7 +59,7 @@ async def main():
         try:
             data = await api.vehicle.list()
             print(data)
-        except TeslaFleetError.Base as e:
+        except TeslaFleetError as e:
             print(e.message, e.error)
 
     with open("auth.json", "w") as f:
