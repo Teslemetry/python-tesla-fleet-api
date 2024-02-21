@@ -30,7 +30,7 @@ async def main():
             data = await api.vehicle.list()
             print(data)
         except TeslaFleetError as e:
-            print(e.message, e.error)
+            print(e)
 
 asyncio.run(main())
 ```
@@ -60,7 +60,7 @@ async def main():
             data = await api.vehicle.list()
             print(data)
         except TeslaFleetError as e:
-            print(e.message, e.error)
+            print(e)
 
     with open("auth.json", "w") as f:
         json.dump(
@@ -98,7 +98,7 @@ async def main():
             data = await api.vehicle.list()
             print(data)
         except TeslaFleetError as e:
-            print(e.message, e.error)
+            print(e)
 
 asyncio.run(main())
 ```
