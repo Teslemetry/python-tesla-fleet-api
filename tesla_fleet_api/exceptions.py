@@ -90,6 +90,12 @@ class Forbidden(TeslaFleetError):
     message = "Access to this resource is not authorized, developers should check required Scope."
     status = 403
 
+class UnsupportedVehicle(TeslaFleetError):
+    """The vehicle is unsupported."""
+
+    message = "The vehicle is unsupported."
+    status = 403
+
 
 class NotFound(TeslaFleetError):
     """The requested resource does not exist."""
@@ -251,6 +257,10 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         elif resp.status == 402:
             raise PaymentRequired(data) from e
         elif resp.status == 403:
+            if data:
+                error = data.get("error")
+                if error = "unsupported vehicle":
+                    UnsupportedVehicle(data)
             raise Forbidden(data) from e
         elif resp.status == 404:
             raise NotFound(data) from e
