@@ -30,6 +30,7 @@ class Error(StrEnum):
     UNAUTHORIZED_CLIENT = "unauthorized_client"
     MOBILE_ACCESS_DISABLED = "mobile_access_disabled"
     TOKEN_EXPIRED = "token expired (401)"
+    UNSUPPORTED_VEHICLE = "unsupported vehicle"
 
 
 SERVERS = {
