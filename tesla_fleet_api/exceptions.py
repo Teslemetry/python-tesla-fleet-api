@@ -239,8 +239,8 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                     raise UnauthorizedClient(data) from e
             raise InvalidRequest(data) from e
         elif resp.status == 401:
-            error = data.get("error")
-            if error:
+            if data:
+                error = data.get("error")
                 if error == Error.TOKEN_EXPIRED:
                     raise OAuthExpired(data) from e
                 if error == Error.MOBILE_ACCESS_DISABLED:
