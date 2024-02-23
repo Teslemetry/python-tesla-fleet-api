@@ -5,17 +5,13 @@ from .const import Error
 class TeslaFleetError(BaseException):
     """Base class for all Tesla exceptions."""
 
-    message: str
-    status: int = 0
-    error: str | None
-    error_description: str | None
+    message: str = "An unknown error has occured."
+    status: int | None
+    data: dict | None
 
-    def __init__(self, data: dict[str, str] | None = None):
-        if data:
-            self.status = data.get("status", self.status)
-            self.error = data.get("error") or data.get("message")
-            self.error_description = data.get("error_description")
-            self.message = self.message or self.error_description
+    def __init__(self, data: dict | None = None, status: int | None = None):
+        self.data = data
+        self.status = status or self.status
         super().__init__(self.message)
 
 
@@ -218,40 +214,40 @@ class LibraryError(Exception):
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
-
-    if resp.status == 401 and resp.content_type != "application/json":
-        # This error does not return a body
-        raise OAuthExpired()
-
+    
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
         if resp.content_type != "application/json":
             data = await resp.json()
         else:
-            data = {}
+            data = None
         if resp.status == 400:
-            error = data.get("error")
-            if error == Error.INVALID_COMMAND:
-                raise InvalidCommand(data) from e
-            if error == Error.INVALID_FIELD:
-                raise InvalidField(data) from e
-            if error == Error.INVALID_REQUEST:
-                raise InvalidRequest(data) from e
-            if error == Error.INVALID_AUTH_CODE:
-                raise InvalidAuthCode(data) from e
-            if error == Error.INVALID_REDIRECT_URL:
-                raise InvalidRedirectUrl(data) from e
-            if error == Error.UNAUTHORIZED_CLIENT:
-                raise UnauthorizedClient(data) from e
-            raise InvalidRequest({error: e.message}) from e
+            if data:
+                error = data.get("error")
+                if error == Error.INVALID_COMMAND:
+                    raise InvalidCommand(data) from e
+                if error == Error.INVALID_FIELD:
+                    raise InvalidField(data) from e
+                if error == Error.INVALID_REQUEST:
+                    raise InvalidRequest(data) from e
+                if error == Error.INVALID_AUTH_CODE:
+                    raise InvalidAuthCode(data) from e
+                if error == Error.INVALID_REDIRECT_URL:
+                    raise InvalidRedirectUrl(data) from e
+                if error == Error.UNAUTHORIZED_CLIENT:
+                    raise UnauthorizedClient(data) from e
+            raise InvalidRequest(data) from e
         elif resp.status == 401:
             error = data.get("error")
-            if error == Error.TOKEN_EXPIRED:
-                raise OAuthExpired(data) from e
-            if error == Error.MOBILE_ACCESS_DISABLED:
-                raise MobileAccessDisabled(data) from e
-            raise InvalidToken({error: e.message}) from e
+            if error:
+                if error == Error.TOKEN_EXPIRED:
+                    raise OAuthExpired(data) from e
+                if error == Error.MOBILE_ACCESS_DISABLED:
+                    raise MobileAccessDisabled(data) from e
+                raise InvalidToken(data) from e
+            # This error does not return a body
+            raise OAuthExpired()
         elif resp.status == 402:
             raise PaymentRequired(data) from e
         elif resp.status == 403:
@@ -289,10 +285,4 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise e
     finally:
         if resp.content_type != "application/json":
-            raise ResponseError(
-                {
-                    "status": resp.status,
-                    "error": "Invalid response from Tesla",
-                    "error_description": await resp.text(),
-                }
-            )
+            raise ResponseError(status = resp.status)
