@@ -1,5 +1,4 @@
 import aiohttp
-from .const import Error
 
 
 class TeslaFleetError(BaseException):
@@ -26,6 +25,7 @@ class InvalidCommand(TeslaFleetError):
 
     message = "The data request or command is unknown."
     status = 400
+    key = "invalid_command"
 
 
 class InvalidField(TeslaFleetError):
@@ -33,6 +33,7 @@ class InvalidField(TeslaFleetError):
 
     message = "A field in the input is not valid."
     status = 400
+    key = "invalid_field"
 
 
 class InvalidRequest(TeslaFleetError):
@@ -40,6 +41,7 @@ class InvalidRequest(TeslaFleetError):
 
     message = "The request body is not valid"
     status = 400
+    key = "invalid_request"
 
 
 class InvalidAuthCode(TeslaFleetError):
@@ -47,6 +49,7 @@ class InvalidAuthCode(TeslaFleetError):
 
     message = "The 'code' in request body is invalid, generate a new one and try again."
     status = 400
+    key = "invalid_auth_code"
 
 
 class InvalidRedirectUrl(TeslaFleetError):
@@ -54,6 +57,7 @@ class InvalidRedirectUrl(TeslaFleetError):
 
     message = "Invalid redirect URI/URL. The authorize redirect URI and token redirect URI must match."
     status = 400
+    key = "invalid_redirect_url"
 
 
 class UnauthorizedClient(TeslaFleetError):
@@ -61,6 +65,7 @@ class UnauthorizedClient(TeslaFleetError):
 
     message = "We don't recognize this client_id and client_secret combination. Use the client_id and client_secret that has been granted for the application."
     status = 400
+    key = "unauthorized_client"
 
 
 class MobileAccessDisabled(TeslaFleetError):
@@ -68,6 +73,15 @@ class MobileAccessDisabled(TeslaFleetError):
 
     message = "The vehicle has turned off remote access."
     status = 401
+    key = "mobile_access_disabled"
+
+
+class InvalidToken(TeslaFleetError):  # Teslemetry specific
+    """Teslemetry specific error for invalid access token."""
+
+    message = "Invalid Teslemetry access token."
+    status = 401
+    key = "invalid_token"
 
 
 class OAuthExpired(TeslaFleetError):
@@ -75,6 +89,7 @@ class OAuthExpired(TeslaFleetError):
 
     message = "The OAuth token has expired."
     status = 401
+    key = "token expired (401)"
 
 
 class PaymentRequired(TeslaFleetError):
@@ -90,11 +105,13 @@ class Forbidden(TeslaFleetError):
     message = "Access to this resource is not authorized, developers should check required Scope."
     status = 403
 
+
 class UnsupportedVehicle(TeslaFleetError):
     """The vehicle is unsupported."""
 
     message = "The vehicle is unsupported."
     status = 403
+    key = "unsupported vehicle"
 
 
 class NotFound(TeslaFleetError):
@@ -206,13 +223,6 @@ class DeviceUnexpectedResponse(TeslaFleetError):
     status = 540
 
 
-class InvalidToken(TeslaFleetError):  # Teslemetry specific
-    """Teslemetry specific error for invalid access token."""
-
-    message = "Invalid Teslemetry access token."
-    status = 401
-
-
 class LibraryError(Exception):
     """Errors related to this library."""
 
@@ -220,7 +230,7 @@ class LibraryError(Exception):
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
-    
+
     try:
         resp.raise_for_status()
     except aiohttp.ClientResponseError as e:
@@ -231,36 +241,36 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         if resp.status == 400:
             if data:
                 error = data.get("error")
-                if error == Error.INVALID_COMMAND:
+                if error == InvalidCommand.key:
                     raise InvalidCommand(data) from e
-                if error == Error.INVALID_FIELD:
+                if error == InvalidField.key:
                     raise InvalidField(data) from e
-                if error == Error.INVALID_REQUEST:
+                if error == InvalidRequest.key:
                     raise InvalidRequest(data) from e
-                if error == Error.INVALID_AUTH_CODE:
+                if error == InvalidAuthCode.key:
                     raise InvalidAuthCode(data) from e
-                if error == Error.INVALID_REDIRECT_URL:
+                if error == InvalidRedirectUrl.key:
                     raise InvalidRedirectUrl(data) from e
-                if error == Error.UNAUTHORIZED_CLIENT:
+                if error == UnauthorizedClient.key:
                     raise UnauthorizedClient(data) from e
             raise InvalidRequest(data) from e
         elif resp.status == 401:
             if data:
                 error = data.get("error")
-                if error == Error.TOKEN_EXPIRED:
+                if error == OAuthExpired.key:
                     raise OAuthExpired(data) from e
-                if error == Error.MOBILE_ACCESS_DISABLED:
+                if error == MobileAccessDisabled.key:
                     raise MobileAccessDisabled(data) from e
                 raise InvalidToken(data) from e
             # This error does not return a body
-            raise OAuthExpired()
+            raise OAuthExpired() from e
         elif resp.status == 402:
             raise PaymentRequired(data) from e
         elif resp.status == 403:
             if data:
                 error = data.get("error")
-                if error = "unsupported vehicle":
-                    UnsupportedVehicle(data)
+                if error == UnsupportedVehicle.key:
+                    raise UnsupportedVehicle(data) from e
             raise Forbidden(data) from e
         elif resp.status == 404:
             raise NotFound(data) from e
@@ -295,4 +305,4 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise e
     finally:
         if resp.content_type != "application/json":
-            raise ResponseError(status = resp.status)
+            raise ResponseError(status=resp.status)

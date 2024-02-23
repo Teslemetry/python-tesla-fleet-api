@@ -18,21 +18,6 @@ class Method(StrEnum):
     DELETE = "DELETE"
 
 
-class Error(StrEnum):
-    """Tesla Fleet API error codes."""
-
-    INVALID_COMMAND = "invalid_command"
-    INVALID_FIELD = "invalid_field"
-    INVALID_REQUEST = "invalid_request"
-    INVALID_TOKEN = "invalid_token"  # Manufactured error for token expiration.
-    INVALID_AUTH_CODE = "invalid_auth_code"
-    INVALID_REDIRECT_URL = "invalid_redirect_url"
-    UNAUTHORIZED_CLIENT = "unauthorized_client"
-    MOBILE_ACCESS_DISABLED = "mobile_access_disabled"
-    TOKEN_EXPIRED = "token expired (401)"
-    UNSUPPORTED_VEHICLE = "unsupported vehicle"
-
-
 SERVERS = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
     "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
