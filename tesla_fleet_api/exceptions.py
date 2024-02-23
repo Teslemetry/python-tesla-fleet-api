@@ -241,26 +241,23 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         if resp.status == 400:
             if data:
                 error = data.get("error")
-                if error == InvalidCommand.key:
-                    raise InvalidCommand(data) from e
-                if error == InvalidField.key:
-                    raise InvalidField(data) from e
-                if error == InvalidRequest.key:
-                    raise InvalidRequest(data) from e
-                if error == InvalidAuthCode.key:
-                    raise InvalidAuthCode(data) from e
-                if error == InvalidRedirectUrl.key:
-                    raise InvalidRedirectUrl(data) from e
-                if error == UnauthorizedClient.key:
-                    raise UnauthorizedClient(data) from e
+                for exception in [
+                    InvalidCommand,
+                    InvalidField,
+                    InvalidRequest,
+                    InvalidAuthCode,
+                    InvalidRedirectUrl,
+                    UnauthorizedClient,
+                ]:
+                    if error == exception.key:
+                        raise exception(data) from e
             raise InvalidRequest(data) from e
         elif resp.status == 401:
             if data:
                 error = data.get("error")
-                if error == OAuthExpired.key:
-                    raise OAuthExpired(data) from e
-                if error == MobileAccessDisabled.key:
-                    raise MobileAccessDisabled(data) from e
+                for exception in [OAuthExpired, MobileAccessDisabled]:
+                    if error == exception.key:
+                        raise exception(data) from e
                 raise InvalidToken(data) from e
             # This error does not return a body
             raise OAuthExpired() from e

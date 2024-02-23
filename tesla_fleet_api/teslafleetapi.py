@@ -1,9 +1,9 @@
 import logging
 import aiohttp
 from json import dumps
-from .exceptions import raise_for_status, InvalidRegion, LibraryError
+from .exceptions import raise_for_status, InvalidRegion, LibraryError, InvalidToken
 from typing import Any
-from .const import SERVERS, Method, Error
+from .const import SERVERS, Method
 from .charging import Charging
 from .energy import Energy
 from .partner import Partner
@@ -113,7 +113,7 @@ class TeslaFleetApi:
                 # Manufacture a response since Tesla doesn't provide a body for token expiration.
                 return {
                     "response": None,
-                    "error": Error.INVALID_TOKEN,
+                    "error": InvalidToken.key,
                     "error_message": "The OAuth token has expired.",
                 }
             if resp.content_type == "application/json":
