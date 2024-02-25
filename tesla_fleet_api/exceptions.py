@@ -4,9 +4,9 @@ import aiohttp
 class TeslaFleetError(BaseException):
     """Base class for all Tesla exceptions."""
 
-    message: str = "An unknown error has occured."
-    status: int | None
-    data: dict | None
+    message: str = "An unknown error has occurred."
+    status: int | None = None
+    data: dict | None = None
 
     def __init__(self, data: dict | None = None, status: int | None = None):
         self.data = data
