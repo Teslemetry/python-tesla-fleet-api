@@ -1,6 +1,11 @@
 import aiohttp
+from aiolimiter import AsyncLimiter
+from typing import Any
 from .teslafleetapi import TeslaFleetApi
 from .const import Method
+
+# Rate limit should be global, even if multiple instances are created
+rate_limit = AsyncLimiter(5, 10)
 
 
 class Teslemetry(TeslaFleetApi):
@@ -19,6 +24,7 @@ class Teslemetry(TeslaFleetApi):
             partner_scope=False,
             user_scope=False,
         )
+        self.rate_limit = rate_limit
 
     async def ping(self) -> bool:
         """Send a ping."""
@@ -44,3 +50,14 @@ class Teslemetry(TeslaFleetApi):
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Teslemetry.")
+
+    async def _request(
+        self,
+        method: Method,
+        path: str,
+        params: dict[str:Any] | None = None,
+        json: dict[str:Any] | None = None,
+    ):
+        """Send a request to the Teslemetry API."""
+        async with rate_limit:
+            return await super()._request(method, path, params, json)
