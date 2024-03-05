@@ -1,16 +1,13 @@
-import logging
 import aiohttp
 from json import dumps
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, InvalidToken
 from typing import Any
-from .const import SERVERS, Method
+from .const import SERVERS, Method, LOGGER
 from .charging import Charging
 from .energy import Energy
 from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
-
-LOGGER = logging.getLogger(__package__)
 
 
 # Based on https://developer.tesla.com/docs/fleet-api

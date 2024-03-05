@@ -1,4 +1,5 @@
 import aiohttp
+from .const import LOGGER
 
 
 class TeslaFleetError(BaseException):
@@ -9,6 +10,7 @@ class TeslaFleetError(BaseException):
     data: dict | None = None
 
     def __init__(self, data: dict | None = None, status: int | None = None):
+        LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status
         super().__init__(self.message)
@@ -97,6 +99,14 @@ class PaymentRequired(TeslaFleetError):
 
     message = "Payment is required in order to use the API (non-free account only)."
     status = 402
+
+
+class SubscriptionRequired(TeslaFleetError):
+    """Subscription is required in order to use Teslemetry."""
+
+    message = "Subscription is required in order to use Teslemetry."
+    status = 402
+    key = "subscription_required"
 
 
 class Forbidden(TeslaFleetError):
@@ -231,75 +241,74 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
 
-    try:
-        resp.raise_for_status()
-    except aiohttp.ClientResponseError as e:
-        if resp.content_type != "application/json":
-            data = await resp.json()
-        else:
-            data = None
-        if resp.status == 400:
-            if data:
-                error = data.get("error")
-                for exception in [
-                    InvalidCommand,
-                    InvalidField,
-                    InvalidRequest,
-                    InvalidAuthCode,
-                    InvalidRedirectUrl,
-                    UnauthorizedClient,
-                ]:
-                    if error == exception.key:
-                        raise exception(data) from e
-            raise InvalidRequest(data) from e
-        elif resp.status == 401:
-            if data:
-                error = data.get("error")
-                for exception in [OAuthExpired, MobileAccessDisabled]:
-                    if error == exception.key:
-                        raise exception(data) from e
-                raise InvalidToken(data) from e
-            # This error does not return a body
-            raise OAuthExpired() from e
-        elif resp.status == 402:
-            raise PaymentRequired(data) from e
-        elif resp.status == 403:
-            if data:
-                error = data.get("error")
-                if error == UnsupportedVehicle.key:
-                    raise UnsupportedVehicle(data) from e
-            raise Forbidden(data) from e
-        elif resp.status == 404:
-            raise NotFound(data) from e
-        elif resp.status == 405:
-            raise NotAllowed(data) from e
-        elif resp.status == 406:
-            raise NotAcceptable(data) from e
-        elif resp.status == 408:
-            raise VehicleOffline(data) from e
-        elif resp.status == 412:
-            raise PreconditionFailed(data) from e
-        elif resp.status == 421:
-            raise InvalidRegion(data) from e
-        elif resp.status == 422:
-            raise InvalidResource(data) from e
-        elif resp.status == 423:
-            raise Locked(data) from e
-        elif resp.status == 429:
-            raise RateLimited(data) from e
-        elif resp.status == 451:
-            raise ResourceUnavailableForLegalReasons(data) from e
-        elif resp.status == 499:
-            raise ClientClosedRequest(data) from e
-        elif resp.status == 500:
-            raise InternalServerError(data) from e
-        elif resp.status == 503:
-            raise ServiceUnavailable(data) from e
-        elif resp.status == 504:
-            raise GatewayTimeout(data) from e
-        elif resp.status == 540:
-            raise DeviceUnexpectedResponse(data) from e
-        raise e
-    finally:
-        if resp.content_type != "application/json":
-            raise ResponseError(status=resp.status)
+    if resp.status < 400:
+        return
+
+    data = None
+    error = None
+    if resp.content_type == "application/json":
+        data = await resp.json()
+        error = data.get("error")
+
+    if resp.status == 400:
+        if error:
+            for exception in [
+                InvalidCommand,
+                InvalidField,
+                InvalidRequest,
+                InvalidAuthCode,
+                InvalidRedirectUrl,
+                UnauthorizedClient,
+            ]:
+                if error == exception.key:
+                    raise exception(data)
+        raise InvalidRequest(data)
+    elif resp.status == 401:
+        if error:
+            for exception in [OAuthExpired, MobileAccessDisabled]:
+                if error == exception.key:
+                    raise exception(data)
+            raise InvalidToken(data)
+        # This error does not return a body
+        raise OAuthExpired()
+    elif resp.status == 402:
+        if error == SubscriptionRequired.key:
+            raise SubscriptionRequired(data)
+        raise PaymentRequired(data)
+    elif resp.status == 403:
+        if error == UnsupportedVehicle.key:
+            raise UnsupportedVehicle(data)
+        raise Forbidden(data)
+    elif resp.status == 404:
+        raise NotFound(data)
+    elif resp.status == 405:
+        raise NotAllowed(data)
+    elif resp.status == 406:
+        raise NotAcceptable(data)
+    elif resp.status == 408:
+        raise VehicleOffline(data)
+    elif resp.status == 412:
+        raise PreconditionFailed(data)
+    elif resp.status == 421:
+        raise InvalidRegion(data)
+    elif resp.status == 422:
+        raise InvalidResource(data)
+    elif resp.status == 423:
+        raise Locked(data)
+    elif resp.status == 429:
+        raise RateLimited(data)
+    elif resp.status == 451:
+        raise ResourceUnavailableForLegalReasons(data)
+    elif resp.status == 499:
+        raise ClientClosedRequest(data)
+    elif resp.status == 500:
+        raise InternalServerError(data)
+    elif resp.status == 503:
+        raise ServiceUnavailable(data)
+    elif resp.status == 504:
+        raise GatewayTimeout(data)
+    elif resp.status == 540:
+        raise DeviceUnexpectedResponse(data)
+    elif data is None:
+        raise ResponseError(status=resp.status)
+    resp.raise_for_status()

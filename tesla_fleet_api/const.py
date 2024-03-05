@@ -1,5 +1,7 @@
 """Tesla Fleet API constants."""
+
 from enum import Enum
+import logging
 
 
 class IntEnum(int, Enum):
@@ -17,6 +19,8 @@ class Method(StrEnum):
     POST = "POST"
     DELETE = "DELETE"
 
+
+LOGGER = logging.getLogger(__package__)
 
 SERVERS = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
@@ -212,10 +216,10 @@ class TelemetryField(StrEnum):
     EMERGENCY_LANE_DEPARTURE_AVOIDANCE = "EmergencyLaneDepartureAvoidance"
     ENERGY_REMAINING = "EnergyRemaining"
     EST_BATTERY_RANGE = "EstBatteryRange"
-    EXPERIMENTAL_1 = "Experimental_1"
-    EXPERIMENTAL_2 = "Experimental_2"
-    EXPERIMENTAL_3 = "Experimental_3"
-    EXPERIMENTAL_4 = "Experimental_4"
+    # EXPERIMENTAL_1 = "Experimental_1"
+    # EXPERIMENTAL_2 = "Experimental_2"
+    # EXPERIMENTAL_3 = "Experimental_3"
+    # EXPERIMENTAL_4 = "Experimental_4"
     EXTERIOR_COLOR = "ExteriorColor"
     FAST_CHARGER_PRESENT = "FastChargerPresent"
     FD_WINDOW = "FdWindow"
