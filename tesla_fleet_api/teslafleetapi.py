@@ -1,4 +1,6 @@
 import aiohttp
+from aiolimiter import AsyncLimiter
+
 from json import dumps
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, InvalidToken
 from typing import Any
@@ -9,6 +11,7 @@ from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
 
+rate_limit = AsyncLimiter(5, 10)
 
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi:
@@ -93,34 +96,35 @@ class TeslaFleetApi:
             json = {k: v for k, v in json.items() if v is not None}
             LOGGER.debug("Body: %s", dumps(json))
 
-        async with self.session.request(
-            method,
-            f"{self.server}/{path}",
-            headers={
-                "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json",
-            },
-            json=json,
-            params=params,
-        ) as resp:
-            LOGGER.debug("Response Status: %s", resp.status)
-            if self.raise_for_status and not resp.ok:
-                await raise_for_status(resp)
-            elif resp.status == 401 and resp.content_type != "application/json":
-                # Manufacture a response since Tesla doesn't provide a body for token expiration.
-                return {
-                    "response": None,
-                    "error": InvalidToken.key,
-                    "error_message": "The OAuth token has expired.",
-                }
-            if resp.content_type == "application/json":
-                data = await resp.json()
-                LOGGER.debug("Response JSON: %s", data)
-                return data
+        async with rate_limit:
+            async with self.session.request(
+                method,
+                f"{self.server}/{path}",
+                headers={
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Content-Type": "application/json",
+                },
+                json=json,
+                params=params,
+            ) as resp:
+                LOGGER.debug("Response Status: %s", resp.status)
+                if self.raise_for_status and not resp.ok:
+                    await raise_for_status(resp)
+                elif resp.status == 401 and resp.content_type != "application/json":
+                    # Manufacture a response since Tesla doesn't provide a body for token expiration.
+                    return {
+                        "response": None,
+                        "error": InvalidToken.key,
+                        "error_message": "The OAuth token has expired.",
+                    }
+                if resp.content_type == "application/json":
+                    data = await resp.json()
+                    LOGGER.debug("Response JSON: %s", data)
+                    return data
 
-            data = await resp.text()
-            LOGGER.debug("Response Text: %s", data)
-            return data
+                data = await resp.text()
+                LOGGER.debug("Response Text: %s", data)
+                return data
 
     async def status(self):
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
