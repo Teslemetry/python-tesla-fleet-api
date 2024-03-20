@@ -102,3 +102,31 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Tessie
+This extends TeslaFleetApi to send requests through Tessie, which manages all aspects of Tesla OAuth. This class only requires an access_token from [Tessie](https://dash.tessie.com/settings/api).
+
+```
+import asyncio
+import aiohttp
+
+from tesla_fleet_api import Tessie
+from tesla_fleet_api.exceptions import TeslaFleetError
+
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        api = Tessie(
+            access_token="<access_token>",
+            session=session,
+            raise_for_status=True,
+        )
+
+        try:
+            data = await api.vehicle.list()
+            print(data)
+        except TeslaFleetError as e:
+            print(e)
+
+asyncio.run(main())
+```
