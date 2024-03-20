@@ -24,4 +24,4 @@ class Tessie(TeslaFleetApi):
 
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
-        raise NotImplementedError("Do not use this function for Teslemetry.")
+        raise NotImplementedError("Do not use this function for Tessie.")
