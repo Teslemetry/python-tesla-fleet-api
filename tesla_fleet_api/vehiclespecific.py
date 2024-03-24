@@ -114,10 +114,10 @@ class VehicleSpecific:
         return await self._parent.media_volume_down(self.vin)
 
     async def navigation_gps_request(
-        self, lat: float, lon: float, order: int
+        self, lat: float, lon: float, order: int | None = None
     ) -> dict[str, Any]:
         """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
-        self._parent.navigation_gps_request(self.vin, lat, lon, order)
+        return await self._parent.navigation_gps_request(self.vin, lat, lon, order)
 
     async def navigation_request(
         self, type: str, locale: str, timestamp_ms: str
@@ -127,7 +127,9 @@ class VehicleSpecific:
             self.vin, type, locale, timestamp_ms
         )
 
-    async def navigation_sc_request(self, id: int, order: int) -> dict[str, Any]:
+    async def navigation_sc_request(
+        self, id: int, order: int | None = None
+    ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
         return await self._parent.navigation_sc_request(self.vin, id, order)
 

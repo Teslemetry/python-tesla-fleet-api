@@ -189,7 +189,7 @@ class Vehicle:
         )
 
     async def navigation_gps_request(
-        self, vehicle_tag: str | int, lat: float, lon: float, order: int
+        self, vehicle_tag: str | int, lat: float, lon: float, order: int | None = None
     ) -> dict[str, Any]:
         """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
         return await self._request(
@@ -209,7 +209,7 @@ class Vehicle:
         )
 
     async def navigation_sc_request(
-        self, vehicle_tag: str | int, id: int, order: int
+        self, vehicle_tag: str | int, id: int, order: int | None = None
     ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
         return await self._request(
