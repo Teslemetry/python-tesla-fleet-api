@@ -26,34 +26,31 @@ class Teslemetry(TeslaFleetApi):
         )
         self.rate_limit = rate_limit
 
-    async def ping(self) -> bool:
+    async def ping(self) -> dict[str, bool]:
         """Send a ping."""
-        return (
-            await self._request(
-                Method.GET,
-                "api/ping",
-            )
-        ).get("response", False)
+        return await self._request(
+            Method.GET,
+            "api/ping",
+        )
 
-    async def test(self) -> bool:
+    async def test(self) -> dict[str, bool]:
         """Test API Authentication."""
-        return (
-            await self._request(
-                Method.GET,
-                "api/test",
-            )
-        ).get("response", False)
+        return await self._request(
+            Method.GET,
+            "api/test",
+        )
 
-    async def metadata(self, use_region=True) -> dict[str, Any]:
+    async def metadata(self, update_region=True) -> dict[str, Any]:
         """Test API Authentication."""
         resp = await self._request(
             Method.GET,
             "api/metadata",
         )
-        if use_region and "region" in resp:
+        if update_region and "region" in resp:
             self.region = resp["region"].lower()
             self.server = f"https://{self.region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
+        return resp
 
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
