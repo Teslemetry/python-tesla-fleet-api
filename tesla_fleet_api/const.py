@@ -3,6 +3,14 @@
 from enum import Enum
 import logging
 
+VERSION = "0.5.2"
+LOGGER = logging.getLogger(__package__)
+SERVERS = {
+    "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
+    "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
+    "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
+}
+
 
 class IntEnum(int, Enum):
     """Integer Enum."""
@@ -18,15 +26,6 @@ class Method(StrEnum):
     GET = "GET"
     POST = "POST"
     DELETE = "DELETE"
-
-
-LOGGER = logging.getLogger(__package__)
-
-SERVERS = {
-    "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
-    "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
-    "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
-}
 
 
 class Trunk(StrEnum):

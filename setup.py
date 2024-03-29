@@ -1,20 +1,21 @@
 import setuptools
+from tesla_fleet_api.const import VERSION
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="tesla_fleet_api",
-    version="0.5.1",
+    version=VERSION,
     author="Brett Adams",
-    author_email="hello@teslemetry.com",
+    author_email="admin@teslemetry.com",
     description="Tesla Fleet API library for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Teslemetry/tesla_fleet_api",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",

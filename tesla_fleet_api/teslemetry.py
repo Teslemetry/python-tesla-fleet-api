@@ -2,7 +2,7 @@ import aiohttp
 from aiolimiter import AsyncLimiter
 from typing import Any
 from .teslafleetapi import TeslaFleetApi
-from .const import Method
+from .const import Method, LOGGER
 
 # Rate limit should be global, even if multiple instances are created
 rate_limit = AsyncLimiter(5, 10)
@@ -28,28 +28,36 @@ class Teslemetry(TeslaFleetApi):
 
     async def ping(self) -> bool:
         """Send a ping."""
-        return await self._request(
-            Method.GET,
-            "api/ping",
-        )
+        return (
+            await self._request(
+                Method.GET,
+                "api/ping",
+            )
+        ).get("response", False)
 
     async def test(self) -> bool:
         """Test API Authentication."""
-        return await self._request(
-            Method.GET,
-            "api/test",
-        )
+        return (
+            await self._request(
+                Method.GET,
+                "api/test",
+            )
+        ).get("response", False)
 
-    async def metadata(self) -> bool:
+    async def metadata(self, use_region=True) -> dict[str, Any]:
         """Test API Authentication."""
-        return await self._request(
+        resp = await self._request(
             Method.GET,
             "api/metadata",
         )
+        if use_region and "region" in resp:
+            self.region = resp["region"].lower()
+            self.server = f"https://{self.region}.teslemetry.com"
+            LOGGER.debug("Using server %s", self.server)
 
     async def find_server(self):
         """Find the server URL for the Tesla Fleet API."""
-        raise NotImplementedError("Do not use this function for Teslemetry.")
+        await self.metadata(True)
 
     async def _request(
         self,

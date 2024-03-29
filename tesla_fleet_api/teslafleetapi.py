@@ -3,7 +3,7 @@ import aiohttp
 from json import dumps
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, InvalidToken
 from typing import Any
-from .const import SERVERS, Method, LOGGER
+from .const import SERVERS, Method, LOGGER, VERSION
 from .charging import Charging
 from .energy import Energy
 from .partner import Partner
@@ -64,6 +64,7 @@ class TeslaFleetApi:
                 response = await (self.user.region()).get("response")
                 if response:
                     self.server = response["fleet_api_base_url"]
+                    LOGGER.debug("Using server %s", self.server)
                     return response["region"]
             except InvalidRegion:
                 continue
@@ -100,6 +101,7 @@ class TeslaFleetApi:
             headers={
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
+                "X-Library": f"python tesla_fleet_api ${VERSION}",
             },
             json=json,
             params=params,
