@@ -426,13 +426,29 @@ class Vehicle:
         )
 
     async def set_scheduled_departure(
-        self, vehicle_tag: str | int, enable: bool, time: int
+        self,
+        vehicle_tag: str | int,
+        enable: bool = True,
+        preconditioning_enabled: bool = False,
+        preconditioning_weekdays_only: bool = False,
+        departure_time: int = 0,
+        off_peak_charging_enabled: bool = False,
+        off_peak_charging_weekdays_only: bool = False,
+        end_off_peak_time: int = 0,
     ) -> dict[str, Any]:
         """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
-            json={"preconditioning_enabled": enable, "departure_time": time},
+            json={
+                "enable": enable,
+                "preconditioning_enabled": preconditioning_enabled,
+                "preconditioning_weekdays_only": preconditioning_weekdays_only,
+                "departure_time": departure_time,
+                "off_peak_charging_enabled": off_peak_charging_enabled,
+                "off_peak_charging_weekdays_only": off_peak_charging_weekdays_only,
+                "end_off_peak_time": end_off_peak_time,
+            },
         )
 
     async def set_sentry_mode(self, vehicle_tag: str | int, on: bool) -> dict[str, Any]:

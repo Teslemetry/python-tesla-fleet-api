@@ -243,9 +243,27 @@ class VehicleSpecific:
         """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
         return await self._parent.set_scheduled_charging(self.vin, enable, time)
 
-    async def set_scheduled_departure(self, enable: bool, time: int) -> dict[str, Any]:
+    async def set_scheduled_departure(
+        self,
+        enable: bool = True,
+        preconditioning_enabled: bool = False,
+        preconditioning_weekdays_only: bool = False,
+        departure_time: int = 0,
+        off_peak_charging_enabled: bool = False,
+        off_peak_charging_weekdays_only: bool = False,
+        end_off_peak_time: int = 0,
+    ) -> dict[str, Any]:
         """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
-        return await self._parent.set_scheduled_departure(self.vin, enable, time)
+        return await self._parent.set_scheduled_departure(
+            self.vin,
+            enable,
+            preconditioning_enabled,
+            preconditioning_weekdays_only,
+            departure_time,
+            off_peak_charging_enabled,
+            off_peak_charging_weekdays_only,
+            end_off_peak_time,
+        )
 
     async def set_sentry_mode(self, on: bool) -> dict[str, Any]:
         """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
