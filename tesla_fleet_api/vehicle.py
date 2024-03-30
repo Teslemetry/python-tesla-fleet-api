@@ -432,7 +432,7 @@ class Vehicle:
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{vehicle_tag}/command/set_scheduled_departure",
-            json={"enable": enable, "departure_time": time},
+            json={"preconditioning_enabled": enable, "departure_time": time},
         )
 
     async def set_sentry_mode(self, vehicle_tag: str | int, on: bool) -> dict[str, Any]:
