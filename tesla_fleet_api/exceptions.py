@@ -114,6 +114,7 @@ class Forbidden(TeslaFleetError):
 
     message = "Access to this resource is not authorized, developers should check required Scope."
     status = 403
+    key = "Unauthorized missing scopes"
 
 
 class UnsupportedVehicle(TeslaFleetError):
