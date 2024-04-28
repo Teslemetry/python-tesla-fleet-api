@@ -2,7 +2,6 @@ import aiohttp
 from typing import Any
 from .teslafleetapi import TeslaFleetApi
 from .const import Method
-from .vehiclespecific import VehicleSpecific
 
 
 class Tessie(TeslaFleetApi):
@@ -23,7 +22,7 @@ class Tessie(TeslaFleetApi):
             energy_scope=False,
         )
 
-    async def find_server(self):
+    async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Tessie.")
 

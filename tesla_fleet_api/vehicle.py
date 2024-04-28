@@ -567,7 +567,7 @@ class Vehicle:
         lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
-        data = {}
+        data: dict[str, str | float] = {}
         if token:
             data["token"] = token
         if lat and lon:
@@ -742,12 +742,11 @@ class Vehicle:
         endpoints: List[VehicleDataEndpoint] | List[str] | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
-        if isinstance(endpoints, list):
-            endpoints = ";".join(endpoints)
+        endpoint_payload = ";".join(endpoints) if endpoints else None
         return await self._request(
             Method.GET,
             f"api/1/vehicles/{vehicle_tag}/vehicle_data",
-            {"endpoints": endpoints},
+            {"endpoints": endpoint_payload},
         )
 
     async def vehicle_subscriptions(

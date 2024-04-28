@@ -15,7 +15,7 @@ from .vehicle import Vehicle
 class TeslaFleetApi:
     """Class describing the Tesla Fleet API."""
 
-    server: str
+    server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
     raise_for_status: bool
@@ -23,7 +23,7 @@ class TeslaFleetApi:
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        access_token: str,
+        access_token: str | None = None,
         region: str | None = None,
         server: str | None = None,
         raise_for_status: bool = True,
@@ -61,7 +61,8 @@ class TeslaFleetApi:
         for server in SERVERS.values():
             self.server = server
             try:
-                response = await (self.user.region()).get("response")
+                region_response = await self.user.region()
+                response = region_response.get("response")
                 if response:
                     self.server = response["fleet_api_base_url"]
                     LOGGER.debug("Using server %s", self.server)
@@ -74,8 +75,8 @@ class TeslaFleetApi:
         self,
         method: Method,
         path: str,
-        params: dict[str:Any] | None = None,
-        json: dict[str:Any] | None = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ):
         """Send a request to the Tesla Fleet API."""
 

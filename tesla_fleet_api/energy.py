@@ -91,7 +91,7 @@ class Energy:
         self,
         energy_site_id: int,
         disallow_charge_from_grid_with_solar_installed: bool | None = None,
-        customer_preferred_export_rule: EnergyExportMode|str | None = None,
+        customer_preferred_export_rule: EnergyExportMode | str | None = None,
     ) -> dict[str, Any]:
         """Allow/disallow charging from the grid and exporting energy to the grid."""
         return await self._request(

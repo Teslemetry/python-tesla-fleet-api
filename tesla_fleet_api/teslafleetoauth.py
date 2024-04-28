@@ -63,13 +63,13 @@ class TeslaFleetOAuth(TeslaFleetApi):
                 region = code.split("_")[0].lower()
                 self.server = SERVERS.get(region)
 
-    async def check_access_token(self) -> str | None:
+    async def check_access_token(self) -> dict[str, Any] | None:
         """Get the access token."""
         if self.access_token and self.expires > time.time():
-            return
+            return None
         return await self.refresh_access_token()
 
-    async def refresh_access_token(self) -> str:
+    async def refresh_access_token(self) -> dict[str, Any]:
         """Refresh the access token."""
         if not self.refresh_token:
             raise ValueError("Refresh token is missing")
