@@ -13,7 +13,7 @@ from .const import (
 class VehicleSpecific:
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle."""
 
-    def __init__(self, parent, vin: str | None = None):
+    def __init__(self, parent, vin: str | int | None = None):
         self._parent = parent
         self.vin = vin
 

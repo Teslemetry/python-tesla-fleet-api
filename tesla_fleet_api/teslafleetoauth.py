@@ -42,7 +42,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         """Get the login URL."""
         return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(scopes)}&state={state}"
 
-    async def get_refresh_token(self, client_secret: str, code: str, redirect_uri: str):
+    async def get_refresh_token(
+        self, client_secret: str, code: str, redirect_uri: str
+    ) -> None:
         """Get the refresh token."""
         async with self.session.post(
             "https://auth.tesla.com/oauth2/v3/token",
@@ -63,13 +65,13 @@ class TeslaFleetOAuth(TeslaFleetApi):
                 region = code.split("_")[0].lower()
                 self.server = SERVERS.get(region)
 
-    async def check_access_token(self) -> str | None:
+    async def check_access_token(self) -> dict[str, Any] | None:
         """Get the access token."""
         if self.access_token and self.expires > time.time():
-            return
+            return None
         return await self.refresh_access_token()
 
-    async def refresh_access_token(self) -> str:
+    async def refresh_access_token(self) -> dict[str, Any]:
         """Refresh the access token."""
         if not self.refresh_token:
             raise ValueError("Refresh token is missing")
@@ -93,9 +95,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         self,
         method: Method,
         path: str,
-        params: dict | None = None,
-        data: dict | None = None,
-    ):
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> str | dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
         await self.check_access_token()
         return await super()._request(method, path, params, data)

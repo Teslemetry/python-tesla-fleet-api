@@ -52,7 +52,8 @@ class Teslemetry(TeslaFleetApi):
             LOGGER.debug("Using server %s", self.server)
         return resp
 
-    async def find_server(self):
+    # TODO: type this properly, it probably should return something
+    async def find_server(self) -> None:
         """Find the server URL for the Tesla Fleet API."""
         await self.metadata(True)
 
@@ -60,9 +61,9 @@ class Teslemetry(TeslaFleetApi):
         self,
         method: Method,
         path: str,
-        params: dict[str:Any] | None = None,
-        json: dict[str:Any] | None = None,
-    ):
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> str | dict[str, Any]:
         """Send a request to the Teslemetry API."""
         async with rate_limit:
             return await super()._request(method, path, params, json)

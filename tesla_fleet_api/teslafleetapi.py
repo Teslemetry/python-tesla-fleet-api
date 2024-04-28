@@ -15,7 +15,7 @@ from .vehicle import Vehicle
 class TeslaFleetApi:
     """Class describing the Tesla Fleet API."""
 
-    server: str
+    server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
     raise_for_status: bool
@@ -23,7 +23,7 @@ class TeslaFleetApi:
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        access_token: str,
+        access_token: str | None = None,
         region: str | None = None,
         server: str | None = None,
         raise_for_status: bool = True,
@@ -38,9 +38,10 @@ class TeslaFleetApi:
         self.session = session
         self.access_token = access_token
 
-        if region and not server and region not in SERVERS:
-            raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
-        self.server = server or SERVERS.get(region)
+        if region is not None:
+            if not server and region not in SERVERS:
+                raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
+            self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
 
         LOGGER.debug("Using server %s", self.server)
@@ -61,7 +62,8 @@ class TeslaFleetApi:
         for server in SERVERS.values():
             self.server = server
             try:
-                response = await (self.user.region()).get("response")
+                region_response = await self.user.region()
+                response = region_response.get("response")
                 if response:
                     self.server = response["fleet_api_base_url"]
                     LOGGER.debug("Using server %s", self.server)
@@ -74,9 +76,9 @@ class TeslaFleetApi:
         self,
         method: Method,
         path: str,
-        params: dict[str:Any] | None = None,
-        json: dict[str:Any] | None = None,
-    ):
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | str:
         """Send a request to the Tesla Fleet API."""
 
         if not self.server:
@@ -125,7 +127,7 @@ class TeslaFleetApi:
             LOGGER.debug("Response Text: %s", data)
             return data
 
-    async def status(self):
+    async def status(self) -> str:
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
