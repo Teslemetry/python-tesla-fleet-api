@@ -52,7 +52,7 @@ class Teslemetry(TeslaFleetApi):
             LOGGER.debug("Using server %s", self.server)
         return resp
 
-    async def find_server(self):
+    async def find_server(self) -> None:
         """Find the server URL for the Tesla Fleet API."""
         await self.metadata(True)
 
