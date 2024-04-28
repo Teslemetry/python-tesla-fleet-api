@@ -38,9 +38,10 @@ class TeslaFleetApi:
         self.session = session
         self.access_token = access_token
 
-        if region and not server and region not in SERVERS:
-            raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
-        self.server = server or SERVERS.get(region)
+        if region is not None:
+            if not server and region not in SERVERS:
+                raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
+            self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
 
         LOGGER.debug("Using server %s", self.server)
@@ -77,7 +78,7 @@ class TeslaFleetApi:
         path: str,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
-    ):
+    ) -> dict[str, Any] | str:
         """Send a request to the Tesla Fleet API."""
 
         if not self.server:
@@ -126,7 +127,7 @@ class TeslaFleetApi:
             LOGGER.debug("Response Text: %s", data)
             return data
 
-    async def status(self):
+    async def status(self) -> str:
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")

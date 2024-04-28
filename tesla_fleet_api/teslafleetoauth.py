@@ -42,7 +42,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         """Get the login URL."""
         return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(scopes)}&state={state}"
 
-    async def get_refresh_token(self, client_secret: str, code: str, redirect_uri: str):
+    async def get_refresh_token(
+        self, client_secret: str, code: str, redirect_uri: str
+    ) -> None:
         """Get the refresh token."""
         async with self.session.post(
             "https://auth.tesla.com/oauth2/v3/token",
@@ -93,9 +95,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         self,
         method: Method,
         path: str,
-        params: dict | None = None,
-        data: dict | None = None,
-    ):
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> str | dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
         await self.check_access_token()
         return await super()._request(method, path, params, data)
