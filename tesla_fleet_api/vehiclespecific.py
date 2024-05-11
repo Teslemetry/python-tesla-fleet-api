@@ -17,6 +17,10 @@ class VehicleSpecific:
         self._parent = parent
         self.vin = vin
 
+    def pre2021(self) -> bool:
+        """Checks if a vehicle is pre-2021."""
+        return self._parent.pre2021(self.vin)
+
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
         return await self._parent.actuate_trunk(self.vin, which_trunk)
