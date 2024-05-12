@@ -37,12 +37,16 @@ class TeslaFleetApi:
 
         self.session = session
         self.access_token = access_token
-
-        if region is not None:
-            if not server and region not in SERVERS:
-                raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
-            self.server = server or SERVERS.get(region)
         self.raise_for_status = raise_for_status
+
+        if server is not None:
+            self.server = server
+        elif region is not None:
+            if region not in SERVERS:
+                raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
+            self.server = SERVERS.get(region)
+        else:
+            raise ValueError("Either server or region must be provided.")
 
         LOGGER.debug("Using server %s", self.server)
 
