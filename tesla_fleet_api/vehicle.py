@@ -24,10 +24,10 @@ class Vehicle:
     def specific(self, vehicle_tag: str | int) -> VehicleSpecific:
         """Creates a class for each vehicle."""
         return VehicleSpecific(self, vehicle_tag)
-    
+
     def pre2021(self, vin: str) -> bool:
-        """Checks if a vehicle is pre-2021."""
-        return vin[9] <= "L"
+        """Checks if a vehicle is a pre-2021 model S or X."""
+        return vin[9] <= "L" and vin[3] in ["S", "X"]
 
     async def actuate_trunk(
         self, vehicle_tag: str | int, which_trunk: Trunk | str
