@@ -17,7 +17,7 @@ class VehicleSpecific:
         self._parent = parent
         self.vin = vin
 
-
+    @property
     def pre2021(self) -> bool:
         """Checks if a vehicle is pre-2021."""
         return self._parent.pre2021(self.vin)
