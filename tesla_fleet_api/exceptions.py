@@ -94,6 +94,14 @@ class OAuthExpired(TeslaFleetError):
     key = "token expired (401)"
 
 
+class LoginRequired(TeslaFleetError):
+    """The user has reset their password and a new auth code is required, or the refresh_token has already been used."""
+
+    message = "The user has reset their password and a new auth code is required, or the refresh_token has already been used."
+    status = 401
+    key = "login_required"
+
+
 class PaymentRequired(TeslaFleetError):
     """Payment is required in order to use the API (non-free account only)."""
 
@@ -101,7 +109,7 @@ class PaymentRequired(TeslaFleetError):
     status = 402
 
 
-class SubscriptionRequired(TeslaFleetError):
+class SubscriptionRequired(TeslaFleetError):  # Teslemetry specific
     """Subscription is required in order to use Teslemetry."""
 
     message = "Subscription is required in order to use Teslemetry."
@@ -266,7 +274,7 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise InvalidRequest(data)
     elif resp.status == 401:
         if error:
-            for exception in [OAuthExpired, MobileAccessDisabled]:
+            for exception in [OAuthExpired, MobileAccessDisabled, LoginRequired]:
                 if error == exception.key:
                     raise exception(data)
             raise InvalidToken(data)
