@@ -78,6 +78,14 @@ class MobileAccessDisabled(TeslaFleetError):
     key = "mobile_access_disabled"
 
 
+class MissingToken(TeslaFleetError):  # Teslemetry specific
+    """Teslemetry specific error when no access token is provided."""
+
+    message = "Missing access token."
+    status = 401
+    key = "missing_token"
+
+
 class InvalidToken(TeslaFleetError):  # Teslemetry specific
     """Teslemetry specific error for invalid access token."""
 
@@ -94,7 +102,7 @@ class OAuthExpired(TeslaFleetError):
     key = "token expired (401)"
 
 
-class LoginRequired(TeslaFleetError):
+class LoginRequired(TeslaFleetError):  # Native and Teslemetry
     """The user has reset their password and a new auth code is required, or the refresh_token has already been used."""
 
     message = "The user has reset their password and a new auth code is required, or the refresh_token has already been used."
@@ -138,6 +146,14 @@ class NotFound(TeslaFleetError):
 
     message = "The requested resource does not exist."
     status = 404
+
+
+class InvalidMethod(TeslaFleetError):
+    """The HTTP method is not allowed."""
+
+    message = "The HTTP method is not allowed."
+    status = 405
+    key = "invalid_method"
 
 
 class NotAllowed(TeslaFleetError):
@@ -189,6 +205,13 @@ class Locked(TeslaFleetError):
 
     message = "Account is locked, and must be unlocked by Tesla."
     status = 423
+
+
+class InvalidResponse(TeslaFleetError):
+    """The response from Tesla was invalid."""
+
+    message = "The response from Tesla was invalid."
+    status = 424
 
 
 class RateLimited(TeslaFleetError):
@@ -274,10 +297,15 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise InvalidRequest(data)
     elif resp.status == 401:
         if error:
-            for exception in [OAuthExpired, MobileAccessDisabled, LoginRequired]:
+            for exception in [
+                OAuthExpired,
+                MobileAccessDisabled,
+                LoginRequired,
+                MissingToken,
+                InvalidToken,
+            ]:
                 if error == exception.key:
                     raise exception(data)
-            raise InvalidToken(data)
         # This error does not return a body
         raise OAuthExpired()
     elif resp.status == 402:
@@ -291,6 +319,8 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     elif resp.status == 404:
         raise NotFound(data)
     elif resp.status == 405:
+        if error == InvalidMethod.key:
+            raise InvalidMethod(data)
         raise NotAllowed(data)
     elif resp.status == 406:
         raise NotAcceptable(data)
@@ -304,6 +334,8 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise InvalidResource(data)
     elif resp.status == 423:
         raise Locked(data)
+    elif resp.status == 424:
+        raise InvalidResponse(data)
     elif resp.status == 429:
         raise RateLimited(data)
     elif resp.status == 451:
