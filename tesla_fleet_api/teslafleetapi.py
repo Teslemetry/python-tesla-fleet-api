@@ -113,6 +113,7 @@ class TeslaFleetApi:
             params=params,
         ) as resp:
             LOGGER.debug("Response Status: %s", resp.status)
+            print(resp.headers)
             if self.raise_for_status and not resp.ok:
                 await raise_for_status(resp)
             elif resp.status == 401 and resp.content_type != "application/json":
@@ -129,6 +130,7 @@ class TeslaFleetApi:
 
             data = await resp.text()
             LOGGER.debug("Response Text: %s", data)
+
             return data
 
     async def status(self) -> str:
