@@ -19,7 +19,6 @@ class Tessie(TeslaFleetApi):
             raise_for_status=raise_for_status,
             partner_scope=False,
             user_scope=False,
-            energy_scope=False,
         )
 
     async def find_server(self) -> str:
