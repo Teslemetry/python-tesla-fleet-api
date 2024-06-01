@@ -1,8 +1,10 @@
-import aiohttp
+"""Tesla Fleet API for Python."""
 
 from json import dumps
-from .exceptions import raise_for_status, InvalidRegion, LibraryError, InvalidToken
 from typing import Any
+import aiohttp
+
+from .exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
 from .const import SERVERS, Method, LOGGER, VERSION
 from .charging import Charging
 from .energy import Energy
@@ -15,10 +17,11 @@ from .vehicle import Vehicle
 class TeslaFleetApi:
     """Class describing the Tesla Fleet API."""
 
+    access_token: str | None = None
+    region: str | None = None
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
-    raise_for_status: bool
 
     def __init__(
         self,
@@ -26,7 +29,6 @@ class TeslaFleetApi:
         access_token: str | None = None,
         region: str | None = None,
         server: str | None = None,
-        raise_for_status: bool = True,
         charging_scope: bool = True,
         energy_scope: bool = True,
         partner_scope: bool = True,
@@ -37,7 +39,6 @@ class TeslaFleetApi:
 
         self.session = session
         self.access_token = access_token
-        self.raise_for_status = raise_for_status
 
         if server is not None:
             self.server = server
@@ -82,7 +83,7 @@ class TeslaFleetApi:
         path: str,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | str:
+    ) -> dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
 
         if not self.server:
@@ -113,22 +114,14 @@ class TeslaFleetApi:
             params=params,
         ) as resp:
             LOGGER.debug("Response Status: %s", resp.status)
-            if self.raise_for_status and not resp.ok:
+            if not resp.ok:
                 await raise_for_status(resp)
-            elif resp.status == 401 and resp.content_type != "application/json":
-                # Manufacture a response since Tesla doesn't provide a body for token expiration.
-                return {
-                    "response": None,
-                    "error": InvalidToken.key,
-                    "error_message": "The OAuth token has expired.",
-                }
-            if resp.content_type == "application/json":
-                data = await resp.json()
-                LOGGER.debug("Response JSON: %s", data)
-                return data
+            if not resp.content_type.lower().startswith("application/json"):
+                LOGGER.debug("Response type is: %s", resp.content_type)
+                raise ResponseError(status=resp.status, data=await resp.text())
 
-            data = await resp.text()
-            LOGGER.debug("Response Text: %s", data)
+            data = await resp.json()
+            LOGGER.debug("Response JSON: %s", data)
             return data
 
     async def status(self) -> str:

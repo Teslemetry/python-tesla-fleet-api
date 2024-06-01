@@ -1,4 +1,5 @@
-from typing import Any, List
+from __future__ import annotations
+from typing import Any, List, TYPE_CHECKING
 from .const import (
     Method,
     Trunk,
@@ -13,17 +14,22 @@ from .const import (
 )
 from .vehiclespecific import VehicleSpecific
 
+if TYPE_CHECKING:
+    from .teslafleetapi import TeslaFleetApi
+
 
 class Vehicle:
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
 
-    def __init__(self, parent):
+    _parent: TeslaFleetApi
+
+    def __init__(self, parent: TeslaFleetApi):
         self._parent = parent
         self._request = parent._request
 
-    def specific(self, vehicle_tag: str | int) -> VehicleSpecific:
+    def specific(self, vin: str) -> VehicleSpecific:
         """Creates a class for each vehicle."""
-        return VehicleSpecific(self, vehicle_tag)
+        return VehicleSpecific(self, vin)
 
     def pre2021(self, vin: str) -> bool:
         """Checks if a vehicle is a pre-2021 model S or X."""
@@ -716,26 +722,6 @@ class Vehicle:
             {"routable_message": routable_message},
         )
 
-    async def subscriptions(
-        self, device_token: str, device_type: str
-    ) -> dict[str, Any]:
-        """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
-        return await self._request(
-            Method.GET,
-            "api/1/subscriptions",
-            query={"device_token": device_token, "device_type": device_type},
-        )
-
-    async def subscriptions_set(
-        self, device_token: str, device_type: str
-    ) -> dict[str, Any]:
-        """Allows a mobile device to specify which vehicles to receive push notifications from."""
-        return await self._request(
-            Method.POST,
-            "api/1/subscriptions",
-            query={"device_token": device_token, "device_type": device_type},
-        )
-
     async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Returns information about a vehicle."""
         return await self._request(Method.GET, f"api/1/vehicles/{vehicle_tag}")
@@ -743,7 +729,7 @@ class Vehicle:
     async def vehicle_data(
         self,
         vehicle_tag: str | int,
-        endpoints: List[VehicleDataEndpoint] | List[str] | None = None,
+        endpoints: List[VehicleDataEndpoint | str] | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         endpoint_payload = ";".join(endpoints) if endpoints else None
@@ -753,37 +739,21 @@ class Vehicle:
             {"endpoints": endpoint_payload},
         )
 
-    async def vehicle_subscriptions(
-        self, device_token: str, device_type: DeviceType | str
-    ) -> dict[str, Any]:
-        """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
-        return await self._request(
-            Method.GET,
-            "api/1/vehicle_subscriptions",
-            {"device_token": device_token, "device_type": device_type},
-        )
-
-    async def vehicle_subscriptions_set(
-        self, device_token: str, device_type: DeviceType | str
-    ) -> dict[str, Any]:
-        """Allows a mobile device to specify which vehicles to receive push notifications from."""
-        return await self._request(
-            Method.POST,
-            "api/1/vehicle_subscriptions",
-            params={"device_token": device_token, "device_type": device_type},
-        )
-
     async def wake_up(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
         return await self._request(Method.POST, f"api/1/vehicles/{vehicle_tag}/wake_up")
 
     async def warranty_details(self, vin: str | None) -> dict[str, Any]:
         """Returns warranty details."""
-        return await self._request(Method.GET, "api/1/dx/warranty/details", {vin: vin})
+        return await self._request(
+            Method.GET, "api/1/dx/warranty/details", {"vin": vin}
+        )
 
     async def fleet_status(self, vins: List[str]) -> dict[str, Any]:
         """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
-        return await self._request(Method.GET, "api/1/vehicles/fleet_status", json=vins)
+        return await self._request(
+            Method.GET, "api/1/vehicles/fleet_status", json={"vins": vins}
+        )
 
     async def fleet_telemetry_config_create(
         self, config: dict[str, Any]

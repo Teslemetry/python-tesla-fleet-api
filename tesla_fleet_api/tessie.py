@@ -9,14 +9,12 @@ class Tessie(TeslaFleetApi):
         self,
         session: aiohttp.ClientSession,
         access_token: str,
-        raise_for_status: bool = True,
     ):
         """Initialize the Tessie API."""
         super().__init__(
             session,
             access_token,
             server="https://api.tessie.com",
-            raise_for_status=raise_for_status,
             partner_scope=False,
             user_scope=False,
         )

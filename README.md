@@ -23,7 +23,6 @@ async def main():
             access_token="<access_token>",
             session=session,
             region="na",
-            raise_for_status=True,
         )
 
         try:
@@ -54,7 +53,6 @@ async def main():
             refresh_token=auth["refresh_token"],
             expires=auth["expires"],
             region="na",
-            raise_for_status=True,
         )
         try:
             data = await api.vehicle.list()
@@ -91,7 +89,6 @@ async def main():
         api = Teslemetry(
             access_token="<access_token>",
             session=session,
-            raise_for_status=True,
         )
 
         try:
@@ -119,7 +116,6 @@ async def main():
         api = Tessie(
             access_token="<access_token>",
             session=session,
-            raise_for_status=True,
         )
 
         try:

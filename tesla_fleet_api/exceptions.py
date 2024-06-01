@@ -7,9 +7,10 @@ class TeslaFleetError(BaseException):
 
     message: str = "An unknown error has occurred."
     status: int | None = None
-    data: dict | None = None
+    data: dict | str | None = None
+    key: str | None = None
 
-    def __init__(self, data: dict | None = None, status: int | None = None):
+    def __init__(self, data: dict | str | None = None, status: int | None = None):
         LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status
@@ -20,6 +21,7 @@ class ResponseError(TeslaFleetError):
     """The response from the server was not JSON."""
 
     message = "The response from the server was not JSON."
+    data: str | None = None
 
 
 class InvalidCommand(TeslaFleetError):
@@ -375,5 +377,5 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     elif resp.status == 540:
         raise DeviceUnexpectedResponse(data)
     elif data is None:
-        raise ResponseError(status=resp.status)
+        raise ResponseError(status=resp.status, data=await resp.text())
     resp.raise_for_status()

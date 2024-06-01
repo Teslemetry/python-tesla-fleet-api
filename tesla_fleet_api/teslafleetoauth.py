@@ -21,7 +21,6 @@ class TeslaFleetOAuth(TeslaFleetApi):
         expires: int = 0,
         region: str | None = None,
         server: str | None = None,
-        raise_for_status: bool = True,
     ):
         self.client_id = client_id
         self.access_token = access_token
@@ -33,7 +32,6 @@ class TeslaFleetOAuth(TeslaFleetApi):
             access_token="",
             region=region,
             server=server,
-            raise_for_status=raise_for_status,
         )
 
     def get_login_url(
@@ -96,8 +94,8 @@ class TeslaFleetOAuth(TeslaFleetApi):
         method: Method,
         path: str,
         params: dict[str, Any] | None = None,
-        data: dict[str, Any] | None = None,
-    ) -> str | dict[str, Any]:
+        json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
         await self.check_access_token()
-        return await super()._request(method, path, params, data)
+        return await super()._request(method, path, params, json)

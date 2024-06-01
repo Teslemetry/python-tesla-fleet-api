@@ -1,10 +1,16 @@
-from typing import Any
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING
 from .const import Method, EnergyOperationMode, EnergyExportMode
 from .energyspecific import EnergySpecific
+
+if TYPE_CHECKING:
+    from .teslafleetapi import TeslaFleetApi
 
 
 class Energy:
     """Class describing the Tesla Fleet API partner endpoints"""
+
+    parent: TeslaFleetApi
 
     def __init__(self, parent):
         self._request = parent._request

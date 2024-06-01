@@ -1,4 +1,5 @@
-from typing import Any
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING
 from .const import (
     Trunk,
     ClimateKeeperMode,
@@ -9,11 +10,17 @@ from .const import (
     DeviceType,
 )
 
+if TYPE_CHECKING:
+    from .vehicle import Vehicle
+
 
 class VehicleSpecific:
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle."""
 
-    def __init__(self, parent, vin: str | int | None = None):
+    _parent: Vehicle
+    vin: str
+
+    def __init__(self, parent: Vehicle, vin: str):
         self._parent = parent
         self.vin = vin
 
@@ -406,44 +413,16 @@ class VehicleSpecific:
         """Signed Commands is a generic endpoint replacing legacy commands."""
         return await self._parent.signed_command(self.vin, routable_message)
 
-    async def subscriptions(
-        self, device_token: str, device_type: str
-    ) -> dict[str, Any]:
-        """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
-        return await self._parent.subscriptions(self.vin, device_token, device_type)
-
-    async def subscriptions_set(
-        self, device_token: str, device_type: str
-    ) -> dict[str, Any]:
-        """Allows a mobile device to specify which vehicles to receive push notifications from."""
-        return await self._parent.subscriptions_set(self.vin, device_token, device_type)
-
     async def vehicle(self) -> dict[str, Any]:
         """Returns information about a vehicle."""
         return await self._parent.vehicle(self.vin)
 
     async def vehicle_data(
         self,
-        endpoints: list[VehicleDataEndpoint] | str | None = None,
+        endpoints: list[VehicleDataEndpoint | str] | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         return await self._parent.vehicle_data(self.vin, endpoints)
-
-    async def vehicle_subscriptions(
-        self, device_token: str, device_type: DeviceType | str
-    ) -> dict[str, Any]:
-        """Returns the list of vehicles for which this mobile device currently subscribes to push notifications."""
-        return await self._parent.vehicle_subscriptions(
-            self.vin, device_token, device_type
-        )
-
-    async def vehicle_subscriptions_set(
-        self, device_token: str, device_type: DeviceType | str
-    ) -> dict[str, Any]:
-        """Allows a mobile device to specify which vehicles to receive push notifications from."""
-        return await self._parent.vehicle_subscriptions_set(
-            self.vin, device_token, device_type
-        )
 
     async def wake_up(self) -> dict[str, Any]:
         """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
