@@ -78,20 +78,42 @@ class MobileAccessDisabled(TeslaFleetError):
     key = "mobile_access_disabled"
 
 
-class MissingToken(TeslaFleetError):  # Teslemetry specific
-    """Teslemetry specific error when no access token is provided."""
+class MissingToken(TeslaFleetError):
+    """Third party specific error when no access token is provided."""
 
     message = "Missing access token."
     status = 401
+
+
+class MissingTeslemetryToken(MissingToken):
+    """Teslemetry specific error when no access token is provided."""
+
     key = "missing_token"
 
 
-class InvalidToken(TeslaFleetError):  # Teslemetry specific
+class MissingTessieToken(MissingToken):
+    """Tessie specific error when no access token is provided."""
+
+    key = "Access token is required"
+
+
+class InvalidToken(TeslaFleetError):
+    """Third party specific error for invalid access token."""
+
+    message = "Invalid access token."
+    status = 401
+
+
+class InvalidTeslemetryToken(InvalidToken):
     """Teslemetry specific error for invalid access token."""
 
-    message = "Invalid Teslemetry access token."
-    status = 401
     key = "invalid_token"
+
+
+class InvalidTessieToken(InvalidToken):
+    """Tessie specific error for invalid access token."""
+
+    key = "Invalid access token"
 
 
 class OAuthExpired(TeslaFleetError):
@@ -301,8 +323,10 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                 OAuthExpired,
                 MobileAccessDisabled,
                 LoginRequired,
-                MissingToken,
-                InvalidToken,
+                MissingTeslemetryToken,
+                MissingTessieToken,
+                InvalidTeslemetryToken,
+                InvalidTessieToken,
             ]:
                 if error == exception.key:
                     raise exception(data)
