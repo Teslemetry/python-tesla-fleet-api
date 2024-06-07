@@ -152,3 +152,13 @@ class Energy:
             f"api/1/energy_sites/{energy_site_id}/storm_mode",
             json={"enabled": enabled},
         )
+
+    async def time_of_use_settings(
+        self, energy_site_id: int, settings: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update the time of use settings for the energy site."""
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{energy_site_id}/time_of_use_settings",
+            json={"tou_settings": {"tariff_content_v2": settings}},
+        )

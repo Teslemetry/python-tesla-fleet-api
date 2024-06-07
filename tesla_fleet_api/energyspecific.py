@@ -117,3 +117,10 @@ class EnergySpecific:
             self.energy_site_id,
             enabled,
         )
+
+    async def time_of_use_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+        """Update the site's time of use settings."""
+        return await self._parent.time_of_use_settings(
+            self.energy_site_id,
+            settings,
+        )
