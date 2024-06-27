@@ -436,6 +436,14 @@ class VehicleSpecific:
         """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
         return await self._parent.fleet_status([self.vin])
 
+    async def fleet_telemetry_config_create(
+        self, config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Configures fleet telemetry."""
+        return await self._parent.fleet_telemetry_config_create(
+            {"vins": [self.vin], "config": config}
+        )
+
     async def fleet_telemetry_config_get(self) -> dict[str, Any]:
         """Configures fleet telemetry."""
         return await self._parent.fleet_telemetry_config_get(self.vin)

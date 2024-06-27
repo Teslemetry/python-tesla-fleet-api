@@ -2,7 +2,7 @@ import aiohttp
 from aiolimiter import AsyncLimiter
 from typing import Any
 from .teslafleetapi import TeslaFleetApi
-from .const import Method, LOGGER
+from .const import Method, LOGGER, Scope
 
 # Rate limit should be global, even if multiple instances are created
 rate_limit = AsyncLimiter(5, 10)
@@ -39,7 +39,7 @@ class Teslemetry(TeslaFleetApi):
         )
 
     async def metadata(self, update_region=True) -> dict[str, Any]:
-        """Test API Authentication."""
+        """Get user metadata including scopes."""
         resp = await self._request(
             Method.GET,
             "api/metadata",
@@ -49,6 +49,11 @@ class Teslemetry(TeslaFleetApi):
             self.server = f"https://{self.region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
         return resp
+    
+    async def scopes(self) -> list[str]:
+        """Get user scopes."""
+        resp = await self.metadata(False)
+        return resp["scopes"]
 
     async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""

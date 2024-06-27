@@ -19,6 +19,14 @@ class Tessie(TeslaFleetApi):
             user_scope=False,
         )
 
+    async def scopes(self) -> list[str]:
+        """Get user scopes."""
+        resp = await self._request(
+            Method.GET,
+            "auth/tesla_scopes",
+        )
+        return resp["scopes"]
+
     async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Tessie.")

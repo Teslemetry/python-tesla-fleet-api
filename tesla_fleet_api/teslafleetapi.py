@@ -114,6 +114,8 @@ class TeslaFleetApi:
             params=params,
         ) as resp:
             LOGGER.debug("Response Status: %s", resp.status)
+            if "x-txid" in resp.headers:
+                LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
             if not resp.ok:
                 await raise_for_status(resp)
             if not resp.content_type.lower().startswith("application/json"):

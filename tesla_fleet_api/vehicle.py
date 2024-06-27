@@ -752,7 +752,7 @@ class Vehicle:
     async def fleet_status(self, vins: List[str]) -> dict[str, Any]:
         """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
         return await self._request(
-            Method.GET, "api/1/vehicles/fleet_status", json={"vins": vins}
+            Method.POST, "api/1/vehicles/fleet_status", json={"vins": vins}
         )
 
     async def fleet_telemetry_config_create(
