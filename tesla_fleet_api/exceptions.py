@@ -363,7 +363,12 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     elif resp.status == 424:
         raise InvalidResponse(data)
     elif resp.status == 429:
-        raise RateLimited(data)
+        raise RateLimited(
+            {
+                "reset": resp.headers.get("RateLimit-Reset"),
+                "after": resp.headers.get("Retry-After"),
+            }
+        )
     elif resp.status == 451:
         raise ResourceUnavailableForLegalReasons(data)
     elif resp.status == 499:

@@ -1,7 +1,7 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import Any
+from typing import Any, Awaitable
 import aiohttp
 
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
@@ -22,6 +22,7 @@ class TeslaFleetApi:
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
+    refresh_hook: Awaitable | None
 
     def __init__(
         self,
@@ -34,11 +35,13 @@ class TeslaFleetApi:
         partner_scope: bool = True,
         user_scope: bool = True,
         vehicle_scope: bool = True,
+        refresh_hook: Awaitable | None = None,
     ):
         """Initialize the Tesla Fleet API."""
 
         self.session = session
         self.access_token = access_token
+        self.refresh_hook = refresh_hook
 
         if server is not None:
             self.server = server
@@ -90,6 +93,10 @@ class TeslaFleetApi:
         if method == Method.GET and json is not None:
             raise ValueError("GET requests cannot have a body.")
 
+        # Call a pre-request hook if provided
+        if self.refresh_hook is not None:
+            await self.refresh_hook()
+
         LOGGER.debug("Sending request to %s", path)
 
         # Remove None values from params and json
@@ -114,8 +121,16 @@ class TeslaFleetApi:
             LOGGER.debug("Response Status: %s", resp.status)
             if "x-txid" in resp.headers:
                 LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
+            if "RateLimit-Reset" in resp.headers:
+                LOGGER.debug(
+                    "Rate limit reset: %s", resp.headers.get("RateLimit-Reset")
+                )
+            if "Retry-After" in resp.headers:
+                LOGGER.debug("Retry after: %s", resp.headers.get("Retry-After"))
+
             if not resp.ok:
                 await raise_for_status(resp)
+
             if not resp.content_type.lower().startswith("application/json"):
                 LOGGER.debug("Response type is: %s", resp.content_type)
                 raise ResponseError(status=resp.status, data=await resp.text())
