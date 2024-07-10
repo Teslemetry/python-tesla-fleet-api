@@ -46,8 +46,6 @@ class TeslaFleetApi:
             if region not in SERVERS:
                 raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
             self.server = SERVERS.get(region)
-        else:
-            raise ValueError("Either server or region must be provided.")
 
         LOGGER.debug("Using server %s", self.server)
 

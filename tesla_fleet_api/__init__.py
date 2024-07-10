@@ -1,5 +1,6 @@
 from .teslafleetapi import TeslaFleetApi
 from .teslafleetoauth import TeslaFleetOAuth
+from .teslafleetopensource import TeslaFleetOpenSource
 from .teslemetry import Teslemetry
 from .tessie import Tessie
 from .charging import Charging

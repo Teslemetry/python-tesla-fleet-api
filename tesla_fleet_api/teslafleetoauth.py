@@ -11,11 +11,16 @@ class TeslaFleetOAuth(TeslaFleetApi):
     """Tesla Fleet OAuth API."""
 
     expires: int
+    refresh_token: str
+    redirect_uri: str | None
+    _client_secret: str | None
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
         client_id: str,
+        client_secret: str | None = None,
+        redirect_uri: str | None = None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         expires: int = 0,
@@ -23,6 +28,8 @@ class TeslaFleetOAuth(TeslaFleetApi):
         server: str | None = None,
     ):
         self.client_id = client_id
+        self._client_secret = client_secret
+        self.redirect_uri = redirect_uri
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.expires = expires
@@ -34,25 +41,34 @@ class TeslaFleetOAuth(TeslaFleetApi):
             server=server,
         )
 
-    def get_login_url(
-        self, redirect_uri: str, scopes: list[Scope], state: str = "login"
-    ) -> str:
+    def get_login_url(self, scopes: list[Scope], state: str = "login") -> str:
         """Get the login URL."""
-        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={redirect_uri}&scope={' '.join(scopes)}&state={state}"
+        if self.redirect_uri is None:
+            raise ValueError("Redirect URI is missing")
+        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&prompt=login&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={' '.join(scopes)}&state={state}"
 
-    async def get_refresh_token(
-        self, client_secret: str, code: str, redirect_uri: str
-    ) -> None:
+    async def get_refresh_token(self, code: str) -> None:
         """Get the refresh token."""
+
+        if self._client_secret is None:
+            raise ValueError("Client secret is missing")
+
+        if self.redirect_uri is None:
+            raise ValueError("Redirect URI is missing")
+
+        if self.server is None:
+            self.region = code.split("_")[0].lower()
+            self.server = SERVERS.get(self.region)
+
         async with self.session.post(
             "https://auth.tesla.com/oauth2/v3/token",
             data={
                 "grant_type": "authorization_code",
                 "client_id": self.client_id,
-                "client_secret": client_secret,
+                "client_secret": self._client_secret,
                 "code": code,
                 "audience": self.server,
-                "redirect_uri": redirect_uri,
+                "redirect_uri": self.redirect_uri,
             },
         ) as resp:
             if resp.ok:
