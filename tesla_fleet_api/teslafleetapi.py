@@ -95,7 +95,8 @@ class TeslaFleetApi:
 
         # Call a pre-request hook if provided
         if self.refresh_hook is not None:
-            await self.refresh_hook()
+            if access_token := await self.refresh_hook():
+                self.access_token = access_token
 
         LOGGER.debug("Sending request to %s", path)
 

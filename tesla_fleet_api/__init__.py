@@ -15,6 +15,7 @@ from .vehiclespecific import VehicleSpecific
 __all__ = [
     "TeslaFleetApi",
     "TeslaFleetOAuth",
+    "TeslaFleetOpenSource",
     "Teslemetry",
     "Tessie",
     "Charging",
