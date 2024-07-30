@@ -114,7 +114,7 @@ class TeslaFleetApi:
             headers={
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
-                "X-Library": f"python tesla_fleet_api ${VERSION}",
+                "X-Library": f"python tesla_fleet_api {VERSION}",
             },
             json=json,
             params=params,
