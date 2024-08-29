@@ -2,11 +2,17 @@ import aiohttp
 from aiolimiter import AsyncLimiter
 from typing import Any
 from .teslafleetapi import TeslaFleetApi
+from .charging import Charging
+from .energy import Energy
+from .partner import Partner
+from .user import User
+from .vehicle import Vehicle
+from .vehiclespecific import VehicleSpecific
+
 from .const import Method, LOGGER, Scope
 
 # Rate limit should be global, even if multiple instances are created
 rate_limit = AsyncLimiter(5, 10)
-
 
 class Teslemetry(TeslaFleetApi):
     def __init__(
@@ -16,11 +22,11 @@ class Teslemetry(TeslaFleetApi):
     ):
         """Initialize the Teslemetry API."""
         super().__init__(
-            session,
-            access_token,
+            session=session,
+            access_token=access_token,
             server="https://api.teslemetry.com",
-            partner_scope=False,
             user_scope=False,
+            partner_scope=False
         )
         self.rate_limit = rate_limit
 
@@ -38,6 +44,14 @@ class Teslemetry(TeslaFleetApi):
             "api/test",
         )
 
+    async def userdata(self) -> dict[str, Any]:
+        """Get userdata."""
+        resp = await self._request(
+            Method.GET,
+            "api/userdata",
+        )
+        return resp
+
     async def metadata(self, update_region=True) -> dict[str, Any]:
         """Get user metadata including scopes."""
         resp = await self._request(
@@ -49,7 +63,7 @@ class Teslemetry(TeslaFleetApi):
             self.server = f"https://{self.region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
         return resp
-    
+
     async def scopes(self) -> list[str]:
         """Get user scopes."""
         resp = await self.metadata(False)
@@ -60,6 +74,23 @@ class Teslemetry(TeslaFleetApi):
         await self.metadata(True)
         assert self.region
         return self.region
+
+    async def server_side_polling(self, vin: str, value: bool | None = None) -> bool | None:
+        """Get or set Auto mode."""
+        if value is True:
+            return (await self._request(
+                Method.POST,
+                f"api/auto/{vin}",
+            )).get("response")
+        if value is False:
+            return (await self._request(
+                Method.DELETE,
+                f"api/auto/{vin}",
+            )).get("response")
+        return (await self._request(
+            Method.GET,
+            f"api/auto/{vin}",
+        )).get("response")
 
     async def _request(
         self,

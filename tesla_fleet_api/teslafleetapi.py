@@ -22,7 +22,7 @@ class TeslaFleetApi:
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
-    refresh_hook: Awaitable | None
+    refresh_hook: Awaitable | None = None
 
     def __init__(
         self,
