@@ -63,7 +63,7 @@ class Energy:
         return await self._request(
             Method.GET,
             f"api/1/energy_sites/{energy_site_id}/telemetry_history",
-            query={
+            params={
                 "kind": kind,
                 "start_date": start_date,
                 "end_date": end_date,
@@ -84,7 +84,7 @@ class Energy:
         return await self._request(
             Method.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
-            query={
+            params={
                 "kind": kind,
                 "start_date": start_date,
                 "end_date": end_date,
