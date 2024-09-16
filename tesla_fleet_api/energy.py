@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
-from .const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyKind, TeslaEnergyPeriod
+from .const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyPeriod
 from .energyspecific import EnergySpecific
 
 if TYPE_CHECKING:
