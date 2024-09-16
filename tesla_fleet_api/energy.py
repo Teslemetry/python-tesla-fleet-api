@@ -32,10 +32,10 @@ class Energy:
     async def backup_history(
         self,
         energy_site_id: int,
-        start_date: str,
-        end_date: str,
-        period: TeslaEnergyPeriod | str,
-        time_zone: str,
+        period: TeslaEnergyPeriod | str | None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        time_zone: str | None = None,
     ) -> dict[str, Any]:
         """Returns the backup (off-grid) event history of the site in duration of seconds."""
         return await self._request(
@@ -55,7 +55,7 @@ class Energy:
         energy_site_id: int,
         start_date: str,
         end_date: str,
-        time_zone: str,
+        time_zone: str | None = None,
     ) -> dict[str, Any]:
         """Returns the charging history of a wall connector."""
         return await self._request(
@@ -72,10 +72,10 @@ class Energy:
     async def energy_history(
         self,
         energy_site_id: int,
-        start_date: str,
-        end_date: str,
-        period: TeslaEnergyPeriod | str,
-        time_zone: str,
+        period: TeslaEnergyPeriod | str | None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        time_zone: str | None = None,
     ) -> dict[str, Any]:
         """Returns the energy measurements of the site, aggregated to the requested period."""
         return await self._request(
