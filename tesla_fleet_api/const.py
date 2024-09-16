@@ -15,9 +15,15 @@ SERVERS = {
 class IntEnum(int, Enum):
     """Integer Enum."""
 
+    def __str__(self) -> str:
+        return str(self.value)
+
 
 class StrEnum(str, Enum):
     """String Enum."""
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class Method(StrEnum):
@@ -302,3 +308,13 @@ class TelemetryAlert(StrEnum):
     CUSTOMER = "Customer"
     SERVICE = "Service"
     SERVICE_FIX = "ServiceFix"
+
+
+class TeslaEnergyPeriod(StrEnum):
+    """Period for history for energy sites"""
+
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+    YEAR = "year"
+    LIFETIME = "lifetime"

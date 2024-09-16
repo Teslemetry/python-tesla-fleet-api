@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
-from .const import Method, EnergyOperationMode, EnergyExportMode
+from .const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyKind, TeslaEnergyPeriod
 from .energyspecific import EnergySpecific
 
 if TYPE_CHECKING:
@@ -32,18 +32,17 @@ class Energy:
     async def backup_history(
         self,
         energy_site_id: int,
-        kind: str,
         start_date: str,
         end_date: str,
-        period: str,
+        period: TeslaEnergyPeriod | str,
         time_zone: str,
     ) -> dict[str, Any]:
         """Returns the backup (off-grid) event history of the site in duration of seconds."""
         return await self._request(
             Method.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
-            json={
-                "kind": kind,
+            params={
+                "kind": "backup",
                 "start_date": start_date,
                 "end_date": end_date,
                 "period": period,
@@ -54,7 +53,6 @@ class Energy:
     async def charge_history(
         self,
         energy_site_id: int,
-        kind: str,
         start_date: str,
         end_date: str,
         time_zone: str,
@@ -64,7 +62,7 @@ class Energy:
             Method.GET,
             f"api/1/energy_sites/{energy_site_id}/telemetry_history",
             params={
-                "kind": kind,
+                "kind": "charge",
                 "start_date": start_date,
                 "end_date": end_date,
                 "time_zone": time_zone,
@@ -74,10 +72,9 @@ class Energy:
     async def energy_history(
         self,
         energy_site_id: int,
-        kind: str,
         start_date: str,
         end_date: str,
-        period: str,
+        period: TeslaEnergyPeriod | str,
         time_zone: str,
     ) -> dict[str, Any]:
         """Returns the energy measurements of the site, aggregated to the requested period."""
@@ -85,7 +82,7 @@ class Energy:
             Method.GET,
             f"api/1/energy_sites/{energy_site_id}/calendar_history",
             params={
-                "kind": kind,
+                "kind": "energy",
                 "start_date": start_date,
                 "end_date": end_date,
                 "period": period,

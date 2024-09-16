@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
-from .const import EnergyExportMode, EnergyOperationMode
+from .const import EnergyExportMode, EnergyOperationMode, TeslaEnergyKind, TeslaEnergyPeriod
 
 if TYPE_CHECKING:
     from .energy import Energy
@@ -29,20 +29,22 @@ class EnergySpecific:
 
     async def backup_history(
         self,
-        kind: str,
         start_date: str,
         end_date: str,
-        period: str,
+        period: TeslaEnergyPeriod | str,
         time_zone: str,
     ) -> dict[str, Any]:
         """Returns the backup (off-grid) event history of the site in duration of seconds."""
         return await self._parent.backup_history(
-            self.energy_site_id, kind, start_date, end_date, period, time_zone
+            self.energy_site_id,
+            start_date,
+            end_date,
+            period,
+            time_zone,
         )
 
     async def charge_history(
         self,
-        kind: str,
         start_date: str,
         end_date: str,
         time_zone: str,
@@ -50,7 +52,6 @@ class EnergySpecific:
         """Returns the charging history of a wall connector."""
         return await self._parent.charge_history(
             self.energy_site_id,
-            kind,
             start_date,
             end_date,
             time_zone,
@@ -58,16 +59,14 @@ class EnergySpecific:
 
     async def energy_history(
         self,
-        kind: str,
         start_date: str,
         end_date: str,
-        period: str,
+        period: TeslaEnergyPeriod | str,
         time_zone: str,
     ) -> dict[str, Any]:
         """Returns the energy measurements of the site, aggregated to the requested period."""
         return await self._parent.energy_history(
             self.energy_site_id,
-            kind,
             start_date,
             end_date,
             period,

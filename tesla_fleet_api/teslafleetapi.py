@@ -98,7 +98,6 @@ class TeslaFleetApi:
             if access_token := await self.refresh_hook():
                 self.access_token = access_token
 
-        LOGGER.debug("Sending request to %s", path)
 
         # Remove None values from params and json
         if params:
@@ -119,6 +118,7 @@ class TeslaFleetApi:
             json=json,
             params=params,
         ) as resp:
+            LOGGER.debug("Requested: %s", resp.url)
             LOGGER.debug("Response Status: %s", resp.status)
             if "x-txid" in resp.headers:
                 LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
