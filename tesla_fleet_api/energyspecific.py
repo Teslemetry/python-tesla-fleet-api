@@ -29,7 +29,7 @@ class EnergySpecific:
 
     async def backup_history(
         self,
-        period: TeslaEnergyPeriod | str | None,
+        period: TeslaEnergyPeriod | str,
         start_date: str | None = None,
         end_date: str | None = None,
         time_zone: str | None = None,
@@ -59,7 +59,7 @@ class EnergySpecific:
 
     async def energy_history(
         self,
-        period: TeslaEnergyPeriod | str | None,
+        period: TeslaEnergyPeriod | str,
         start_date: str | None = None,
         end_date: str | None = None,
         time_zone: str | None = None,
