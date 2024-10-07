@@ -1,4 +1,8 @@
 from __future__ import annotations
+import base64
+import json
+from random import randbytes
+from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT
 from typing import Any, TYPE_CHECKING
 from .const import (
     Trunk,
@@ -17,16 +21,27 @@ if TYPE_CHECKING:
 class VehicleSigning(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
-    _parent: Vehicle
-    vin: str
+    _key: str
+    _from_destination: bytes
 
-    def __init__(self, parent: Vehicle, vin: str):
-        self._parent = parent
-        self.vin = vin
+    def __init__(self, parent: Vehicle, vin: str, key: str):
+        super().__init__(parent, vin)
+        self._key = key
+        self._from_destination = self.uuid()
 
-    async def _request(self, endpoint: VehicleDataEndpoint, **kwargs) -> dict[str, Any]:
-        """Makes a signed request to a vehicle endpoint."""
-        return await self._parent._request(self.vin, f"api/1/vehicles/{self.vin}/signed_command", **kwargs)
+    def uuid(self) -> bytes:
+        """Generate a random UUID."""
+        return randbytes(16)
+
+    def _sign(self, domain: int, message: dict) -> str:
+        """Sign a message."""
+        assert domain in (DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT)
+
+        return base64.b64encode(json.dumps(message).encode()).decode()
+
+    async def _sign_and_send(self, message: dict) -> dict[str, Any]:
+        """Sign and send a message."""
+        return await self.signed_command(self._sign(message))
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
@@ -408,45 +423,24 @@ class VehicleSigning(VehicleSpecific):
         """Revokes a share invite."""
         return await self._parent.share_invites_revoke(self.vin, id)
 
-    async def signed_command(self, routable_message: str) -> dict[str, Any]:
-        """Signed Commands is a generic endpoint replacing legacy commands."""
-        return await self._parent.signed_command(self.vin, routable_message)
+    # signed command doesnt require signing
 
-    async def vehicle(self) -> dict[str, Any]:
-        """Returns information about a vehicle."""
-        return await self._parent.vehicle(self.vin)
+    # vehicle doesnt require signing
 
-    async def vehicle_data(
-        self,
-        endpoints: list[VehicleDataEndpoint | str] | None = None,
-    ) -> dict[str, Any]:
-        """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
-        return await self._parent.vehicle_data(self.vin, endpoints)
+    # vehicle_data doesnt require signing
 
-    async def wake_up(self) -> dict[str, Any]:
-        """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
-        return await self._parent.wake_up(self.vin)
+    # wake_up doesnt require signing
 
-    async def warranty_details(self) -> dict[str, Any]:
-        """Returns warranty details."""
-        return await self._parent.warranty_details(self.vin)
+    # warranty_details doesnt require signing
 
-    async def fleet_status(self) -> dict[str, Any]:
-        """Checks whether vehicles can accept Tesla commands protocol for the partner's public key"""
-        return await self._parent.fleet_status([self.vin])
+    # fleet_status doesnt require signing
 
     async def fleet_telemetry_config_create(
         self, config: dict[str, Any]
     ) -> dict[str, Any]:
         """Configures fleet telemetry."""
-        return await self._parent.fleet_telemetry_config_create(
-            {"vins": [self.vin], "config": config}
-        )
+        raise NotImplementedError
 
-    async def fleet_telemetry_config_get(self) -> dict[str, Any]:
-        """Configures fleet telemetry."""
-        return await self._parent.fleet_telemetry_config_get(self.vin)
+    # fleet_telemetry_config_get doesnt require signing
 
-    async def fleet_telemetry_config_delete(self) -> dict[str, Any]:
-        """Configures fleet telemetry."""
-        return await self._parent.fleet_telemetry_config_delete(self.vin)
+    # fleet_telemetry_config_delete doesnt require signing
