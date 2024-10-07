@@ -1,5 +1,9 @@
 from __future__ import annotations
 from typing import Any, List, TYPE_CHECKING
+from cryptography.hazmat.primitives.asymmetric import ec
+import base64
+
+from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT, RoutableMessage
 from .const import (
     Method,
     Trunk,
@@ -13,6 +17,7 @@ from .const import (
     Level,
 )
 from .vehiclespecific import VehicleSpecific
+from .vehiclesigned import VehicleSigned
 
 if TYPE_CHECKING:
     from .teslafleetapi import TeslaFleetApi
@@ -30,6 +35,10 @@ class Vehicle:
     def specific(self, vin: str) -> VehicleSpecific:
         """Creates a class for each vehicle."""
         return VehicleSpecific(self, vin)
+
+    def specific_signed(self, vin: str, private_key: ec.EllipticCurvePrivateKey | None = None) -> VehicleSigned:
+        """Creates a class for each vehicle with command signing."""
+        return VehicleSigned(self, vin, private_key)
 
     def pre2021(self, vin: str) -> bool:
         """Checks if a vehicle is a pre-2021 model S or X."""
@@ -716,11 +725,14 @@ class Vehicle:
         self, vehicle_tag: str | int, routable_message: str
     ) -> dict[str, Any]:
         """Signed Commands is a generic endpoint replacing legacy commands."""
-        return await self._request(
+        resp = await self._request(
             Method.POST,
             f"api/1/vehicles/{vehicle_tag}/signed_command",
-            {"routable_message": routable_message},
+            json={"routable_message": routable_message},
         )
+        msg = RoutableMessage()
+        msg.ParseFromString(base64.b64decode(resp["response"]))
+        return msg
 
     async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Returns information about a vehicle."""

@@ -2,7 +2,14 @@
 
 from json import dumps
 from typing import Any, Awaitable
+from os.path import exists
 import aiohttp
+
+# cryptography
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.backends import default_backend
 
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
 from .const import SERVERS, Method, LOGGER, VERSION
@@ -23,6 +30,7 @@ class TeslaFleetApi:
     session: aiohttp.ClientSession
     headers: dict[str, str]
     refresh_hook: Awaitable | None = None
+    _private_key: ec.EllipticCurvePrivateKey
 
     def __init__(
         self,
@@ -153,3 +161,33 @@ class TeslaFleetApi:
             Method.GET,
             "api/1/products",
         )
+
+    def private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
+        """Create or load the private key."""
+        if not exists(path):
+            self._private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+            # save the key
+            pem = self._private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+            with open(path, "wb") as key_file:
+                key_file.write(pem)
+            return self._private_key
+        else:
+            try:
+                with open(path, "rb") as key_file:
+                    key_data = key_file.read()
+                    value = serialization.load_pem_private_key(
+                        key_data, password=None, backend=default_backend()
+                    )
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Private key file not found at {path}")
+            except PermissionError:
+                raise PermissionError(f"Permission denied when trying to read {path}")
+
+            if not isinstance(value, ec.EllipticCurvePrivateKey):
+                raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
+            self._private_key = value
+            return self._private_key

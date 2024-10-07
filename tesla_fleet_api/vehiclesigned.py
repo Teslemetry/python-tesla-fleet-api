@@ -2,7 +2,6 @@ from __future__ import annotations
 import base64
 import json
 from random import randbytes
-from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT
 from typing import Any, TYPE_CHECKING
 from .const import (
     Trunk,
@@ -15,33 +14,59 @@ from .const import (
 )
 from .vehiclespecific import VehicleSpecific
 
+from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT, RoutableMessage
+from .pb2.car_server_pb2 import Action, VehicleAction, VehicleControlFlashLightsAction
+
 if TYPE_CHECKING:
     from .vehicle import Vehicle
+    from cryptography.hazmat.primitives.asymmetric import ec
 
-class VehicleSigning(VehicleSpecific):
+class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     _key: str
     _from_destination: bytes
 
-    def __init__(self, parent: Vehicle, vin: str, key: str):
+    def __init__(self, parent: Vehicle, vin: str, key: ec.EllipticCurvePrivateKey | None = None):
         super().__init__(parent, vin)
-        self._key = key
-        self._from_destination = self.uuid()
+        if key:
+            self._key = key
+        elif parent._parent._private_key:
+            self._key = parent._parent._private_key
+        else:
+            raise ValueError("No private key.")
 
-    def uuid(self) -> bytes:
-        """Generate a random UUID."""
-        return randbytes(16)
+        self._from_destination = randbytes(16)
 
-    def _sign(self, domain: int, message: dict) -> str:
+    async def send(self, domain: int, command: bytes) -> dict[str, Any]:
         """Sign a message."""
         assert domain in (DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT)
 
-        return base64.b64encode(json.dumps(message).encode()).decode()
+        msg = RoutableMessage()
+        msg.to_destination.domain = domain
+        msg.from_destination.routing_address = self._from_destination
+        msg.protobuf_message_as_bytes = command
+        msg.uuid = randbytes(16)
+        routable_message = base64.b64encode(msg.SerializeToString()).decode()
 
-    async def _sign_and_send(self, message: dict) -> dict[str, Any]:
-        """Sign and send a message."""
-        return await self.signed_command(self._sign(message))
+        return await self.signed_command(routable_message)
+
+    async def flash_lights(self) -> dict[str, Any]:
+        """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
+
+
+        # Create an instance of VehicleControlFlashLightsAction
+        flash_lights_action = VehicleControlFlashLightsAction()
+
+        # Create an instance of VehicleAction and set the flash lights action
+        vehicle_action = VehicleAction()
+        vehicle_action.vehicleControlFlashLightsAction.CopyFrom(flash_lights_action)
+
+        # Create an instance of Action and set the vehicle action
+        msg = Action()
+        msg.vehicleAction.CopyFrom(vehicle_action)
+
+        return await self.send(DOMAIN_INFOTAINMENT, msg.SerializeToString())
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
@@ -103,9 +128,7 @@ class VehicleSigning(VehicleSpecific):
         """Erases user's data from the user interface. Requires the vehicle to be in park."""
         return await self._parent.erase_user_data(self.vin)
 
-    async def flash_lights(self) -> dict[str, Any]:
-        """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
-        return await self._parent.flash_lights(self.vin)
+
 
     async def guest_mode(self, enable: bool) -> dict[str, Any]:
         """Restricts certain vehicle UI functionality from guest users"""

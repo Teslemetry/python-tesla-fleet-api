@@ -4,3 +4,4 @@ register.py
 __pycache__
 auth.json
 opensource.py
+*.pem
