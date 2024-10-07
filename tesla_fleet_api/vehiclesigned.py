@@ -1,8 +1,9 @@
 from __future__ import annotations
 import base64
-import json
 from random import randbytes
 from typing import Any, TYPE_CHECKING
+import hmac
+import hashlib
 from .const import (
     Trunk,
     ClimateKeeperMode,
@@ -16,6 +17,7 @@ from .vehiclespecific import VehicleSpecific
 
 from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT, RoutableMessage
 from .pb2.car_server_pb2 import Action, VehicleAction, VehicleControlFlashLightsAction
+from .pb2.vcsec_pb2 import UnsignedMessage
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -38,35 +40,34 @@ class VehicleSigned(VehicleSpecific):
 
         self._from_destination = randbytes(16)
 
-    async def send(self, domain: int, command: bytes) -> dict[str, Any]:
-        """Sign a message."""
-        assert domain in (DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT)
+    async def sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+        """Sign and send a message to Infotainment computer."""
+        return await self.send(DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
 
+    async def sendInfotainment(self, command: Action) -> dict[str, Any]:
+        """Sign and send a message to Infotainment computer."""
+        return await self.send(DOMAIN_INFOTAINMENT, command.SerializeToString())
+
+    async def send(self, domain: int, command: bytes) -> dict[str, Any]:
+        """Send a signed message to the vehicle."""
         msg = RoutableMessage()
         msg.to_destination.domain = domain
-        msg.from_destination.routing_address = self._from_destination
         msg.protobuf_message_as_bytes = command
+        msg.from_destination.routing_address = self._from_destination
         msg.uuid = randbytes(16)
+        # HMAC-SHA256 authentication
+        sig = hmac.new(self._key.encode(), command, hashlib.sha256).digest()
+        msg.signature_data = sig
         routable_message = base64.b64encode(msg.SerializeToString()).decode()
-
         return await self.signed_command(routable_message)
 
     async def flash_lights(self) -> dict[str, Any]:
         """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
-
-
-        # Create an instance of VehicleControlFlashLightsAction
-        flash_lights_action = VehicleControlFlashLightsAction()
-
-        # Create an instance of VehicleAction and set the flash lights action
-        vehicle_action = VehicleAction()
-        vehicle_action.vehicleControlFlashLightsAction.CopyFrom(flash_lights_action)
-
-        # Create an instance of Action and set the vehicle action
-        msg = Action()
-        msg.vehicleAction.CopyFrom(vehicle_action)
-
-        return await self.send(DOMAIN_INFOTAINMENT, msg.SerializeToString())
+        return await self.sendInfotainment(Action(
+            vehicleAction=VehicleAction(
+                vehicleControlFlashLightsAction=VehicleControlFlashLightsAction()
+            )
+        ))
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
