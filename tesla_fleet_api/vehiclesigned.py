@@ -10,31 +10,104 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
 
+from tesla_fleet_api.exceptions import SIGNING_EXCEPTIONS
+
 from .const import (
+    LOGGER,
     Trunk,
     ClimateKeeperMode,
     CabinOverheatProtectionTemp,
-    VehicleDataEndpoint,
     SunRoofCommand,
     WindowCommand,
-    DeviceType,
 )
 from .vehiclespecific import VehicleSpecific
 
 from .pb2.universal_message_pb2 import (
+    OPERATIONSTATUS_OK,
+    OPERATIONSTATUS_WAIT,
+    OPERATIONSTATUS_ERROR,
     DOMAIN_VEHICLE_SECURITY,
     DOMAIN_INFOTAINMENT,
     RoutableMessage,
 )
-from .pb2.car_server_pb2 import Action, VehicleAction, VehicleControlFlashLightsAction
-from .pb2.vcsec_pb2 import UnsignedMessage
-from .pb2.signatures_pb2 import SIGNATURE_TYPE_HMAC, SIGNATURE_TYPE_HMAC_PERSONALIZED, TAG_DOMAIN, TAG_SIGNATURE_TYPE, SignatureData, SessionInfo, HMAC_Personalized_Signature_Data, SignatureType, TAG_PERSONALIZATION, TAG_EPOCH, TAG_EXPIRES_AT, TAG_COUNTER, TAG_CHALLENGE, TAG_FLAGS, TAG_END
+from .pb2.car_server_pb2 import (
+    Action,
+    HvacAutoAction,
+    VehicleAction,
+    VehicleControlFlashLightsAction,
+    ChargingStartStopAction,
+    ChargingSetLimitAction,
+    EraseUserDataAction,
+    DrivingClearSpeedLimitPinAction,
+    DrivingSetSpeedLimitAction,
+    DrivingSpeedLimitAction,
+    HvacAutoAction,
+    HvacSeatHeaterActions,
+    HvacSeatCoolerActions,
+    HvacSetPreconditioningMaxAction,
+    HvacSteeringWheelHeaterAction,
+    HvacTemperatureAdjustmentAction,
+    GetNearbyChargingSites,
+    NearbyChargingSites,
+    Superchargers,
+    VehicleControlCancelSoftwareUpdateAction,
+    VehicleControlHonkHornAction,
+    VehicleControlResetValetPinAction,
+    VehicleControlScheduleSoftwareUpdateAction,
+    VehicleControlSetSentryModeAction,
+    VehicleControlSetValetModeAction,
+    VehicleControlSunroofOpenCloseAction,
+    VehicleControlTriggerHomelinkAction,
+    VehicleControlWindowAction,
+    HvacBioweaponModeAction,
+    AutoSeatClimateAction,
+    Ping,
+    ScheduledChargingAction,
+    ScheduledDepartureAction,
+    HvacClimateKeeperAction,
+    SetChargingAmpsAction,
+    SetCabinOverheatProtectionAction,
+    SetVehicleNameAction,
+    ChargePortDoorOpen,
+    ChargePortDoorClose,
+    SetCopTempAction,
+    VehicleControlSetPinToDriveAction,
+    VehicleControlResetPinToDriveAction,
+    MediaNextTrack,
+    MediaNextFavorite,
+    MediaUpdateVolume,
+    MediaPreviousTrack,
+    MediaPreviousFavorite,
+)
+from .pb2.vehicle_pb2 import GuestMode, ClimateState
+from .pb2.vcsec_pb2 import (
+    UnsignedMessage,
+    RKEAction_E,
+    ClosureMoveRequest,
+    ClosureMoveType_E,
+)
+from .pb2.signatures_pb2 import (
+    SIGNATURE_TYPE_HMAC_PERSONALIZED,
+    TAG_DOMAIN,
+    TAG_SIGNATURE_TYPE,
+    SignatureData,
+    SessionInfo,
+    HMAC_Personalized_Signature_Data,
+    TAG_PERSONALIZATION,
+    TAG_EPOCH,
+    TAG_EXPIRES_AT,
+    TAG_COUNTER,
+    TAG_END,
+)
+from .pb2.common_pb2 import Void
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
 
 
 class Session:
+    """A connect to a domain"""
+
     key: bytes
     counter: int
     epoch: bytes
@@ -47,7 +120,9 @@ class Session:
         self.counter = counter
         self.epoch = epoch
         self.delta = delta
-        self.hmac = hmac.new(key, "authenticated command".encode(), hashlib.sha256).digest()
+        self.hmac = hmac.new(
+            key, "authenticated command".encode(), hashlib.sha256
+        ).digest()
 
     def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
@@ -58,10 +133,16 @@ class Session:
         signature.expires_at = int(time.time()) - self.delta + 10
         return signature
 
-    def tag(self, signature: HMAC_Personalized_Signature_Data, command: bytes, metadata: bytes) -> HMAC_Personalized_Signature_Data:
+    def tag(
+        self,
+        signature: HMAC_Personalized_Signature_Data,
+        command: bytes,
+        metadata: bytes,
+    ) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return the signature"""
-        signature.tag = hmac.new(self.hmac, metadata + command , hashlib.sha256).digest()
+        signature.tag = hmac.new(self.hmac, metadata + command, hashlib.sha256).digest()
         return signature
+
 
 class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
@@ -88,7 +169,15 @@ class VehicleSigned(VehicleSpecific):
         self._from_destination = randbytes(16)
         self._sessions = {}
 
-    async def handshake(self, domain: int) -> None:
+    async def _signed_message(self, msg: RoutableMessage) -> RoutableMessage:
+        """Serialize a message and send to the signed command endpoint."""
+        routable_message = base64.b64encode(msg.SerializeToString()).decode()
+        resp = await self.signed_command(routable_message)
+        msg = RoutableMessage()
+        msg.ParseFromString(base64.b64decode(resp["response"]))
+        return msg
+
+    async def _handshake(self, domain: int) -> None:
         """Perform a handshake with the vehicle."""
         msg = RoutableMessage()
         msg.to_destination.domain = domain
@@ -97,9 +186,7 @@ class VehicleSigned(VehicleSpecific):
         msg.uuid = randbytes(16)
 
         # Send handshake message
-        resp = await self.signed_command(
-            base64.b64encode(msg.SerializeToString()).decode()
-        )
+        resp = await self._signed_message(msg)
 
         # Get session info with publicKey, epoch, and clock_time
         info = SessionInfo.FromString(resp.session_info)
@@ -122,19 +209,19 @@ class VehicleSigned(VehicleSpecific):
 
         print(self._sessions[domain])
 
-    async def sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
         if DOMAIN_VEHICLE_SECURITY not in self._sessions:
-            await self.handshake(DOMAIN_VEHICLE_SECURITY)
-        return await self.send(DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
+            await self._handshake(DOMAIN_VEHICLE_SECURITY)
+        return await self._send(DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
 
-    async def sendInfotainment(self, command: Action) -> dict[str, Any]:
+    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
         if DOMAIN_INFOTAINMENT not in self._sessions:
-            await self.handshake(DOMAIN_INFOTAINMENT)
-        return await self.send(DOMAIN_INFOTAINMENT, command.SerializeToString())
+            await self._handshake(DOMAIN_INFOTAINMENT)
+        return await self._send(DOMAIN_INFOTAINMENT, command.SerializeToString())
 
-    async def send(self, domain: int, command: bytes) -> dict[str, Any]:
+    async def _send(self, domain: int, command: bytes) -> dict[str, Any]:
         """Send a signed message to the vehicle."""
         msg = RoutableMessage()
         msg.to_destination.domain = domain
@@ -162,7 +249,7 @@ class VehicleSigned(VehicleSpecific):
             TAG_COUNTER,
             4,
             *struct.pack(">I", session.counter),
-            TAG_END
+            TAG_END,
         ]
 
         session = self._sessions[domain].tag(session, command, bytes(metadata))
@@ -173,11 +260,191 @@ class VehicleSigned(VehicleSpecific):
 
         msg.signature_data.CopyFrom(signature)
 
-        return await self.signed_command(base64.b64encode(msg.SerializeToString()).decode())
+        resp = await self._signed_message(msg)
+
+        LOGGER.debug(resp)
+        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_ERROR:
+            raise SIGNING_EXCEPTIONS[resp.signedMessageStatus.signed_message_fault]
+        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
+            return {"response": {"result": False}}
+
+        if resp.protobuf_message_as_bytes and (
+            text := resp.protobuf_message_as_bytes.decode()
+        ):
+            LOGGER.warning(text)
+
+            # if domain == DOMAIN_INFOTAINMENT:
+            #    resp_msg = Action()
+            #    resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
+            #    print("INFOTAINMENT RESPONSE", resp_msg)
+            #    #return {"response": {"result": False, "reason": resp_msg}}
+            # elif domain == DOMAIN_VEHICLE_SECURITY:
+            #    resp_msg = UnsignedMessage()
+            #    resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
+            #    print("VCSEC RESPONSE", resp_msg)
+            #    print(resp.protobuf_message_as_bytes.encode())
+            #    #return {"response": {"result": False, "reason": resp_msg}}
+
+        return {"response": {"result": True, "reason": ""}}
+
+    async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
+        """Controls the front or rear trunk."""
+        if which_trunk == Trunk.FRONT:
+            return await self._sendVehicleSecurity(
+                UnsignedMessage(
+                    closureMoveRequest=ClosureMoveRequest(
+                        frontTrunk=ClosureMoveType_E.CLOSURE_MOVE_TYPE_MOVE
+                    )
+                )
+            )
+        if which_trunk == Trunk.REAR:
+            return await self._sendVehicleSecurity(
+                UnsignedMessage(
+                    closureMoveRequest=ClosureMoveRequest(
+                        rearTrunk=ClosureMoveType_E.CLOSURE_MOVE_TYPE_MOVE
+                    )
+                )
+            )
+
+    async def adjust_volume(self, volume: float) -> dict[str, Any]:
+        """Adjusts vehicle media playback volume."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaUpdateVolume=MediaUpdateVolume(volume_absolute_float=volume)
+                )
+            )
+        )
+
+    async def auto_conditioning_start(self) -> dict[str, Any]:
+        """Starts climate preconditioning."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacAutoAction=HvacAutoAction(power_on=True)
+                )
+            )
+        )
+
+    async def auto_conditioning_stop(self) -> dict[str, Any]:
+        """Stops climate preconditioning."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacAutoAction=HvacAutoAction(power_on=False)
+                )
+            )
+        )
+
+    async def cancel_software_update(self) -> dict[str, Any]:
+        """Cancels the countdown to install the vehicle software update."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlCancelSoftwareUpdateAction=VehicleControlCancelSoftwareUpdateAction()
+                )
+            )
+        )
+
+    async def charge_max_range(self) -> dict[str, Any]:
+        """Charges in max range mode -- we recommend limiting the use of this mode to long trips."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    chargingStartStopAction=ChargingStartStopAction(
+                        start_max_range=Void()
+                    )
+                )
+            )
+        )
+
+    async def charge_port_door_close(self) -> dict[str, Any]:
+        """Closes the charge port door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    chargePort=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
+    async def charge_port_door_open(self) -> dict[str, Any]:
+        """Opens the charge port door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    chargePort=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def charge_standard(self) -> dict[str, Any]:
+        """Charges in Standard mode."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    chargingStartStopAction=ChargingStartStopAction(
+                        start_standard=Void()
+                    )
+                )
+            )
+        )
+
+    async def charge_start(self) -> dict[str, Any]:
+        """Starts charging the vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    chargingStartStopAction=ChargingStartStopAction(start=Void())
+                )
+            )
+        )
+
+    async def charge_stop(self) -> dict[str, Any]:
+        """Stops charging the vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    chargingStartStopAction=ChargingStartStopAction(stop=Void())
+                )
+            )
+        )
+
+    async def clear_pin_to_drive_admin(self, pin: str):
+        """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingClearSpeedLimitPinAction=DrivingClearSpeedLimitPinAction(
+                        pin=pin
+                    )
+                )
+            )
+        )
+
+    async def door_lock(self) -> dict[str, Any]:
+        """Locks the vehicle."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_LOCK)
+        )
+
+    async def door_unlock(self) -> dict[str, Any]:
+        """Unlocks the vehicle."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_UNLOCK)
+        )
+
+    async def erase_user_data(self) -> dict[str, Any]:
+        """Erases user's data from the user interface. Requires the vehicle to be in park."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(eraseUserDataAction=EraseUserDataAction())
+            )
+        )
 
     async def flash_lights(self) -> dict[str, Any]:
         """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
-        return await self.sendInfotainment(
+        return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     vehicleControlFlashLightsAction=VehicleControlFlashLightsAction()
@@ -185,93 +452,77 @@ class VehicleSigned(VehicleSpecific):
             )
         )
 
-    async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
-        """Controls the front or rear trunk."""
-        return await self._parent.actuate_trunk(self.vin, which_trunk)
-
-    async def adjust_volume(self, volume: float) -> dict[str, Any]:
-        """Adjusts vehicle media playback volume."""
-        return await self._parent.adjust_volume(self.vin, volume)
-
-    async def auto_conditioning_start(self) -> dict[str, Any]:
-        """Starts climate preconditioning."""
-        return await self._parent.auto_conditioning_start(self.vin)
-
-    async def auto_conditioning_stop(self) -> dict[str, Any]:
-        """Stops climate preconditioning."""
-        return await self._parent.auto_conditioning_stop(self.vin)
-
-    async def cancel_software_update(self) -> dict[str, Any]:
-        """Cancels the countdown to install the vehicle software update."""
-        return await self._parent.cancel_software_update(self.vin)
-
-    async def charge_max_range(self) -> dict[str, Any]:
-        """Charges in max range mode -- we recommend limiting the use of this mode to long trips."""
-        return await self._parent.charge_max_range(self.vin)
-
-    async def charge_port_door_close(self) -> dict[str, Any]:
-        """Closes the charge port door."""
-        return await self._parent.charge_port_door_close(self.vin)
-
-    async def charge_port_door_open(self) -> dict[str, Any]:
-        """Opens the charge port door."""
-        return await self._parent.charge_port_door_open(self.vin)
-
-    async def charge_standard(self) -> dict[str, Any]:
-        """Charges in Standard mode."""
-        return await self._parent.charge_standard(self.vin)
-
-    async def charge_start(self) -> dict[str, Any]:
-        """Starts charging the vehicle."""
-        return await self._parent.charge_start(self.vin)
-
-    async def charge_stop(self) -> dict[str, Any]:
-        """Stops charging the vehicle."""
-        return await self._parent.charge_stop(self.vin)
-
-    async def clear_pin_to_drive_admin(self):
-        """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
-        return await self._parent.clear_pin_to_drive_admin(self.vin)
-
-    async def door_lock(self) -> dict[str, Any]:
-        """Locks the vehicle."""
-        return await self._parent.door_lock(self.vin)
-
-    async def door_unlock(self) -> dict[str, Any]:
-        """Unlocks the vehicle."""
-        return await self._parent.door_unlock(self.vin)
-
-    async def erase_user_data(self) -> dict[str, Any]:
-        """Erases user's data from the user interface. Requires the vehicle to be in park."""
-        return await self._parent.erase_user_data(self.vin)
-
     async def guest_mode(self, enable: bool) -> dict[str, Any]:
         """Restricts certain vehicle UI functionality from guest users"""
-        return await self._parent.guest_mode(self.vin, enable)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    guestModeAction=GuestMode(
+                        GuestModeActive=enable
+                    )
+                )
+            )
+        )
 
     async def honk_horn(self) -> dict[str, Any]:
         """Honks the vehicle horn. Requires the vehicle to be in park."""
-        return await self._parent.honk_horn(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlHonkHornAction=VehicleControlHonkHornAction()
+                )
+            )
+        )
 
     async def media_next_fav(self) -> dict[str, Any]:
         """Advances media player to next favorite track."""
-        return await self._parent.media_next_fav(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaNextFavorite=MediaNextFavorite()
+                )
+            )
+        )
 
     async def media_next_track(self) -> dict[str, Any]:
         """Advances media player to next track."""
-        return await self._parent.media_next_track(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaNextTrack=MediaNextTrack()
+                )
+            )
+        )
 
     async def media_prev_fav(self) -> dict[str, Any]:
         """Advances media player to previous favorite track."""
-        return await self._parent.media_prev_fav(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaPreviousFavorite=MediaPreviousFavorite()
+                )
+            )
+        )
 
     async def media_prev_track(self) -> dict[str, Any]:
         """Advances media player to previous track."""
-        return await self._parent.media_prev_track(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaPreviousTrack=MediaPreviousTrack()
+                )
+            )
+        )
 
     async def media_toggle_playback(self) -> dict[str, Any]:
         """Toggles current play/pause state."""
-        return await self._parent.media_toggle_playback(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaPlayAction=MediaPlayAction() # This is missing
+                )
+            )
+        )
 
     async def media_volume_down(self) -> dict[str, Any]:
         """Turns the volume down by one."""
@@ -335,7 +586,9 @@ class VehicleSigned(VehicleSpecific):
 
     async def remote_start_drive(self) -> dict[str, Any]:
         """Starts the vehicle remotely. Requires keyless driving to be enabled."""
-        return await self._parent.remote_start_drive(self.vin)
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_REMOTE_DRIVE)
+        )
 
     async def remote_steering_wheel_heat_level_request(
         self, level: int

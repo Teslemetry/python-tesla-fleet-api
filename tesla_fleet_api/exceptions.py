@@ -293,6 +293,169 @@ class LibraryError(Exception):
     """Errors related to this library."""
 
 
+class TeslaFleetSigningError(TeslaFleetError):
+    """Vehicle has responded with an error when sending a signed command"""
+
+    message = "Vehicle has responded with an error when sending a signed command"
+
+
+class UnknownFault(TeslaFleetSigningError):
+    """Unknown fault on signed command."""
+
+    message = "Unknown fault on signed command."
+    code = 1
+
+
+class NotOnWhitelistFault(TeslaFleetSigningError):
+    """Not on whitelist fault on signed command."""
+
+    message = "Not on whitelist fault on signed command."
+    code = 2
+
+
+class IVSmallerThanExpectedFault(TeslaFleetSigningError):
+    """IV smaller than expected fault on signed command."""
+
+    message = "IV smaller than expected fault on signed command."
+    code = 3
+
+
+class InvalidTokenFault(TeslaFleetSigningError):
+    """Invalid token fault on signed command."""
+
+    message = "Invalid token fault on signed command."
+    code = 4
+
+
+class TokenAndCounterInvalidFault(TeslaFleetSigningError):
+    """Token and counter invalid fault on signed command."""
+
+    message = "Token and counter invalid fault on signed command."
+    code = 5
+
+
+class AESDecryptAuthFault(TeslaFleetSigningError):
+    """AES decrypt auth fault on signed command."""
+
+    message = "AES decrypt auth fault on signed command."
+    code = 6
+
+
+class ECDSAInputFault(TeslaFleetSigningError):
+    """ECDSA input fault on signed command."""
+
+    message = "ECDSA input fault on signed command."
+    code = 7
+
+
+class ECDSASignatureFault(TeslaFleetSigningError):
+    """ECDSA signature fault on signed command."""
+
+    message = "ECDSA signature fault on signed command."
+    code = 8
+
+
+class LocalEntityStartFault(TeslaFleetSigningError):
+    """Local entity start fault on signed command."""
+
+    message = "Local entity start fault on signed command."
+    code = 9
+
+
+class LocalEntityResultFault(TeslaFleetSigningError):
+    """Local entity result fault on signed command."""
+
+    message = "Local entity result fault on signed command."
+    code = 10
+
+
+class CouldNotRetrieveKeyFault(TeslaFleetSigningError):
+    """Could not retrieve key fault on signed command."""
+
+    message = "Could not retrieve key fault on signed command."
+    code = 11
+
+
+class CouldNotRetrieveTokenFault(TeslaFleetSigningError):
+    """Could not retrieve token fault on signed command."""
+
+    message = "Could not retrieve token fault on signed command."
+    code = 12
+
+
+class SignatureTooShortFault(TeslaFleetSigningError):
+    """Signature too short fault on signed command."""
+
+    message = "Signature too short fault on signed command."
+    code = 13
+
+
+class TokenIsIncorrectLengthFault(TeslaFleetSigningError):
+    """Token is incorrect length fault on signed command."""
+
+    message = "Token is incorrect length fault on signed command."
+    code = 14
+
+
+class IncorrectEpochFault(TeslaFleetSigningError):
+    """Incorrect epoch fault on signed command."""
+
+    message = "Incorrect epoch fault on signed command."
+    code = 15
+
+
+class IVIncorrectLengthFault(TeslaFleetSigningError):
+    """IV incorrect length fault on signed command."""
+
+    message = "IV incorrect length fault on signed command."
+    code = 16
+
+
+class TimeExpiredFault(TeslaFleetSigningError):
+    """Time expired fault on signed command."""
+
+    message = "Time expired fault on signed command."
+    code = 17
+
+
+class NotProvisionedWithIdentityFault(TeslaFleetSigningError):
+    """Not provisioned with identity fault on signed command."""
+
+    message = "Not provisioned with identity fault on signed command."
+    code = 18
+
+
+class CouldNotHashMetadataFault(TeslaFleetSigningError):
+    """Could not hash metadata fault on signed command."""
+
+    message = "Could not hash metadata fault on signed command."
+    code = 19
+
+
+SIGNING_EXCEPTIONS = [
+    None,
+    UnknownFault,
+    NotOnWhitelistFault,
+    IVSmallerThanExpectedFault,
+    InvalidTokenFault,
+    TokenAndCounterInvalidFault,
+    AESDecryptAuthFault,
+    ECDSAInputFault,
+    ECDSASignatureFault,
+    LocalEntityStartFault,
+    LocalEntityResultFault,
+    CouldNotRetrieveKeyFault,
+    CouldNotRetrieveTokenFault,
+    SignatureTooShortFault,
+    TokenIsIncorrectLengthFault,
+    IncorrectEpochFault,
+    IVIncorrectLengthFault,
+    TimeExpiredFault,
+    NotProvisionedWithIdentityFault,
+    CouldNotHashMetadataFault,
+]
+
+
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes

@@ -1,13 +1,6 @@
 from __future__ import annotations
 from typing import Any, List, TYPE_CHECKING
 from cryptography.hazmat.primitives.asymmetric import ec
-import base64
-
-from .pb2.universal_message_pb2 import (
-    DOMAIN_VEHICLE_SECURITY,
-    DOMAIN_INFOTAINMENT,
-    RoutableMessage,
-)
 from .const import (
     Method,
     Trunk,
@@ -729,16 +722,13 @@ class Vehicle:
 
     async def signed_command(
         self, vehicle_tag: str | int, routable_message: str
-    ) -> RoutableMessage:
+    ) -> dict[str, Any]:
         """Signed Commands is a generic endpoint replacing legacy commands."""
-        resp = await self._request(
+        return await self._request(
             Method.POST,
             f"api/1/vehicles/{vehicle_tag}/signed_command",
             json={"routable_message": routable_message},
         )
-        msg = RoutableMessage()
-        msg.ParseFromString(base64.b64decode(resp["response"]))
-        return msg
 
     async def vehicle(self, vehicle_tag: str | int) -> dict[str, Any]:
         """Returns information about a vehicle."""
