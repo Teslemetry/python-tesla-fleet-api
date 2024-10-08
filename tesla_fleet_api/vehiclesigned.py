@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from random import randbytes
 from typing import Any, TYPE_CHECKING
 import time
+import struct
 import hmac
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -27,7 +28,7 @@ from .pb2.universal_message_pb2 import (
 )
 from .pb2.car_server_pb2 import Action, VehicleAction, VehicleControlFlashLightsAction
 from .pb2.vcsec_pb2 import UnsignedMessage
-from .pb2.signatures_pb2 import SignatureData, SessionInfo, HMAC_Personalized_Signature_Data
+from .pb2.signatures_pb2 import SIGNATURE_TYPE_HMAC, SIGNATURE_TYPE_HMAC_PERSONALIZED, TAG_DOMAIN, TAG_SIGNATURE_TYPE, SignatureData, SessionInfo, HMAC_Personalized_Signature_Data, SignatureType, TAG_PERSONALIZATION, TAG_EPOCH, TAG_EXPIRES_AT, TAG_COUNTER, TAG_CHALLENGE, TAG_FLAGS, TAG_END
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -48,16 +49,19 @@ class Session:
         self.delta = delta
         self.hmac = hmac.new(key, "authenticated command".encode(), hashlib.sha256).digest()
 
-    def sign(self, command: bytes) -> HMAC_Personalized_Signature_Data:
+    def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
+        self.counter += 1
         signature = HMAC_Personalized_Signature_Data()
         signature.epoch = self.epoch
         signature.counter = self.counter
         signature.expires_at = int(time.time()) - self.delta + 10
-        signature.tag = hmac.new(self.hmac, command, hashlib.sha256).digest()
-        self.counter += 1
         return signature
 
+    def tag(self, signature: HMAC_Personalized_Signature_Data, command: bytes, metadata: bytes) -> HMAC_Personalized_Signature_Data:
+        """Sign a command and return the signature"""
+        signature.tag = hmac.new(self.hmac, metadata + command , hashlib.sha256).digest()
+        return signature
 
 class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
@@ -108,10 +112,9 @@ class VehicleSigned(VehicleSpecific):
                 ec.SECP256R1(), vehicle_public_key
             ),
         )
-        key = hashlib.sha1(shared).digest()[:16]
 
         self._sessions[domain] = Session(
-            key=key,
+            key=hashlib.sha1(shared).digest()[:16],
             counter=info.counter,
             epoch=info.epoch,
             delta=int(time.time()) - info.clock_time,
@@ -139,8 +142,33 @@ class VehicleSigned(VehicleSpecific):
         msg.protobuf_message_as_bytes = command
         msg.uuid = randbytes(16)
 
+        session = self._sessions[domain].get()
+        metadata = [
+            TAG_SIGNATURE_TYPE,
+            1,
+            SIGNATURE_TYPE_HMAC_PERSONALIZED,
+            TAG_DOMAIN,
+            1,
+            domain,
+            TAG_PERSONALIZATION,
+            17,
+            *self.vin.encode(),
+            TAG_EPOCH,
+            len(session.epoch),
+            *session.epoch,
+            TAG_EXPIRES_AT,
+            4,
+            *struct.pack(">I", session.expires_at),
+            TAG_COUNTER,
+            4,
+            *struct.pack(">I", session.counter),
+            TAG_END
+        ]
+
+        session = self._sessions[domain].tag(session, command, bytes(metadata))
+
         signature = SignatureData()
-        signature.HMAC_Personalized_data.CopyFrom(self._sessions[domain].sign(command))
+        signature.HMAC_Personalized_data.CopyFrom(session)
         signature.signer_identity.public_key = self._public_key
 
         msg.signature_data.CopyFrom(signature)
