@@ -14,6 +14,7 @@ from .const import Method, LOGGER, Scope
 # Rate limit should be global, even if multiple instances are created
 rate_limit = AsyncLimiter(5, 10)
 
+
 class Teslemetry(TeslaFleetApi):
     def __init__(
         self,
@@ -26,7 +27,7 @@ class Teslemetry(TeslaFleetApi):
             access_token=access_token,
             server="https://api.teslemetry.com",
             user_scope=False,
-            partner_scope=False
+            partner_scope=False,
         )
         self.rate_limit = rate_limit
 
@@ -75,22 +76,30 @@ class Teslemetry(TeslaFleetApi):
         assert self.region
         return self.region
 
-    async def server_side_polling(self, vin: str, value: bool | None = None) -> bool | None:
+    async def server_side_polling(
+        self, vin: str, value: bool | None = None
+    ) -> bool | None:
         """Get or set Auto mode."""
         if value is True:
-            return (await self._request(
-                Method.POST,
-                f"api/auto/{vin}",
-            )).get("response")
+            return (
+                await self._request(
+                    Method.POST,
+                    f"api/auto/{vin}",
+                )
+            ).get("response")
         if value is False:
-            return (await self._request(
-                Method.DELETE,
+            return (
+                await self._request(
+                    Method.DELETE,
+                    f"api/auto/{vin}",
+                )
+            ).get("response")
+        return (
+            await self._request(
+                Method.GET,
                 f"api/auto/{vin}",
-            )).get("response")
-        return (await self._request(
-            Method.GET,
-            f"api/auto/{vin}",
-        )).get("response")
+            )
+        ).get("response")
 
     async def _request(
         self,

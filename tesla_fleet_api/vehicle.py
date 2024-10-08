@@ -3,7 +3,11 @@ from typing import Any, List, TYPE_CHECKING
 from cryptography.hazmat.primitives.asymmetric import ec
 import base64
 
-from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT, RoutableMessage
+from .pb2.universal_message_pb2 import (
+    DOMAIN_VEHICLE_SECURITY,
+    DOMAIN_INFOTAINMENT,
+    RoutableMessage,
+)
 from .const import (
     Method,
     Trunk,
@@ -36,7 +40,9 @@ class Vehicle:
         """Creates a class for each vehicle."""
         return VehicleSpecific(self, vin)
 
-    def specific_signed(self, vin: str, private_key: ec.EllipticCurvePrivateKey | None = None) -> VehicleSigned:
+    def specific_signed(
+        self, vin: str, private_key: ec.EllipticCurvePrivateKey | None = None
+    ) -> VehicleSigned:
         """Creates a class for each vehicle with command signing."""
         return VehicleSigned(self, vin, private_key)
 
@@ -723,7 +729,7 @@ class Vehicle:
 
     async def signed_command(
         self, vehicle_tag: str | int, routable_message: str
-    ) -> dict[str, Any]:
+    ) -> RoutableMessage:
         """Signed Commands is a generic endpoint replacing legacy commands."""
         resp = await self._request(
             Method.POST,

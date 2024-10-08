@@ -1,9 +1,14 @@
 from __future__ import annotations
 import base64
+from dataclasses import dataclass
 from random import randbytes
 from typing import Any, TYPE_CHECKING
+import time
 import hmac
 import hashlib
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
+
 from .const import (
     Trunk,
     ClimateKeeperMode,
@@ -15,21 +20,56 @@ from .const import (
 )
 from .vehiclespecific import VehicleSpecific
 
-from .pb2.universal_message_pb2 import DOMAIN_VEHICLE_SECURITY, DOMAIN_INFOTAINMENT, RoutableMessage
+from .pb2.universal_message_pb2 import (
+    DOMAIN_VEHICLE_SECURITY,
+    DOMAIN_INFOTAINMENT,
+    RoutableMessage,
+)
 from .pb2.car_server_pb2 import Action, VehicleAction, VehicleControlFlashLightsAction
 from .pb2.vcsec_pb2 import UnsignedMessage
+from .pb2.signatures_pb2 import SignatureData, SessionInfo, HMAC_Personalized_Signature_Data
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
-    from cryptography.hazmat.primitives.asymmetric import ec
+
+
+class Session:
+    key: bytes
+    counter: int
+    epoch: bytes
+    delta: int
+    hmac: bytes
+
+    def __init__(self, key: bytes, counter: int, epoch: bytes, delta: int):
+        """Create a session instance for a single domain"""
+        self.key = key
+        self.counter = counter
+        self.epoch = epoch
+        self.delta = delta
+        self.hmac = hmac.new(key, "authenticated command".encode(), hashlib.sha256).digest()
+
+    def sign(self, command: bytes) -> HMAC_Personalized_Signature_Data:
+        """Sign a command and return session metadata"""
+        signature = HMAC_Personalized_Signature_Data()
+        signature.epoch = self.epoch
+        signature.counter = self.counter
+        signature.expires_at = int(time.time()) - self.delta + 10
+        signature.tag = hmac.new(self.hmac, command, hashlib.sha256).digest()
+        self.counter += 1
+        return signature
+
 
 class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
-    _key: str
+    _key: ec.EllipticCurvePrivateKey
+    _public_key: bytes
     _from_destination: bytes
+    _sessions: dict[int, Session]
 
-    def __init__(self, parent: Vehicle, vin: str, key: ec.EllipticCurvePrivateKey | None = None):
+    def __init__(
+        self, parent: Vehicle, vin: str, key: ec.EllipticCurvePrivateKey | None = None
+    ):
         super().__init__(parent, vin)
         if key:
             self._key = key
@@ -38,36 +78,84 @@ class VehicleSigned(VehicleSpecific):
         else:
             raise ValueError("No private key.")
 
+        self._public_key = self._key.public_key().public_bytes(
+            encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
+        )
         self._from_destination = randbytes(16)
+        self._sessions = {}
+
+    async def handshake(self, domain: int) -> None:
+        """Perform a handshake with the vehicle."""
+        msg = RoutableMessage()
+        msg.to_destination.domain = domain
+        msg.from_destination.routing_address = self._from_destination
+        msg.session_info_request.public_key = self._public_key
+        msg.uuid = randbytes(16)
+
+        # Send handshake message
+        resp = await self.signed_command(
+            base64.b64encode(msg.SerializeToString()).decode()
+        )
+
+        # Get session info with publicKey, epoch, and clock_time
+        info = SessionInfo.FromString(resp.session_info)
+        vehicle_public_key = info.publicKey
+
+        # Derive shared key from private key _key and vehicle public key
+        shared = self._key.exchange(
+            ec.ECDH(),
+            ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), vehicle_public_key
+            ),
+        )
+        key = hashlib.sha1(shared).digest()[:16]
+
+        self._sessions[domain] = Session(
+            key=key,
+            counter=info.counter,
+            epoch=info.epoch,
+            delta=int(time.time()) - info.clock_time,
+        )
+
+        print(self._sessions[domain])
 
     async def sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
+        if DOMAIN_VEHICLE_SECURITY not in self._sessions:
+            await self.handshake(DOMAIN_VEHICLE_SECURITY)
         return await self.send(DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
 
     async def sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
+        if DOMAIN_INFOTAINMENT not in self._sessions:
+            await self.handshake(DOMAIN_INFOTAINMENT)
         return await self.send(DOMAIN_INFOTAINMENT, command.SerializeToString())
 
     async def send(self, domain: int, command: bytes) -> dict[str, Any]:
         """Send a signed message to the vehicle."""
         msg = RoutableMessage()
         msg.to_destination.domain = domain
-        msg.protobuf_message_as_bytes = command
         msg.from_destination.routing_address = self._from_destination
+        msg.protobuf_message_as_bytes = command
         msg.uuid = randbytes(16)
-        # HMAC-SHA256 authentication
-        sig = hmac.new(self._key.encode(), command, hashlib.sha256).digest()
-        msg.signature_data = sig
-        routable_message = base64.b64encode(msg.SerializeToString()).decode()
-        return await self.signed_command(routable_message)
+
+        signature = SignatureData()
+        signature.HMAC_Personalized_data.CopyFrom(self._sessions[domain].sign(command))
+        signature.signer_identity.public_key = self._public_key
+
+        msg.signature_data.CopyFrom(signature)
+
+        return await self.signed_command(base64.b64encode(msg.SerializeToString()).decode())
 
     async def flash_lights(self) -> dict[str, Any]:
         """Briefly flashes the vehicle headlights. Requires the vehicle to be in park."""
-        return await self.sendInfotainment(Action(
-            vehicleAction=VehicleAction(
-                vehicleControlFlashLightsAction=VehicleControlFlashLightsAction()
+        return await self.sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlFlashLightsAction=VehicleControlFlashLightsAction()
+                )
             )
-        ))
+        )
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
@@ -128,8 +216,6 @@ class VehicleSigned(VehicleSpecific):
     async def erase_user_data(self) -> dict[str, Any]:
         """Erases user's data from the user interface. Requires the vehicle to be in park."""
         return await self._parent.erase_user_data(self.vin)
-
-
 
     async def guest_mode(self, enable: bool) -> dict[str, Any]:
         """Restricts certain vehicle UI functionality from guest users"""

@@ -106,7 +106,6 @@ class TeslaFleetApi:
             if access_token := await self.refresh_hook():
                 self.access_token = access_token
 
-
         # Remove None values from params and json
         if params:
             params = {k: v for k, v in params.items() if v is not None}
@@ -165,7 +164,9 @@ class TeslaFleetApi:
     def private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
         """Create or load the private key."""
         if not exists(path):
-            self._private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+            self._private_key = ec.generate_private_key(
+                ec.SECP256R1(), default_backend()
+            )
             # save the key
             pem = self._private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
