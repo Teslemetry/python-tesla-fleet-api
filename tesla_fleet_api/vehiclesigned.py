@@ -33,6 +33,7 @@ from .pb2.universal_message_pb2 import (
 from .pb2.car_server_pb2 import (
     Action,
     HvacAutoAction,
+    MediaPlayAction,
     VehicleAction,
     VehicleControlFlashLightsAction,
     ChargingStartStopAction,
@@ -519,34 +520,35 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    mediaPlayAction=MediaPlayAction() # This is missing
+                    mediaPlayAction=MediaPlayAction()
                 )
             )
         )
 
     async def media_volume_down(self) -> dict[str, Any]:
         """Turns the volume down by one."""
-        return await self._parent.media_volume_down(self.vin)
-
-    async def navigation_gps_request(
-        self, lat: float, lon: float, order: int | None = None
-    ) -> dict[str, Any]:
-        """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
-        return await self._parent.navigation_gps_request(self.vin, lat, lon, order)
-
-    async def navigation_request(
-        self, type: str, locale: str, timestamp_ms: str
-    ) -> dict[str, Any]:
-        """Sends a location to the in-vehicle navigation system."""
-        return await self._parent.navigation_request(
-            self.vin, type, locale, timestamp_ms
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaUpdateVolume=MediaUpdateVolume(volume_delta=-1)
+                )
+            )
         )
 
-    async def navigation_sc_request(
-        self, id: int, order: int | None = None
-    ) -> dict[str, Any]:
-        """Sends a location to the in-vehicle navigation system."""
-        return await self._parent.navigation_sc_request(self.vin, id, order)
+    # This one is new
+    async def media_volume_up(self) -> dict[str, Any]:
+        """Turns the volume up by one."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    mediaUpdateVolume=MediaUpdateVolume(volume_delta=1)
+                )
+            )
+        )
+
+    #navigation_gps_request doesnt require signing
+    #navigation_request doesnt require signing
+    #navigation_sc_request doesnt require signing
 
     async def remote_auto_seat_climate_request(
         self, auto_seat_position: int, auto_climate_on: bool
