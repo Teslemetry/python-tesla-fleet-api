@@ -10,6 +10,7 @@ from .partner import Partner
 from .user import User
 from .vehicle import Vehicle
 from .vehiclespecific import VehicleSpecific
+from .vehiclesigned import VehicleSigned
 
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "User",
     "Vehicle",
     "VehicleSpecific",
+    "VehicleSigned",
 ]
