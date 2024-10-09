@@ -293,146 +293,146 @@ class LibraryError(Exception):
     """Errors related to this library."""
 
 
-class TeslaFleetSigningError(TeslaFleetError):
+class TeslaFleetInformationFault(TeslaFleetError):
     """Vehicle has responded with an error when sending a signed command"""
 
     message = "Vehicle has responded with an error when sending a signed command"
 
 
-class UnknownFault(TeslaFleetSigningError):
+class UnknownFault(TeslaFleetInformationFault):
     """Unknown fault on signed command."""
 
     message = "Unknown fault on signed command."
     code = 1
 
 
-class NotOnWhitelistFault(TeslaFleetSigningError):
+class NotOnWhitelistFault(TeslaFleetInformationFault):
     """Not on whitelist fault on signed command."""
 
     message = "Not on whitelist fault on signed command."
     code = 2
 
 
-class IVSmallerThanExpectedFault(TeslaFleetSigningError):
+class IVSmallerThanExpectedFault(TeslaFleetInformationFault):
     """IV smaller than expected fault on signed command."""
 
     message = "IV smaller than expected fault on signed command."
     code = 3
 
 
-class InvalidTokenFault(TeslaFleetSigningError):
+class InvalidTokenFault(TeslaFleetInformationFault):
     """Invalid token fault on signed command."""
 
     message = "Invalid token fault on signed command."
     code = 4
 
 
-class TokenAndCounterInvalidFault(TeslaFleetSigningError):
+class TokenAndCounterInvalidFault(TeslaFleetInformationFault):
     """Token and counter invalid fault on signed command."""
 
     message = "Token and counter invalid fault on signed command."
     code = 5
 
 
-class AESDecryptAuthFault(TeslaFleetSigningError):
+class AESDecryptAuthFault(TeslaFleetInformationFault):
     """AES decrypt auth fault on signed command."""
 
     message = "AES decrypt auth fault on signed command."
     code = 6
 
 
-class ECDSAInputFault(TeslaFleetSigningError):
+class ECDSAInputFault(TeslaFleetInformationFault):
     """ECDSA input fault on signed command."""
 
     message = "ECDSA input fault on signed command."
     code = 7
 
 
-class ECDSASignatureFault(TeslaFleetSigningError):
+class ECDSASignatureFault(TeslaFleetInformationFault):
     """ECDSA signature fault on signed command."""
 
     message = "ECDSA signature fault on signed command."
     code = 8
 
 
-class LocalEntityStartFault(TeslaFleetSigningError):
+class LocalEntityStartFault(TeslaFleetInformationFault):
     """Local entity start fault on signed command."""
 
     message = "Local entity start fault on signed command."
     code = 9
 
 
-class LocalEntityResultFault(TeslaFleetSigningError):
+class LocalEntityResultFault(TeslaFleetInformationFault):
     """Local entity result fault on signed command."""
 
     message = "Local entity result fault on signed command."
     code = 10
 
 
-class CouldNotRetrieveKeyFault(TeslaFleetSigningError):
+class CouldNotRetrieveKeyFault(TeslaFleetInformationFault):
     """Could not retrieve key fault on signed command."""
 
     message = "Could not retrieve key fault on signed command."
     code = 11
 
 
-class CouldNotRetrieveTokenFault(TeslaFleetSigningError):
+class CouldNotRetrieveTokenFault(TeslaFleetInformationFault):
     """Could not retrieve token fault on signed command."""
 
     message = "Could not retrieve token fault on signed command."
     code = 12
 
 
-class SignatureTooShortFault(TeslaFleetSigningError):
+class SignatureTooShortFault(TeslaFleetInformationFault):
     """Signature too short fault on signed command."""
 
     message = "Signature too short fault on signed command."
     code = 13
 
 
-class TokenIsIncorrectLengthFault(TeslaFleetSigningError):
+class TokenIsIncorrectLengthFault(TeslaFleetInformationFault):
     """Token is incorrect length fault on signed command."""
 
     message = "Token is incorrect length fault on signed command."
     code = 14
 
 
-class IncorrectEpochFault(TeslaFleetSigningError):
+class IncorrectEpochFault(TeslaFleetInformationFault):
     """Incorrect epoch fault on signed command."""
 
     message = "Incorrect epoch fault on signed command."
     code = 15
 
 
-class IVIncorrectLengthFault(TeslaFleetSigningError):
+class IVIncorrectLengthFault(TeslaFleetInformationFault):
     """IV incorrect length fault on signed command."""
 
     message = "IV incorrect length fault on signed command."
     code = 16
 
 
-class TimeExpiredFault(TeslaFleetSigningError):
+class TimeExpiredFault(TeslaFleetInformationFault):
     """Time expired fault on signed command."""
 
     message = "Time expired fault on signed command."
     code = 17
 
 
-class NotProvisionedWithIdentityFault(TeslaFleetSigningError):
+class NotProvisionedWithIdentityFault(TeslaFleetInformationFault):
     """Not provisioned with identity fault on signed command."""
 
     message = "Not provisioned with identity fault on signed command."
     code = 18
 
 
-class CouldNotHashMetadataFault(TeslaFleetSigningError):
+class CouldNotHashMetadataFault(TeslaFleetInformationFault):
     """Could not hash metadata fault on signed command."""
 
     message = "Could not hash metadata fault on signed command."
     code = 19
 
 
-SIGNING_EXCEPTIONS = [
+INFORMATION_FAULTS = [
     None,
     UnknownFault,
     NotOnWhitelistFault,
@@ -453,6 +453,201 @@ SIGNING_EXCEPTIONS = [
     TimeExpiredFault,
     NotProvisionedWithIdentityFault,
     CouldNotHashMetadataFault,
+]
+
+
+class TeslaFleetMessageFault(TeslaFleetError):
+    """Vehicle has responded with an error when sending a signed command"""
+
+    message = "Vehicle has responded with an error when sending a signed command"
+
+
+class TeslaFleetMessageFaultBusy(TeslaFleetMessageFault):
+    """Vehicle is busy"""
+
+    message = "Vehicle is busy"
+    code = 1
+
+
+class TeslaFleetMessageFaultTimeout(TeslaFleetMessageFault):
+    """Vehicle timed out"""
+
+    message = "Vehicle timed out"
+    code = 2
+
+
+class TeslaFleetMessageFaultUnknownKeyId(TeslaFleetMessageFault):
+    """Unknown Key ID"""
+
+    message = "Unknown Key ID"
+    code = 3
+
+
+class TeslaFleetMessageFaultInactiveKey(TeslaFleetMessageFault):
+    """Inactive Key"""
+
+    message = "Inactive Key"
+    code = 4
+
+
+class TeslaFleetMessageFaultInvalidSignature(TeslaFleetMessageFault):
+    """Invalid Signature"""
+
+    message = "Invalid Signature"
+    code = 5
+
+
+class TeslaFleetMessageFaultInvalidTokenOrCounter(TeslaFleetMessageFault):
+    """Invalid Token or Counter"""
+
+    message = "Invalid Token or Counter"
+    code = 6
+
+
+class TeslaFleetMessageFaultInsufficientPrivileges(TeslaFleetMessageFault):
+    """Insufficient Privileges"""
+
+    message = "Insufficient Privileges"
+    code = 7
+
+
+class TeslaFleetMessageFaultInvalidDomains(TeslaFleetMessageFault):
+    """Invalid Domains"""
+
+    message = "Invalid Domains"
+    code = 8
+
+
+class TeslaFleetMessageFaultInvalidCommand(TeslaFleetMessageFault):
+    """Invalid Command"""
+
+    message = "Invalid Command"
+    code = 9
+
+
+class TeslaFleetMessageFaultDecoding(TeslaFleetMessageFault):
+    """Decoding Error"""
+
+    message = "Decoding Error"
+    code = 10
+
+
+class TeslaFleetMessageFaultInternal(TeslaFleetMessageFault):
+    """Internal Error"""
+
+    message = "Internal Error"
+    code = 11
+
+
+class TeslaFleetMessageFaultWrongPersonalization(TeslaFleetMessageFault):
+    """Wrong Personalization"""
+
+    message = "Wrong Personalization"
+    code = 12
+
+
+class TeslaFleetMessageFaultBadParameter(TeslaFleetMessageFault):
+    """Bad Parameter"""
+
+    message = "Bad Parameter"
+    code = 13
+
+
+class TeslaFleetMessageFaultKeychainIsFull(TeslaFleetMessageFault):
+    """Keychain is Full"""
+
+    message = "Keychain is Full"
+    code = 14
+
+
+class TeslaFleetMessageFaultIncorrectEpoch(TeslaFleetMessageFault):
+    """Incorrect Epoch"""
+
+    message = "Incorrect Epoch"
+    code = 15
+
+
+class TeslaFleetMessageFaultIVIncorrectLength(TeslaFleetMessageFault):
+    """IV Incorrect Length"""
+
+    message = "IV Incorrect Length"
+    code = 16
+
+
+class TeslaFleetMessageFaultTimeExpired(TeslaFleetMessageFault):
+    """Time Expired"""
+
+    message = "Time Expired"
+    code = 17
+
+
+class TeslaFleetMessageFaultNotProvisionedWithIdentity(TeslaFleetMessageFault):
+    """Not Provisioned with Identity"""
+
+    message = "Not Provisioned with Identity"
+    code = 18
+
+
+class TeslaFleetMessageFaultCouldNotHashMetadata(TeslaFleetMessageFault):
+    """Could not Hash Metadata"""
+
+    message = "Could not Hash Metadata"
+    code = 19
+
+
+class TeslaFleetMessageFaultTimeToLiveTooLong(TeslaFleetMessageFault):
+    """Time to Live Too Long"""
+
+    message = "Time to Live Too Long"
+    code = 20
+
+
+class TeslaFleetMessageFaultRemoteAccessDisabled(TeslaFleetMessageFault):
+    """Remote Access Disabled"""
+
+    message = "Remote Access Disabled"
+    code = 21
+
+
+class TeslaFleetMessageFaultRemoteServiceAccessDisabled(TeslaFleetMessageFault):
+    """Remote Service Access Disabled"""
+
+    message = "Remote Service Access Disabled"
+    code = 22
+
+
+class TeslaFleetMessageFaultCommandRequiresAccountCredentials(TeslaFleetMessageFault):
+    """Command Requires Account Credentials"""
+
+    message = "Command Requires Account Credentials"
+    code = 23
+
+
+MESSAGE_FAULTS = [
+    None,
+    TeslaFleetMessageFaultBusy,
+    TeslaFleetMessageFaultTimeout,
+    TeslaFleetMessageFaultUnknownKeyId,
+    TeslaFleetMessageFaultInactiveKey,
+    TeslaFleetMessageFaultInvalidSignature,
+    TeslaFleetMessageFaultInvalidTokenOrCounter,
+    TeslaFleetMessageFaultInsufficientPrivileges,
+    TeslaFleetMessageFaultInvalidDomains,
+    TeslaFleetMessageFaultInvalidCommand,
+    TeslaFleetMessageFaultDecoding,
+    TeslaFleetMessageFaultInternal,
+    TeslaFleetMessageFaultWrongPersonalization,
+    TeslaFleetMessageFaultBadParameter,
+    TeslaFleetMessageFaultKeychainIsFull,
+    TeslaFleetMessageFaultIncorrectEpoch,
+    TeslaFleetMessageFaultIVIncorrectLength,
+    TeslaFleetMessageFaultTimeExpired,
+    TeslaFleetMessageFaultNotProvisionedWithIdentity,
+    TeslaFleetMessageFaultCouldNotHashMetadata,
+    TeslaFleetMessageFaultTimeToLiveTooLong,
+    TeslaFleetMessageFaultRemoteAccessDisabled,
+    TeslaFleetMessageFaultRemoteServiceAccessDisabled,
+    TeslaFleetMessageFaultCommandRequiresAccountCredentials,
 ]
 
 

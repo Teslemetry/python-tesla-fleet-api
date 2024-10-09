@@ -161,7 +161,9 @@ class TeslaFleetApi:
             "api/1/products",
         )
 
-    async def get_private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
+    async def get_private_key(
+        self, path: str = "private_key.pem"
+    ) -> ec.EllipticCurvePrivateKey:
         """Get or create the private key."""
         if not exists(path):
             self.private_key = ec.generate_private_key(

@@ -9,7 +9,7 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
 
-from tesla_fleet_api.exceptions import SIGNING_EXCEPTIONS
+from .exceptions import MESSAGE_FAULTS
 
 from .const import (
     LOGGER,
@@ -22,16 +22,17 @@ from .const import (
 from .vehiclespecific import VehicleSpecific
 
 from .pb2.universal_message_pb2 import (
-    OPERATIONSTATUS_OK,
+    # OPERATIONSTATUS_OK,
     OPERATIONSTATUS_WAIT,
     OPERATIONSTATUS_ERROR,
     DOMAIN_VEHICLE_SECURITY,
     DOMAIN_INFOTAINMENT,
+    Domain,
+    # MessageFault_E,
     RoutableMessage,
 )
 from .pb2.car_server_pb2 import (
     Action,
-    HvacAutoAction,
     MediaPlayAction,
     VehicleAction,
     VehicleControlFlashLightsAction,
@@ -48,8 +49,8 @@ from .pb2.car_server_pb2 import (
     HvacSteeringWheelHeaterAction,
     HvacTemperatureAdjustmentAction,
     GetNearbyChargingSites,
-    NearbyChargingSites,
-    Superchargers,
+    # NearbyChargingSites,
+    # Superchargers,
     VehicleControlCancelSoftwareUpdateAction,
     VehicleControlHonkHornAction,
     VehicleControlResetValetPinAction,
@@ -61,15 +62,13 @@ from .pb2.car_server_pb2 import (
     VehicleControlWindowAction,
     HvacBioweaponModeAction,
     AutoSeatClimateAction,
-    Ping,
+    # Ping,
     ScheduledChargingAction,
     ScheduledDepartureAction,
     HvacClimateKeeperAction,
     SetChargingAmpsAction,
     SetCabinOverheatProtectionAction,
     SetVehicleNameAction,
-    ChargePortDoorOpen,
-    ChargePortDoorClose,
     SetCopTempAction,
     VehicleControlSetPinToDriveAction,
     VehicleControlResetPinToDriveAction,
@@ -79,8 +78,9 @@ from .pb2.car_server_pb2 import (
     MediaPreviousTrack,
     MediaPreviousFavorite,
 )
-from .pb2.vehicle_pb2 import VehicleState, ClimateState
+from .pb2.vehicle_pb2 import VehicleState
 from .pb2.vcsec_pb2 import (
+    # SignedMessage_information_E,
     UnsignedMessage,
     RKEAction_E,
     ClosureMoveRequest,
@@ -179,13 +179,19 @@ class VehicleSigned(VehicleSpecific):
     async def _signed_message(self, msg: RoutableMessage) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
         routable_message = base64.b64encode(msg.SerializeToString()).decode()
-        resp = await self.signed_command(routable_message)
-        msg = RoutableMessage()
-        msg.ParseFromString(base64.b64decode(resp["response"]))
-        return msg
+        resp_json = await self.signed_command(routable_message)
+        resp = RoutableMessage()
+        resp.ParseFromString(base64.b64decode(resp_json["response"]))
+
+        LOGGER.error(resp.signedMessageStatus)
+        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_ERROR:
+            raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]
+
+        return resp
 
     async def _handshake(self, domain: int) -> None:
         """Perform a handshake with the vehicle."""
+        LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
         msg = RoutableMessage()
         msg.to_destination.domain = domain
         msg.from_destination.routing_address = self._from_destination
@@ -197,6 +203,7 @@ class VehicleSigned(VehicleSpecific):
 
         # Get session info with publicKey, epoch, and clock_time
         info = SessionInfo.FromString(resp.session_info)
+
         vehicle_public_key = info.publicKey
 
         # Derive shared key from private key _key and vehicle public key
@@ -228,6 +235,7 @@ class VehicleSigned(VehicleSpecific):
 
     async def _send(self, domain: int, command: bytes) -> dict[str, Any]:
         """Send a signed message to the vehicle."""
+        LOGGER.debug(f"Sending to domain {Domain.Name(domain)}")
         msg = RoutableMessage()
         msg.to_destination.domain = domain
         msg.from_destination.routing_address = self._from_destination
@@ -267,11 +275,10 @@ class VehicleSigned(VehicleSpecific):
 
         resp = await self._signed_message(msg)
 
-        LOGGER.debug(resp)
-        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_ERROR:
-            raise SIGNING_EXCEPTIONS[resp.signedMessageStatus.signed_message_fault]
         if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
             return {"response": {"result": False}}
+
+        LOGGER.debug(resp)
 
         if resp.protobuf_message_as_bytes and (
             text := resp.protobuf_message_as_bytes.decode()
