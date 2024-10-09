@@ -80,7 +80,7 @@ from .pb2.car_server_pb2 import (
     MediaPreviousTrack,
     MediaPreviousFavorite,
 )
-from .pb2.vehicle_pb2 import GuestMode, ClimateState
+from .pb2.vehicle_pb2 import VehicleState, ClimateState
 from .pb2.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
@@ -105,8 +105,8 @@ from .pb2.common_pb2 import (
     LatLong,
     PreconditioningTimes,
     OffPeakChargingTimes,
-    ChargeSchedule,
-    PreconditionSchedule,
+    # ChargeSchedule,
+    # PreconditionSchedule,
 )
 
 if TYPE_CHECKING:
@@ -465,7 +465,7 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    guestModeAction=GuestMode(GuestModeActive=enable)
+                    guestModeAction=VehicleState.GuestMode(GuestModeActive=enable)
                 )
             )
         )
@@ -549,9 +549,11 @@ class VehicleSigned(VehicleSpecific):
             Action(
                 vehicleAction=VehicleAction(
                     autoSeatClimateAction=AutoSeatClimateAction(
-                        AutoSeatClimateAction.CarSeat(
-                            on=auto_climate_on, seat_position=auto_seat_position
-                        )
+                        carseat=[
+                            AutoSeatClimateAction.CarSeat(
+                                on=auto_climate_on, seat_position=auto_seat_position
+                            )
+                        ]
                     )
                 )
             )
@@ -577,10 +579,12 @@ class VehicleSigned(VehicleSpecific):
             Action(
                 vehicleAction=VehicleAction(
                     hvacSeatCoolerActions=HvacSeatCoolerActions(
-                        HvacSeatCoolerActions.HvacSeatCoolerAction(
-                            seat_cooler_level=seat_cooler_level + 1,
-                            seat_position=seat_position,
-                        )
+                        hvacSeatCoolerAction=[
+                            HvacSeatCoolerActions.HvacSeatCoolerAction(
+                                seat_cooler_level=seat_cooler_level + 1,
+                                seat_position=seat_position,
+                            )
+                        ]
                     )
                 )
             )
@@ -639,7 +643,9 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    hvacSeatHeaterActions=HvacSeatHeaterActions(heater_action)
+                    hvacSeatHeaterActions=HvacSeatHeaterActions(
+                        hvacSeatHeaterAction=[heater_action]
+                    )
                 )
             )
         )
