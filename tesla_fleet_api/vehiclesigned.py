@@ -280,6 +280,16 @@ class VehicleSigned(VehicleSpecific):
 
         LOGGER.debug(resp)
 
+        if domain == DOMAIN_INFOTAINMENT:
+            resp_msg = Action()
+            resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
+            print("INFOTAINMENT RESPONSE", resp_msg)
+        elif domain == DOMAIN_VEHICLE_SECURITY:
+            resp_msg = UnsignedMessage()
+            resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
+            print("VCSEC RESPONSE", resp_msg)
+
+
         if resp.protobuf_message_as_bytes and (
             text := resp.protobuf_message_as_bytes.decode()
         ):
