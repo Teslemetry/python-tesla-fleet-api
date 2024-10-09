@@ -4,11 +4,11 @@ from json import dumps
 from typing import Any, Awaitable
 from os.path import exists
 import aiohttp
+import aiofiles
 
 # cryptography
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
 from .exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
@@ -30,7 +30,7 @@ class TeslaFleetApi:
     session: aiohttp.ClientSession
     headers: dict[str, str]
     refresh_hook: Awaitable | None = None
-    _private_key: ec.EllipticCurvePrivateKey
+    _private_key: ec.EllipticCurvePrivateKey | None = None
 
     def __init__(
         self,
@@ -161,8 +161,8 @@ class TeslaFleetApi:
             "api/1/products",
         )
 
-    def private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
-        """Create or load the private key."""
+    async def get_private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
+        """Get or create the private key."""
         if not exists(path):
             self._private_key = ec.generate_private_key(
                 ec.SECP256R1(), default_backend()
@@ -173,16 +173,15 @@ class TeslaFleetApi:
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption(),
             )
-            with open(path, "wb") as key_file:
-                key_file.write(pem)
-            return self._private_key
+            async with aiofiles.open(path, "wb") as key_file:
+                await key_file.write(pem)
         else:
             try:
-                with open(path, "rb") as key_file:
-                    key_data = key_file.read()
-                    value = serialization.load_pem_private_key(
-                        key_data, password=None, backend=default_backend()
-                    )
+                async with aiofiles.open(path, "rb") as key_file:
+                    key_data = await key_file.read()
+                value = serialization.load_pem_private_key(
+                    key_data, password=None, backend=default_backend()
+                )
             except FileNotFoundError:
                 raise FileNotFoundError(f"Private key file not found at {path}")
             except PermissionError:
@@ -191,4 +190,4 @@ class TeslaFleetApi:
             if not isinstance(value, ec.EllipticCurvePrivateKey):
                 raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
             self._private_key = value
-            return self._private_key
+        return self._private_key
