@@ -100,7 +100,14 @@ from .pb2.signatures_pb2 import (
     TAG_COUNTER,
     TAG_END,
 )
-from .pb2.common_pb2 import Void
+from .pb2.common_pb2 import (
+    Void,
+    LatLong,
+    PreconditioningTimes,
+    OffPeakChargingTimes,
+    ChargeSchedule,
+    PreconditionSchedule,
+)
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -458,9 +465,7 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    guestModeAction=GuestMode(
-                        GuestModeActive=enable
-                    )
+                    guestModeAction=GuestMode(GuestModeActive=enable)
                 )
             )
         )
@@ -478,21 +483,13 @@ class VehicleSigned(VehicleSpecific):
     async def media_next_fav(self) -> dict[str, Any]:
         """Advances media player to next favorite track."""
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    mediaNextFavorite=MediaNextFavorite()
-                )
-            )
+            Action(vehicleAction=VehicleAction(mediaNextFavorite=MediaNextFavorite()))
         )
 
     async def media_next_track(self) -> dict[str, Any]:
         """Advances media player to next track."""
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    mediaNextTrack=MediaNextTrack()
-                )
-            )
+            Action(vehicleAction=VehicleAction(mediaNextTrack=MediaNextTrack()))
         )
 
     async def media_prev_fav(self) -> dict[str, Any]:
@@ -508,21 +505,13 @@ class VehicleSigned(VehicleSpecific):
     async def media_prev_track(self) -> dict[str, Any]:
         """Advances media player to previous track."""
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    mediaPreviousTrack=MediaPreviousTrack()
-                )
-            )
+            Action(vehicleAction=VehicleAction(mediaPreviousTrack=MediaPreviousTrack()))
         )
 
     async def media_toggle_playback(self) -> dict[str, Any]:
         """Toggles current play/pause state."""
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    mediaPlayAction=MediaPlayAction()
-                )
-            )
+            Action(vehicleAction=VehicleAction(mediaPlayAction=MediaPlayAction()))
         )
 
     async def media_volume_down(self) -> dict[str, Any]:
@@ -546,9 +535,9 @@ class VehicleSigned(VehicleSpecific):
             )
         )
 
-    #navigation_gps_request doesnt require signing
-    #navigation_request doesnt require signing
-    #navigation_sc_request doesnt require signing
+    # navigation_gps_request doesnt require signing
+    # navigation_request doesnt require signing
+    # navigation_sc_request doesnt require signing
 
     async def remote_auto_seat_climate_request(
         self, auto_seat_position: int, auto_climate_on: bool
@@ -559,10 +548,11 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    autoSeatClimateAction=AutoSeatClimateAction(AutoSeatClimateAction.CarSeat(
-                        on=auto_climate_on,
-                        seat_position=auto_seat_position
-                    ))
+                    autoSeatClimateAction=AutoSeatClimateAction(
+                        AutoSeatClimateAction.CarSeat(
+                            on=auto_climate_on, seat_position=auto_seat_position
+                        )
+                    )
                 )
             )
         )
@@ -586,10 +576,12 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    hvacSeatCoolerActions=HvacSeatCoolerActions(HvacSeatCoolerActions.HvacSeatCoolerAction(
-                        seat_cooler_level=seat_cooler_level+1,
-                        seat_position=seat_position
-                    ))
+                    hvacSeatCoolerActions=HvacSeatCoolerActions(
+                        HvacSeatCoolerActions.HvacSeatCoolerAction(
+                            seat_cooler_level=seat_cooler_level + 1,
+                            seat_position=seat_position,
+                        )
+                    )
                 )
             )
         )
@@ -613,7 +605,6 @@ class VehicleSigned(VehicleSpecific):
         # Void CAR_SEAT_REAR_RIGHT_BACK = 13;
         # Void CAR_SEAT_THIRD_ROW_LEFT = 14;
         # Void CAR_SEAT_THIRD_ROW_RIGHT = 15;
-
 
         heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction()
         match seat_position:
@@ -670,7 +661,9 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    hvacSteeringWheelHeaterAction=HvacSteeringWheelHeaterAction(power_on=on)
+                    hvacSteeringWheelHeaterAction=HvacSteeringWheelHeaterAction(
+                        power_on=on
+                    )
                 )
             )
         )
@@ -697,53 +690,136 @@ class VehicleSigned(VehicleSpecific):
 
     async def schedule_software_update(self, offset_sec: int) -> dict[str, Any]:
         """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
-        return await self._parent.schedule_software_update(self.vin, offset_sec)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlScheduleSoftwareUpdateAction=VehicleControlScheduleSoftwareUpdateAction(
+                        offset_sec=offset_sec
+                    )
+                )
+            )
+        )
 
     async def set_bioweapon_mode(
         self, on: bool, manual_override: bool
     ) -> dict[str, Any]:
         """Turns Bioweapon Defense Mode on and off."""
-        return await self._parent.set_bioweapon_mode(self.vin, on, manual_override)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacBioweaponModeAction=HvacBioweaponModeAction(
+                        on=on, manual_override=manual_override
+                    )
+                )
+            )
+        )
 
     async def set_cabin_overheat_protection(
         self, on: bool, fan_only: bool
     ) -> dict[str, Any]:
         """Sets the vehicle overheat protection."""
-        return await self._parent.set_cabin_overheat_protection(self.vin, on, fan_only)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setCabinOverheatProtectionAction=SetCabinOverheatProtectionAction(
+                        on=on, fan_only=fan_only
+                    )
+                )
+            )
+        )
 
     async def set_charge_limit(self, percent: int) -> dict[str, Any]:
         """Sets the vehicle charge limit."""
-        return await self._parent.set_charge_limit(self.vin, percent)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    chargingSetLimitAction=ChargingSetLimitAction(percent=percent)
+                )
+            )
+        )
 
     async def set_charging_amps(self, charging_amps: int) -> dict[str, Any]:
         """Sets the vehicle charging amps."""
-        return await self._parent.set_charging_amps(self.vin, charging_amps)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setChargingAmpsAction=SetChargingAmpsAction(
+                        charging_amps=charging_amps
+                    )
+                )
+            )
+        )
 
     async def set_climate_keeper_mode(
         self, climate_keeper_mode: ClimateKeeperMode | int
     ) -> dict[str, Any]:
         """Enables climate keeper mode."""
-        return await self._parent.set_climate_keeper_mode(self.vin, climate_keeper_mode)
+        if isinstance(climate_keeper_mode, ClimateKeeperMode):
+            climate_keeper_mode = climate_keeper_mode.value
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacClimateKeeperAction=HvacClimateKeeperAction(
+                        ClimateKeeperAction=climate_keeper_mode,
+                        # manual_override
+                    )
+                )
+            )
+        )
 
     async def set_cop_temp(
         self, cop_temp: CabinOverheatProtectionTemp | int
     ) -> dict[str, Any]:
         """Adjusts the Cabin Overheat Protection temperature (COP)."""
-        return await self._parent.set_cop_temp(self.vin, cop_temp)
+        if isinstance(cop_temp, CabinOverheatProtectionTemp):
+            cop_temp = cop_temp.value
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setCopTempAction=SetCopTempAction(copActivationTemp=cop_temp + 1)
+                )
+            )
+        )
 
     async def set_pin_to_drive(self, on: bool, password: str | int) -> dict[str, Any]:
         """Sets a four-digit passcode for PIN to Drive. This PIN must then be entered before the vehicle can be driven."""
-        return await self._parent.set_pin_to_drive(self.vin, on, password)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlSetPinToDriveAction=VehicleControlSetPinToDriveAction(
+                        on=on, password=str(password)
+                    )
+                )
+            )
+        )
 
     async def set_preconditioning_max(
         self, on: bool, manual_override: bool
     ) -> dict[str, Any]:
         """Sets an override for preconditioning — it should default to empty if no override is used."""
-        return await self._parent.set_preconditioning_max(self.vin, on, manual_override)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacSetPreconditioningMaxAction=HvacSetPreconditioningMaxAction(
+                        on=on,
+                        manual_override=manual_override,
+                        # manual_override_mode
+                    )
+                )
+            )
+        )
 
     async def set_scheduled_charging(self, enable: bool, time: int) -> dict[str, Any]:
         """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
-        return await self._parent.set_scheduled_charging(self.vin, enable, time)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    scheduledChargingAction=ScheduledChargingAction(
+                        enable=enable, charging_time=time
+                    )
+                )
+            )
+        )
 
     async def set_scheduled_departure(
         self,
@@ -756,62 +832,153 @@ class VehicleSigned(VehicleSpecific):
         end_off_peak_time: int = 0,
     ) -> dict[str, Any]:
         """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
-        return await self._parent.set_scheduled_departure(
-            self.vin,
-            enable,
-            preconditioning_enabled,
-            preconditioning_weekdays_only,
-            departure_time,
-            off_peak_charging_enabled,
-            off_peak_charging_weekdays_only,
-            end_off_peak_time,
+
+        if preconditioning_weekdays_only:
+            preconditioning_times = PreconditioningTimes(weekdays=Void)
+        else:
+            preconditioning_times = PreconditioningTimes(all_week=Void)
+
+        if off_peak_charging_weekdays_only:
+            off_peak_charging_times = OffPeakChargingTimes(weekdays=Void)
+        else:
+            off_peak_charging_times = OffPeakChargingTimes(all_week=Void)
+
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    scheduledDepartureAction=ScheduledDepartureAction(
+                        enabled=enable,
+                        departure_time=departure_time,
+                        preconditioning_times=preconditioning_times,
+                        off_peak_charging_times=off_peak_charging_times,
+                        off_peak_hours_end_time=end_off_peak_time,
+                    )
+                )
+            )
         )
 
     async def set_sentry_mode(self, on: bool) -> dict[str, Any]:
         """Enables and disables Sentry Mode. Sentry Mode allows customers to watch the vehicle cameras live from the mobile app, as well as record sentry events."""
-        return await self._parent.set_sentry_mode(self.vin, on)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlSetSentryModeAction=VehicleControlSetSentryModeAction(
+                        on=on
+                    )
+                )
+            )
+        )
 
     async def set_temps(
         self, driver_temp: float, passenger_temp: float
     ) -> dict[str, Any]:
         """Sets the driver and/or passenger-side cabin temperature (and other zones if sync is enabled)."""
-        return await self._parent.set_temps(self.vin, driver_temp, passenger_temp)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacTemperatureAdjustmentAction=HvacTemperatureAdjustmentAction(
+                        driver_temp_celsius=driver_temp,
+                        passenger_temp_celsius=passenger_temp,
+                    )
+                )
+            )
+        )
 
     async def set_valet_mode(self, on: bool, password: str | int) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
-        return await self._parent.set_valet_mode(self.vin, on, password)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlSetValetModeAction=VehicleControlSetValetModeAction(
+                        on=on, password=str(password)
+                    )
+                )
+            )
+        )
 
     async def set_vehicle_name(self, vehicle_name: str) -> dict[str, Any]:
         """Changes the name of a vehicle. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
-        return await self._parent.set_vehicle_name(self.vin, vehicle_name)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setVehicleNameAction=SetVehicleNameAction(vehicle_name=vehicle_name)
+                )
+            )
+        )
 
     async def speed_limit_activate(self, pin: str | int) -> dict[str, Any]:
         """Activates Speed Limit Mode with a four-digit PIN."""
-        return await self._parent.speed_limit_activate(self.vin, pin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingSpeedLimitAction=DrivingSpeedLimitAction(
+                        activate=True, pin=str(pin)
+                    )
+                )
+            )
+        )
 
     async def speed_limit_clear_pin(self, pin: str | int) -> dict[str, Any]:
         """Deactivates Speed Limit Mode and resets the associated PIN."""
-        return await self._parent.speed_limit_clear_pin(self.vin, pin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingClearSpeedLimitPinAction=DrivingClearSpeedLimitPinAction(
+                        pin=str(pin)
+                    )
+                )
+            )
+        )
 
-    async def speed_limit_clear_pin_admin(self) -> dict[str, Any]:
-        """Deactivates Speed Limit Mode and resets the associated PIN for vehicles running firmware versions 2023.38+. This command is only accessible to fleet managers or owners."""
-        return await self._parent.speed_limit_clear_pin_admin(self.vin)
+    # speed_limit_clear_pin_admin doesnt require signing
 
     async def speed_limit_deactivate(self, pin: str | int) -> dict[str, Any]:
         """Deactivates Speed Limit Mode."""
-        return await self._parent.speed_limit_deactivate(self.vin, pin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingSpeedLimitAction=DrivingSpeedLimitAction(
+                        activate=False, pin=str(pin)
+                    )
+                )
+            )
+        )
 
     async def speed_limit_set_limit(self, limit_mph: int) -> dict[str, Any]:
         """Sets the maximum speed allowed when Speed Limit Mode is active."""
-        return await self._parent.speed_limit_set_limit(self.vin, limit_mph)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingSetSpeedLimitAction=DrivingSetSpeedLimitAction(
+                        limit_mph=limit_mph
+                    )
+                )
+            )
+        )
 
     async def sun_roof_control(self, state: str | SunRoofCommand) -> dict[str, Any]:
         """Controls the panoramic sunroof on the Model S."""
-        return await self._parent.sun_roof_control(self.vin, state)
+        if isinstance(state, SunRoofCommand):
+            state = state.value
+        match state:
+            case "vent":
+                action = VehicleControlSunroofOpenCloseAction(vent=Void())
+            case "open":
+                action = VehicleControlSunroofOpenCloseAction(open=Void())
+            case "close":
+                action = VehicleControlSunroofOpenCloseAction(close=Void())
 
-    async def take_drivenote(self, note: str) -> dict[str, Any]:
-        """Records a drive note. The note parameter is truncated to 80 characters in length."""
-        return await self._parent.take_drivenote(self.vin, note)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlSunroofOpenCloseAction=VehicleControlSunroofOpenCloseAction(
+                        state=state
+                    )
+                )
+            )
+        )
+
+    # take_drivenote doesnt require signing
 
     async def trigger_homelink(
         self,
@@ -820,16 +987,19 @@ class VehicleSigned(VehicleSpecific):
         lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
-        return await self._parent.trigger_homelink(
-            self.vin,
-            token,
-            lat,
-            lon,
+        action = VehicleControlTriggerHomelinkAction()
+        if lat is not None and lon is not None:
+            action.location = LatLong(latitude=lat, longitude=lon)
+        if token is not None:
+            action.token = token
+
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(vehicleControlTriggerHomelinkAction=action)
+            )
         )
 
-    async def upcoming_calendar_entries(self, calendar_data: str) -> dict[str, Any]:
-        """Upcoming calendar entries stored on the vehicle."""
-        return await self._parent.upcoming_calendar_entries(self.vin, calendar_data)
+    # upcoming_calendar_entries doesnt require signing
 
     async def window_control(
         self,
@@ -838,21 +1008,21 @@ class VehicleSigned(VehicleSpecific):
         lon: float | None = None,
     ) -> dict[str, Any]:
         """Control the windows of a parked vehicle. Supported commands: vent and close. When closing, specify lat and lon of user to ensure they are within range of vehicle (unless this is an M3 platform vehicle)."""
-        return await self._parent.window_control(self.vin, command, lat, lon)
+        if isinstance(command, WindowCommand):
+            command = command.value
 
-    async def drivers(self) -> dict[str, Any]:
-        """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""
-        return await self._parent.drivers(self.vin)
+        if command == "vent":
+            action = VehicleControlWindowAction(vent=Void())
+        elif command == "close":
+            action = VehicleControlWindowAction(close=Void())
 
-    async def drivers_remove(
-        self, share_user_id: str | int | None = None
-    ) -> dict[str, Any]:
-        """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
-        return await self._parent.drivers_remove(self.vin, share_user_id)
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(vehicleControlWindowAction=action))
+        )
 
-    async def mobile_enabled(self) -> dict[str, Any]:
-        """Returns whether or not mobile access is enabled for the vehicle."""
-        return await self._parent.mobile_enabled(self.vin)
+    # drivers doesnt require signing
+    # drivers_remove doesnt require signing
+    # mobile_enabled
 
     async def nearby_charging_sites(
         self,
@@ -861,54 +1031,31 @@ class VehicleSigned(VehicleSpecific):
         detail: bool | None = None,
     ) -> dict[str, Any]:
         """Returns the charging sites near the current location of the vehicle."""
-        return await self._parent.nearby_charging_sites(self.vin, count, radius, detail)
+        action = GetNearbyChargingSites()
+        if count is not None:
+            action.count = count
+        if radius is not None:
+            action.radius = radius
+        if detail is not None:
+            action.include_meta_data = detail
 
-    async def options(self) -> dict[str, Any]:
-        """Returns vehicle option details."""
-        return await self._parent.options(self.vin)
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(getNearbyChargingSites=action))
+        )
 
-    async def recent_alerts(self) -> dict[str, Any]:
-        """List of recent alerts"""
-        return await self._parent.recent_alerts(self.vin)
-
-    async def release_notes(
-        self,
-        staged: bool | None = None,
-        language: int | None = None,
-    ) -> dict[str, Any]:
-        """Returns firmware release notes."""
-        return await self._parent.release_notes(self.vin, staged, language)
-
-    async def service_data(self) -> dict[str, Any]:
-        """Returns service data."""
-        return await self._parent.service_data(self.vin)
-
-    async def share_invites(self) -> dict[str, Any]:
-        """Returns the share invites for a vehicle."""
-        return await self._parent.share_invites(self.vin)
-
-    async def share_invites_create(self) -> dict[str, Any]:
-        """Creates a share invite for a vehicle."""
-        return await self._parent.share_invites_create(self.vin)
-
-    async def share_invites_redeem(self, code: str) -> dict[str, Any]:
-        """Redeems a share invite."""
-        return await self._parent.share_invites_redeem(code)
-
-    async def share_invites_revoke(self, id: str) -> dict[str, Any]:
-        """Revokes a share invite."""
-        return await self._parent.share_invites_revoke(self.vin, id)
-
+    # options doesnt require signing
+    # recent_alerts doesnt require signing
+    # release_notes doesnt require signing
+    # service_data doesnt require signing
+    # share_invites doesnt require signing
+    # share_invites_create doesnt require signing
+    # share_invites_redeem doesnt require signing
+    # share_invites_revoke doesnt require signing
     # signed command doesnt require signing
-
     # vehicle doesnt require signing
-
     # vehicle_data doesnt require signing
-
     # wake_up doesnt require signing
-
     # warranty_details doesnt require signing
-
     # fleet_status doesnt require signing
 
     async def fleet_telemetry_config_create(
@@ -918,5 +1065,4 @@ class VehicleSigned(VehicleSpecific):
         raise NotImplementedError
 
     # fleet_telemetry_config_get doesnt require signing
-
     # fleet_telemetry_config_delete doesnt require signing
