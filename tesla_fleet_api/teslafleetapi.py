@@ -30,7 +30,7 @@ class TeslaFleetApi:
     session: aiohttp.ClientSession
     headers: dict[str, str]
     refresh_hook: Awaitable | None = None
-    _private_key: ec.EllipticCurvePrivateKey | None = None
+    private_key: ec.EllipticCurvePrivateKey | None = None
 
     def __init__(
         self,
@@ -164,11 +164,11 @@ class TeslaFleetApi:
     async def get_private_key(self, path: str = "private_key.pem") -> ec.EllipticCurvePrivateKey:
         """Get or create the private key."""
         if not exists(path):
-            self._private_key = ec.generate_private_key(
+            self.private_key = ec.generate_private_key(
                 ec.SECP256R1(), default_backend()
             )
             # save the key
-            pem = self._private_key.private_bytes(
+            pem = self.private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption(),
@@ -189,5 +189,10 @@ class TeslaFleetApi:
 
             if not isinstance(value, ec.EllipticCurvePrivateKey):
                 raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
-            self._private_key = value
-        return self._private_key
+            self.private_key = value
+        return self.private_key
+
+    @property
+    def has_private_key(self) -> bool:
+        """Check if the private key has been set."""
+        return self.private_key is not None

@@ -154,7 +154,7 @@ class Session:
 class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
-    _private_key: ec.EllipticCurvePrivateKey
+    private_key: ec.EllipticCurvePrivateKey
     _public_key: bytes
     _from_destination: bytes
     _sessions: dict[int, Session]
@@ -164,13 +164,13 @@ class VehicleSigned(VehicleSpecific):
     ):
         super().__init__(parent, vin)
         if key:
-            self._private_key = key
-        elif parent._parent._private_key:
-            self._private_key = parent._parent._private_key
+            self.private_key = key
+        elif parent._parent.private_key:
+            self.private_key = parent._parent.private_key
         else:
             raise ValueError("No private key.")
 
-        self._public_key = self._private_key.public_key().public_bytes(
+        self._public_key = self.private_key.public_key().public_bytes(
             encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
         )
         self._from_destination = randbytes(16)
@@ -200,7 +200,7 @@ class VehicleSigned(VehicleSpecific):
         vehicle_public_key = info.publicKey
 
         # Derive shared key from private key _key and vehicle public key
-        shared = self._private_key.exchange(
+        shared = self.private_key.exchange(
             ec.ECDH(),
             ec.EllipticCurvePublicKey.from_encoded_point(
                 ec.SECP256R1(), vehicle_public_key
