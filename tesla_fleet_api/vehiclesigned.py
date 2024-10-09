@@ -554,36 +554,103 @@ class VehicleSigned(VehicleSpecific):
         self, auto_seat_position: int, auto_climate_on: bool
     ) -> dict[str, Any]:
         """Sets automatic seat heating and cooling."""
-        return await self._parent.remote_auto_seat_climate_request(
-            self.vin, auto_seat_position, auto_climate_on
+        # AutoSeatPosition_FrontLeft = 1;
+        # AutoSeatPosition_FrontRight = 2;
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    autoSeatClimateAction=AutoSeatClimateAction(AutoSeatClimateAction.CarSeat(
+                        on=auto_climate_on,
+                        seat_position=auto_seat_position
+                    ))
+                )
+            )
         )
 
-    async def remote_auto_steering_wheel_heat_climate_request(
-        self, on: bool
-    ) -> dict[str, Any]:
-        """Sets automatic steering wheel heating on/off."""
-        return await self._parent.remote_auto_steering_wheel_heat_climate_request(
-            self.vin, on
-        )
+    # remote_auto_steering_wheel_heat_climate_request has no protobuf
 
-    async def remote_boombox(self, sound: int) -> dict[str, Any]:
-        """Plays a sound through the vehicle external speaker."""
-        return await self._parent.remote_boombox(self.vin, sound)
+    # remote_boombox not implemented
 
     async def remote_seat_cooler_request(
         self, seat_position: int, seat_cooler_level: int
     ) -> dict[str, Any]:
         """Sets seat cooling."""
-        return await self._parent.remote_seat_cooler_request(
-            self.vin, seat_position, seat_cooler_level
+        # HvacSeatCoolerLevel_Unknown = 0;
+        # HvacSeatCoolerLevel_Off = 1;
+        # HvacSeatCoolerLevel_Low = 2;
+        # HvacSeatCoolerLevel_Med = 3;
+        # HvacSeatCoolerLevel_High = 4;
+        # HvacSeatCoolerPosition_Unknown = 0;
+        # HvacSeatCoolerPosition_FrontLeft = 1;
+        # HvacSeatCoolerPosition_FrontRight = 2;
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacSeatCoolerActions=HvacSeatCoolerActions(HvacSeatCoolerActions.HvacSeatCoolerAction(
+                        seat_cooler_level=seat_cooler_level+1,
+                        seat_position=seat_position
+                    ))
+                )
+            )
         )
 
     async def remote_seat_heater_request(
         self, seat_position: int, seat_heater_level: int
     ) -> dict[str, Any]:
         """Sets seat heating."""
-        return await self._parent.remote_seat_heater_request(
-            self.vin, seat_position, seat_heater_level
+        # HvacSeatCoolerLevel_Unknown = 0;
+        # HvacSeatCoolerLevel_Off = 1;
+        # HvacSeatCoolerLevel_Low = 2;
+        # HvacSeatCoolerLevel_Med = 3;
+        # HvacSeatCoolerLevel_High = 4;
+        # Void CAR_SEAT_UNKNOWN = 6;
+        # Void CAR_SEAT_FRONT_LEFT = 7;
+        # Void CAR_SEAT_FRONT_RIGHT = 8;
+        # Void CAR_SEAT_REAR_LEFT = 9;
+        # Void CAR_SEAT_REAR_LEFT_BACK = 10;
+        # Void CAR_SEAT_REAR_CENTER = 11;
+        # Void CAR_SEAT_REAR_RIGHT = 12;
+        # Void CAR_SEAT_REAR_RIGHT_BACK = 13;
+        # Void CAR_SEAT_THIRD_ROW_LEFT = 14;
+        # Void CAR_SEAT_THIRD_ROW_RIGHT = 15;
+
+
+        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction()
+        match seat_position:
+            case 0:
+                heater_action.CAR_SEAT_FRONT_LEFT = Void()
+            case 1:
+                heater_action.CAR_SEAT_FRONT_RIGHT = Void()
+            case 2:
+                heater_action.CAR_SEAT_REAR_LEFT = Void()
+            case 3:
+                heater_action.CAR_SEAT_REAR_LEFT_BACK = Void()
+            case 4:
+                heater_action.CAR_SEAT_REAR_CENTER = Void()
+            case 5:
+                heater_action.CAR_SEAT_REAR_RIGHT = Void()
+            case 6:
+                heater_action.CAR_SEAT_REAR_RIGHT_BACK = Void()
+            case 7:
+                heater_action.CAR_SEAT_THIRD_ROW_LEFT = Void()
+            case 8:
+                heater_action.CAR_SEAT_THIRD_ROW_RIGHT = Void()
+        match seat_heater_level:
+            case 0:
+                heater_action.SEAT_HEATER_OFF = Void()
+            case 1:
+                heater_action.SEAT_HEATER_LOW = Void()
+            case 2:
+                heater_action.SEAT_HEATER_MEDIUM = Void()
+            case 3:
+                heater_action.SEAT_HEATER_HIGH = Void()
+
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacSeatHeaterActions=HvacSeatHeaterActions(heater_action)
+                )
+            )
         )
 
     async def remote_start_drive(self) -> dict[str, Any]:
@@ -596,21 +663,37 @@ class VehicleSigned(VehicleSpecific):
         self, level: int
     ) -> dict[str, Any]:
         """Sets steering wheel heat level."""
-        return await self._parent.remote_steering_wheel_heat_level_request(
-            self.vin, level
-        )
+        raise NotImplementedError()
 
     async def remote_steering_wheel_heater_request(self, on: bool) -> dict[str, Any]:
         """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
-        return await self._parent.remote_steering_wheel_heater_request(self.vin, on)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacSteeringWheelHeaterAction=HvacSteeringWheelHeaterAction(power_on=on)
+                )
+            )
+        )
 
     async def reset_pin_to_drive_pin(self) -> dict[str, Any]:
         """Removes PIN to Drive. Requires the car to be in Pin to Drive mode and not in Valet mode. Note that this only works if PIN to Drive is not active. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
-        return await self._parent.reset_pin_to_drive_pin(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlResetPinToDriveAction=VehicleControlResetPinToDriveAction()
+                )
+            )
+        )
 
     async def reset_valet_pin(self) -> dict[str, Any]:
         """Removes PIN for Valet Mode."""
-        return await self._parent.reset_valet_pin(self.vin)
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlResetValetPinAction=VehicleControlResetValetPinAction()
+                )
+            )
+        )
 
     async def schedule_software_update(self, offset_sec: int) -> dict[str, Any]:
         """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
