@@ -279,33 +279,11 @@ class VehicleSigned(VehicleSpecific):
             return {"response": {"result": False}}
 
         LOGGER.debug(resp)
+        reason = resp.protobuf_message_as_bytes[8:].decode()
 
-        if domain == DOMAIN_INFOTAINMENT:
-            resp_msg = Action()
-            resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
-            print("INFOTAINMENT RESPONSE", resp_msg)
-        elif domain == DOMAIN_VEHICLE_SECURITY:
-            resp_msg = UnsignedMessage()
-            resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
-            print("VCSEC RESPONSE", resp_msg)
-
-
-        if resp.protobuf_message_as_bytes and (
-            text := resp.protobuf_message_as_bytes.decode()
-        ):
-            LOGGER.warning(text)
-
-            # if domain == DOMAIN_INFOTAINMENT:
-            #    resp_msg = Action()
-            #    resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
-            #    print("INFOTAINMENT RESPONSE", resp_msg)
-            #    #return {"response": {"result": False, "reason": resp_msg}}
-            # elif domain == DOMAIN_VEHICLE_SECURITY:
-            #    resp_msg = UnsignedMessage()
-            #    resp_msg.ParseFromString(resp.protobuf_message_as_bytes)
-            #    print("VCSEC RESPONSE", resp_msg)
-            #    print(resp.protobuf_message_as_bytes.encode())
-            #    #return {"response": {"result": False, "reason": resp_msg}}
+        if reason:
+            LOGGER.error(reason)
+            return {"response": {"result": False, "reason": reason}}
 
         return {"response": {"result": True, "reason": ""}}
 
