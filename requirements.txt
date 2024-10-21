@@ -1,2 +1,3 @@
 aiohttp==3.*
-aiolimiter=1.*
+aiolimiter==1.*
+cryptography==43.*
