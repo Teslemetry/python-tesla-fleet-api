@@ -20,5 +20,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.10",
-    install_requires=["aiohttp", "aiolimiter", "cryptography", "protobuf"],
+    install_requires=["aiohttp", "aiofiles", "aiolimiter", "cryptography", "protobuf"],
 )

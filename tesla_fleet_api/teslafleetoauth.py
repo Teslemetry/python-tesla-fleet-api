@@ -45,7 +45,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         """Get the login URL."""
         if self.redirect_uri is None:
             raise ValueError("Redirect URI is missing")
-        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&prompt=login&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={' '.join(scopes)}&state={state}"
+        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&prompt=login&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={'+'.join(scopes)}&state={state}"
 
     async def get_refresh_token(self, code: str) -> None:
         """Get the refresh token."""

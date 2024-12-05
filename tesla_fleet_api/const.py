@@ -125,6 +125,7 @@ class Scope(StrEnum):
     OFFLINE_ACCESS = "offline_access"
     USER_DATA = "user_data"
     VEHICLE_DEVICE_DATA = "vehicle_device_data"
+    VEHICLE_LOCATION = "vehicle_location"
     VEHICLE_CMDS = "vehicle_cmds"
     VEHICLE_CHARGING_CMDS = "vehicle_charging_cmds"
     ENERGY_DEVICE_DATA = "energy_device_data"
