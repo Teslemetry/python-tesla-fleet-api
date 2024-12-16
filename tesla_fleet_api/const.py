@@ -3,7 +3,7 @@
 from enum import Enum
 import logging
 
-VERSION = "0.8.5"
+VERSION = "1.0.0"
 LOGGER = logging.getLogger(__package__)
 SERVERS = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
@@ -88,9 +88,12 @@ class VehicleDataEndpoint(StrEnum):
     DRIVE_STATE = "drive_state"
     GUI_SETTINGS = "gui_settings"
     LOCATION_DATA = "location_data"
+    CHARGE_SCHEDULE_DATA = "charge_schedule_data"
+    PRECONDITIONING_SCHEDULE_DATA = "preconditioning_schedule_data"
     VEHICLE_CONFIG = "vehicle_config"
     VEHICLE_STATE = "vehicle_state"
     VEHICLE_DATA_COMBO = "vehicle_data_combo"
+
 
 
 class SunRoofCommand(StrEnum):

@@ -1,15 +1,10 @@
+from typing import Any
+
 import aiohttp
 from aiolimiter import AsyncLimiter
-from typing import Any
-from .teslafleetapi import TeslaFleetApi
-from .charging import Charging
-from .energy import Energy
-from .partner import Partner
-from .user import User
-from .vehicle import Vehicle
-from .vehiclespecific import VehicleSpecific
 
-from .const import Method, LOGGER, Scope
+from .const import LOGGER, Method, VehicleDataEndpoint
+from .teslafleetapi import TeslaFleetApi
 
 # Rate limit should be global, even if multiple instances are created
 rate_limit = AsyncLimiter(5, 10)
@@ -100,6 +95,22 @@ class Teslemetry(TeslaFleetApi):
                 f"api/auto/{vin}",
             )
         ).get("response")
+
+    async def vehicle_force_refresh(self, vin: str) -> dict[str, Any]:
+        """Force a refresh of the vehicle data."""
+        return await self._request(
+            Method.GET,
+            f"api/force/{vin}",
+        )
+
+    async def vehicle_data_cached(self, vin: str, endpoints: list[VehicleDataEndpoint | str] | None = None,) -> dict[str, Any]:
+        """Get cached vehicle data."""
+        endpoint_payload = ";".join(endpoints) if endpoints else None
+        return await self._request(
+            Method.GET,
+            f"api/x/vehicles/{vin}/vehicle_data",
+            {"endpoints": endpoint_payload}
+        )
 
     async def _request(
         self,
