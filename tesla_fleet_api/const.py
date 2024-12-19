@@ -187,6 +187,7 @@ class TelemetryField(StrEnum):
     DC_CHARGING_ENERGY_IN = "DCChargingEnergyIn"
     DC_CHARGING_POWER = "DCChargingPower"
     DC_DC_ENABLE = "DCDCEnable"
+    DESTINATION_NAME = "DestinationName"
     DESTINATION_LOCATION = "DestinationLocation"
     DI_AXLE_SPEED_F = "DiAxleSpeedF"
     DI_AXLE_SPEED_R = "DiAxleSpeedR"
