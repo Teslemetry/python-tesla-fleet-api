@@ -195,6 +195,7 @@ class TelemetryField(StrEnum):
     DC_DC_ENABLE = "DCDCEnable"
     DEFROST_FOR_PRECONDITIONING = "DefrostForPreconditioning"
     DEFROST_MODE = "DefrostMode"
+    DESTINATION_NAME = "DestinationName"
     DESTINATION_LOCATION = "DestinationLocation"
     DETAILED_CHARGE_STATE = "DetailedChargeState"
     DI_AXLE_SPEED_F = "DiAxleSpeedF"
