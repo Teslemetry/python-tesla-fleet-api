@@ -9,7 +9,7 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
 
-from .exceptions import MESSAGE_FAULTS
+from .exceptions import MESSAGE_FAULTS, TeslaFleetMessageFaultIncorrectEpoch
 
 from .const import (
     LOGGER,
@@ -23,6 +23,7 @@ from .vehiclespecific import VehicleSpecific
 
 from .pb2.universal_message_pb2 import (
     # OPERATIONSTATUS_OK,
+    MESSAGEFAULT_ERROR_INCORRECT_EPOCH,
     OPERATIONSTATUS_WAIT,
     OPERATIONSTATUS_ERROR,
     DOMAIN_VEHICLE_SECURITY,
@@ -273,7 +274,13 @@ class VehicleSigned(VehicleSpecific):
 
         msg.signature_data.CopyFrom(signature)
 
-        resp = await self._signed_message(msg)
+        try:
+            resp = await self._signed_message(msg)
+        except TeslaFleetMessageFaultIncorrectEpoch:
+            LOGGER.info(f"Session expired, starting new handshake with {Domain.Name(domain)}")
+            await self._handshake(domain)
+            LOGGER.info(f"Handshake complete, retrying message to {Domain.Name(domain)}")
+            return await self._send(domain, command)
 
         if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
             return {"response": {"result": False}}

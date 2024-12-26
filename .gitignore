@@ -1,4 +1,5 @@
 test.py
+test*.py
 register.py
 *.pyc
 __pycache__
