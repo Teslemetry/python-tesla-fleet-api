@@ -234,7 +234,7 @@ class VehicleSigned(VehicleSpecific):
             await self._handshake(DOMAIN_INFOTAINMENT)
         return await self._send(DOMAIN_INFOTAINMENT, command.SerializeToString())
 
-    async def _send(self, domain: int, command: bytes) -> dict[str, Any]:
+    async def _send(self, domain: int, command: bytes, attempt: int = 1) -> dict[str, Any]:
         """Send a signed message to the vehicle."""
         LOGGER.debug(f"Sending to domain {Domain.Name(domain)}")
         msg = RoutableMessage()
@@ -276,11 +276,15 @@ class VehicleSigned(VehicleSpecific):
 
         try:
             resp = await self._signed_message(msg)
-        except TeslaFleetMessageFaultIncorrectEpoch:
+        except TeslaFleetMessageFaultIncorrectEpoch as e:
+            attempt += 1
+            if attempt > 3:
+                # We tried 3 times, give up, raise the error
+                raise e
             LOGGER.info(f"Session expired, starting new handshake with {Domain.Name(domain)}")
             await self._handshake(domain)
             LOGGER.info(f"Handshake complete, retrying message to {Domain.Name(domain)}")
-            return await self._send(domain, command)
+            return await self._send(domain, command, attempt)
 
         if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
             return {"response": {"result": False}}
