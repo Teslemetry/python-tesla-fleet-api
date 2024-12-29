@@ -1,4 +1,6 @@
 from __future__ import annotations
+from time import time
+from locale import getlocale
 from typing import Any, List, TYPE_CHECKING
 from cryptography.hazmat.primitives.asymmetric import ec
 from .const import (
@@ -19,6 +21,7 @@ from .vehiclesigned import VehicleSigned
 if TYPE_CHECKING:
     from .teslafleetapi import TeslaFleetApi
 
+DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_","-")
 
 class Vehicle:
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
@@ -217,13 +220,15 @@ class Vehicle:
         )
 
     async def navigation_request(
-        self, vehicle_tag: str | int, type: str, locale: str, timestamp_ms: str
+        self, vehicle_tag: str | int, value: str, type: str = "share_ext_content_raw", locale: str | None = None, timestamp_ms: int | None = None
     ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
+        timestamp_ms = timestamp_ms or int(time() * 1000)
+        locale = locale or DEFAULT_LOCALE
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{vehicle_tag}/command/navigation_request",
-            json={"type": type, "locale": locale, "timestamp_ms": timestamp_ms},
+            json={"value": {"android.intent.extra.TEXT":value}, "type": type, "locale": locale, "timestamp_ms": timestamp_ms},
         )
 
     async def navigation_sc_request(

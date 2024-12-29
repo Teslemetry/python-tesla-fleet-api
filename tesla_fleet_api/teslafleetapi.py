@@ -137,6 +137,7 @@ class TeslaFleetApi:
                 LOGGER.debug("Retry after: %s", resp.headers.get("Retry-After"))
 
             if not resp.ok:
+                print(await resp.text())
                 await raise_for_status(resp)
 
             if not resp.content_type.lower().startswith("application/json"):

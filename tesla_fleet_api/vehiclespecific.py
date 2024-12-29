@@ -7,12 +7,10 @@ from .const import (
     VehicleDataEndpoint,
     SunRoofCommand,
     WindowCommand,
-    DeviceType,
 )
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
-
 
 class VehicleSpecific:
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle."""
@@ -132,11 +130,11 @@ class VehicleSpecific:
         return await self._parent.navigation_gps_request(self.vin, lat, lon, order)
 
     async def navigation_request(
-        self, type: str, locale: str, timestamp_ms: str
+        self, value: str, type: str = "share_ext_content_raw", locale: str | None = None, timestamp_ms: int | None = None
     ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
         return await self._parent.navigation_request(
-            self.vin, type, locale, timestamp_ms
+            self.vin, value, type, locale, timestamp_ms
         )
 
     async def navigation_sc_request(
