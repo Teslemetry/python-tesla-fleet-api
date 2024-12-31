@@ -613,36 +613,41 @@ class VehicleSigned(VehicleSpecific):
         # Void CAR_SEAT_THIRD_ROW_LEFT = 14;
         # Void CAR_SEAT_THIRD_ROW_RIGHT = 15;
 
-        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction()
+        heater_action_dict = {}
         match seat_position:
             case 0:
-                heater_action.CAR_SEAT_FRONT_LEFT = Void()
+                heater_action_dict["CAR_SEAT_FRONT_LEFT"] = Void()
             case 1:
-                heater_action.CAR_SEAT_FRONT_RIGHT = Void()
+                heater_action_dict["CAR_SEAT_FRONT_RIGHT"] = Void()
             case 2:
-                heater_action.CAR_SEAT_REAR_LEFT = Void()
+                heater_action_dict["CAR_SEAT_REAR_LEFT"] = Void()
             case 3:
-                heater_action.CAR_SEAT_REAR_LEFT_BACK = Void()
+                heater_action_dict["CAR_SEAT_REAR_LEFT_BACK"] = Void()
             case 4:
-                heater_action.CAR_SEAT_REAR_CENTER = Void()
+                heater_action_dict["CAR_SEAT_REAR_CENTER"] = Void()
             case 5:
-                heater_action.CAR_SEAT_REAR_RIGHT = Void()
+                heater_action_dict["CAR_SEAT_REAR_RIGHT"] = Void()
             case 6:
-                heater_action.CAR_SEAT_REAR_RIGHT_BACK = Void()
+                heater_action_dict["CAR_SEAT_REAR_RIGHT_BACK"] = Void()
             case 7:
-                heater_action.CAR_SEAT_THIRD_ROW_LEFT = Void()
+                heater_action_dict["CAR_SEAT_THIRD_ROW_LEFT"] = Void()
             case 8:
-                heater_action.CAR_SEAT_THIRD_ROW_RIGHT = Void()
+                heater_action_dict["CAR_SEAT_THIRD_ROW_RIGHT"] = Void()
+            case _:
+                raise ValueError(f"Invalid seat position: {seat_position}")
         match seat_heater_level:
             case 0:
-                heater_action.SEAT_HEATER_OFF = Void()
+                heater_action_dict["SEAT_HEATER_OFF"] = Void()
             case 1:
-                heater_action.SEAT_HEATER_LOW = Void()
+                heater_action_dict["SEAT_HEATER_LOW"] = Void()
             case 2:
-                heater_action.SEAT_HEATER_MEDIUM = Void()
+                heater_action_dict["SEAT_HEATER_MEDIUM"] = Void()
             case 3:
-                heater_action.SEAT_HEATER_HIGH = Void()
+                heater_action_dict["SEAT_HEATER_HIGH"] = Void()
+            case _:
+                raise ValueError(f"Invalid seat heater level: {seat_heater_level}")
 
+        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction(**heater_action_dict)
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
