@@ -148,6 +148,19 @@ class SubscriptionRequired(TeslaFleetError):  # Teslemetry specific
     status = 402
     key = "subscription_required"
 
+class VehicleSubscriptionRequired(TeslaFleetError):  # Teslemetry specific
+    """Subscription is required in order to use Teslemetry."""
+
+    message = "Vehicle data subscription is required to make this request."
+    status = 402
+    key = "vehicle_subscription_required"
+
+class InsufficientCredits(TeslaFleetError):
+    """Account has insufficient credits to make this request."""
+
+    message = "Account has insufficient command credits to make this request."
+    status = 402
+    key = "insufficient_credits"
 
 class Forbidden(TeslaFleetError):
     """Access to this resource is not authorized, developers should check required Scope."""
@@ -304,21 +317,6 @@ class UnknownFault(TeslaFleetInformationFault):
 
     message = "Unknown fault on signed command."
     code = 1
-
-
-class NotOnWhitelistFault(TeslaFleetInformationFault):
-    """Not on whitelist fault on signed command."""
-
-    message = "Not on whitelist fault on signed command."
-    code = 2
-
-
-class IVSmallerThanExpectedFault(TeslaFleetInformationFault):
-    """IV smaller than expected fault on signed command."""
-
-    message = "IV smaller than expected fault on signed command."
-    code = 3
-
 
 class InvalidTokenFault(TeslaFleetInformationFault):
     """Invalid token fault on signed command."""
@@ -693,8 +691,13 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         # This error does not return a body
         raise OAuthExpired()
     elif resp.status == 402:
-        if error == SubscriptionRequired.key:
-            raise SubscriptionRequired(data)
+        for exception in [
+            SubscriptionRequired,
+            VehicleSubscriptionRequired,
+            InsufficientCredits,
+        ]:
+            if error == exception.key:
+                raise exception(data)
         raise PaymentRequired(data)
     elif resp.status == 403:
         if error == UnsupportedVehicle.key:
