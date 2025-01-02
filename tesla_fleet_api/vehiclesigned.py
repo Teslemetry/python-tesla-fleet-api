@@ -184,9 +184,10 @@ class VehicleSigned(VehicleSpecific):
         resp = RoutableMessage()
         resp.ParseFromString(base64.b64decode(resp_json["response"]))
 
-        LOGGER.error(resp.signedMessageStatus)
-        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_ERROR:
-            raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]
+        if resp.signedMessageStatus:
+            LOGGER.error("Command returned with signedMessageStatus: %s", resp.signedMessageStatus)
+            if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_ERROR:
+                raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]
 
         return resp
 
@@ -289,11 +290,11 @@ class VehicleSigned(VehicleSpecific):
         if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
             return {"response": {"result": False}}
 
-        LOGGER.debug(resp)
+        LOGGER.debug("Command response: %s", resp)
         reason = resp.protobuf_message_as_bytes[8:].decode()
 
         if reason:
-            LOGGER.error(reason)
+            LOGGER.error("Command failed with reason: %s", reason)
             return {"response": {"result": False, "reason": reason}}
 
         return {"response": {"result": True, "reason": ""}}
