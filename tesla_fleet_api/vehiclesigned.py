@@ -1004,7 +1004,10 @@ class VehicleSigned(VehicleSpecific):
         """Turns on HomeLink (used to open and close garage doors)."""
         action = VehicleControlTriggerHomelinkAction()
         if lat is not None and lon is not None:
-            action.location = LatLong(latitude=lat, longitude=lon)
+            location = LatLong()
+            location.latitude = lat
+            location.longitude = lon
+            action.location = location
         if token is not None:
             action.token = token
 
