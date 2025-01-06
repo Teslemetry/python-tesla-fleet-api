@@ -318,6 +318,18 @@ class UnknownFault(TeslaFleetInformationFault):
     message = "Unknown fault on signed command."
     code = 1
 
+class NotOnWhitelistFault(TeslaFleetInformationFault):
+    """Not on whitelist fault on signed command."""
+
+    message = "Not on whitelist fault on signed command."
+    code = 2
+
+class IVSmallerThanExpectedFault(TeslaFleetInformationFault):
+    """IV smaller than expected fault on signed command."""
+
+    message = "IV smaller than expected fault on signed command."
+    code = 3
+
 class InvalidTokenFault(TeslaFleetInformationFault):
     """Invalid token fault on signed command."""
 
