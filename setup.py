@@ -11,7 +11,7 @@ setuptools.setup(
     description="Tesla Fleet API library for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Teslemetry/tesla_fleet_api",
+    url="https://github.com/Teslemetry/python-tesla-fleet-api",
     packages=setuptools.find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
