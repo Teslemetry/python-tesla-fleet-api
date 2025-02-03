@@ -22,14 +22,11 @@ from .const import (
 from .vehiclespecific import VehicleSpecific
 
 from .pb2.universal_message_pb2 import (
-    # OPERATIONSTATUS_OK,
-    MESSAGEFAULT_ERROR_INCORRECT_EPOCH,
     OPERATIONSTATUS_WAIT,
     OPERATIONSTATUS_ERROR,
     DOMAIN_VEHICLE_SECURITY,
     DOMAIN_INFOTAINMENT,
     Domain,
-    # MessageFault_E,
     RoutableMessage,
 )
 from .pb2.car_server_pb2 import (
@@ -215,9 +212,10 @@ class VehicleSigned(VehicleSpecific):
                 ec.SECP256R1(), vehicle_public_key
             ),
         )
+        key = hashlib.sha1(shared).digest()[:16]
 
         self._sessions[domain] = Session(
-            key=hashlib.sha1(shared).digest()[:16],
+            key=key,
             counter=info.counter,
             epoch=info.epoch,
             delta=int(time.time()) - info.clock_time,

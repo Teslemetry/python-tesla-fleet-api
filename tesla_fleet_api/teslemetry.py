@@ -96,11 +96,11 @@ class Teslemetry(TeslaFleetApi):
             )
         ).get("response")
 
-    async def vehicle_force_refresh(self, vin: str) -> dict[str, Any]:
+    async def vehicle_data_refresh(self, vin: str) -> dict[str, Any]:
         """Force a refresh of the vehicle data."""
         return await self._request(
             Method.GET,
-            f"api/force/{vin}",
+            f"api/refresh/{vin}",
         )
 
     async def _request(

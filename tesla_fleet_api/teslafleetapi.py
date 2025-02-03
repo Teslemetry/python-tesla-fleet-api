@@ -106,6 +106,11 @@ class TeslaFleetApi:
             if access_token := await self.refresh_hook():
                 self.access_token = access_token
 
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "X-Library": f"python tesla_fleet_api {VERSION}",
+        }
+
         # Remove None values from params and json
         if params:
             params = {k: v for k, v in params.items() if v is not None}
@@ -113,15 +118,12 @@ class TeslaFleetApi:
         if json:
             json = {k: v for k, v in json.items() if v is not None}
             LOGGER.debug("Body: %s", dumps(json))
+            headers["Content-Type"] = "application/json"
 
         async with self.session.request(
             method,
             f"{self.server}/{path}",
-            headers={
-                "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json",
-                "X-Library": f"python tesla_fleet_api {VERSION}",
-            },
+            headers=headers,
             json=json,
             params=params,
         ) as resp:

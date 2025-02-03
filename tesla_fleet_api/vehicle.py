@@ -44,7 +44,7 @@ class Vehicle:
 
     def pre2021(self, vin: str) -> bool:
         """Checks if a vehicle is a pre-2021 model S or X."""
-        return vin[9] <= "L" and vin[3] in ["S", "X"]
+        return vin[3] in ["S", "X"] and (vin[9] <= "L" or (vin[9] == "M" and vin[7] in ['1', '2', '3', '4']))
 
     async def actuate_trunk(
         self, vehicle_tag: str | int, which_trunk: Trunk | str
