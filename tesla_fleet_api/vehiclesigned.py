@@ -36,7 +36,6 @@ from .pb2.car_server_pb2 import (
     Response,
     Action,
     MediaPlayAction,
-    ResultReason,
     VehicleAction,
     VehicleControlFlashLightsAction,
     ChargingStartStopAction,
@@ -95,8 +94,6 @@ from .pb2.signatures_pb2 import (
     SIGNATURE_TYPE_HMAC_PERSONALIZED,
     TAG_DOMAIN,
     TAG_SIGNATURE_TYPE,
-    KeyIdentity,
-    SignatureData,
     SessionInfo,
     HMAC_Personalized_Signature_Data,
     TAG_PERSONALIZATION,
@@ -107,7 +104,6 @@ from .pb2.signatures_pb2 import (
 )
 from .pb2.common_pb2 import (
     Void,
-    LatLong,
     PreconditioningTimes,
     OffPeakChargingTimes,
     # ChargeSchedule,
@@ -152,7 +148,7 @@ class Session:
 
     def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
-        self.counter += 1
+        self.counter = self.counter+1
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
             counter=self.counter,
@@ -300,7 +296,7 @@ class VehicleSigned(VehicleSpecific):
                 await sleep(2)
             return await self._sign(domain, command, attempt)
 
-        if resp.HasField("signedMessageStatus"):
+        if resp.HasField("protobuf_message_as_bytes"):
             if(resp.from_destination.domain == DOMAIN_VEHICLE_SECURITY):
                 vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
                 LOGGER.debug("VCSEC Response: %s", vcsec)
@@ -308,10 +304,10 @@ class VehicleSigned(VehicleSpecific):
                     LOGGER.error("Command failed with reason: %s", vcsec.nominalError.genericError)
                     return {
                         "response": {
-                        "result": False,
-                        "reason": GenericError_E.Name(vcsec.nominalError.genericError)
+                            "result": False,
+                            "reason": GenericError_E.Name(vcsec.nominalError.genericError)
+                        }
                     }
-                }
                 elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_OK:
                     return {"response": {"result": True, "reason": ""}}
                 elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_WAIT:
@@ -323,7 +319,7 @@ class VehicleSigned(VehicleSpecific):
                         await sleep(2)
                     return await self._sign(domain, command, attempt)
                 elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_ERROR:
-                    if(vcsec.commandStatus.signedMessageStatus):
+                    if(resp.HasField("signedMessageStatus")):
                         raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
 
             elif(resp.from_destination.domain == DOMAIN_INFOTAINMENT):
@@ -345,7 +341,7 @@ class VehicleSigned(VehicleSpecific):
                             }
                         }
 
-        return {"response": {"result": None, "reason": "No Response"}}
+        return {"response": {"result": True, "reason": ""}}
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
@@ -1023,6 +1019,7 @@ class VehicleSigned(VehicleSpecific):
         """Controls the panoramic sunroof on the Model S."""
         if isinstance(state, SunRoofCommand):
             state = state.value
+        action = VehicleControlSunroofOpenCloseAction()
         match state:
             case "vent":
                 action = VehicleControlSunroofOpenCloseAction(vent=Void())
@@ -1034,9 +1031,7 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    vehicleControlSunroofOpenCloseAction=VehicleControlSunroofOpenCloseAction(
-                        state=state
-                    )
+                    vehicleControlSunroofOpenCloseAction=action
                 )
             )
         )
@@ -1052,10 +1047,8 @@ class VehicleSigned(VehicleSpecific):
         """Turns on HomeLink (used to open and close garage doors)."""
         action = VehicleControlTriggerHomelinkAction()
         if lat is not None and lon is not None:
-            location = LatLong()
-            location.latitude = lat
-            location.longitude = lon
-            action.location = location
+            action.location.latitude = lat
+            action.location.longitude = lon
         if token is not None:
             action.token = token
 
