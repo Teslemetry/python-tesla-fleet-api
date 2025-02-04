@@ -1,0 +1,17 @@
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from google.protobuf import descriptor as _descriptor
+from typing import ClassVar as _ClassVar
+DESCRIPTOR: _descriptor.FileDescriptor
+
+class ChargeOnSolarNoChargeReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    CHARGE_ON_SOLAR_NO_CHARGE_REASON_INVALID: _ClassVar[ChargeOnSolarNoChargeReason]
+    CHARGE_ON_SOLAR_NO_CHARGE_REASON_POWERWALL_CHARGE_PRIORITY: _ClassVar[ChargeOnSolarNoChargeReason]
+    CHARGE_ON_SOLAR_NO_CHARGE_REASON_INSUFFICIENT_SOLAR: _ClassVar[ChargeOnSolarNoChargeReason]
+    CHARGE_ON_SOLAR_NO_CHARGE_REASON_GRID_EXPORT_PRIORITY: _ClassVar[ChargeOnSolarNoChargeReason]
+    CHARGE_ON_SOLAR_NO_CHARGE_REASON_ALTERNATE_VEHICLE_CHARGE_PRIORITY: _ClassVar[ChargeOnSolarNoChargeReason]
+CHARGE_ON_SOLAR_NO_CHARGE_REASON_INVALID: ChargeOnSolarNoChargeReason
+CHARGE_ON_SOLAR_NO_CHARGE_REASON_POWERWALL_CHARGE_PRIORITY: ChargeOnSolarNoChargeReason
+CHARGE_ON_SOLAR_NO_CHARGE_REASON_INSUFFICIENT_SOLAR: ChargeOnSolarNoChargeReason
+CHARGE_ON_SOLAR_NO_CHARGE_REASON_GRID_EXPORT_PRIORITY: ChargeOnSolarNoChargeReason
+CHARGE_ON_SOLAR_NO_CHARGE_REASON_ALTERNATE_VEHICLE_CHARGE_PRIORITY: ChargeOnSolarNoChargeReason

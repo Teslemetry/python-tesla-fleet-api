@@ -148,6 +148,7 @@ class SubscriptionRequired(TeslaFleetError):  # Teslemetry specific
     status = 402
     key = "subscription_required"
 
+
 class VehicleSubscriptionRequired(TeslaFleetError):  # Teslemetry specific
     """Subscription is required in order to use Teslemetry."""
 
@@ -155,12 +156,14 @@ class VehicleSubscriptionRequired(TeslaFleetError):  # Teslemetry specific
     status = 402
     key = "vehicle_subscription_required"
 
+
 class InsufficientCredits(TeslaFleetError):
     """Account has insufficient credits to make this request."""
 
     message = "Account has insufficient command credits to make this request."
     status = 402
     key = "insufficient_credits"
+
 
 class Forbidden(TeslaFleetError):
     """Access to this resource is not authorized, developers should check required Scope."""
@@ -318,17 +321,20 @@ class UnknownFault(TeslaFleetInformationFault):
     message = "Unknown fault on signed command."
     code = 1
 
+
 class NotOnWhitelistFault(TeslaFleetInformationFault):
     """Not on whitelist fault on signed command."""
 
     message = "Not on whitelist fault on signed command."
     code = 2
 
+
 class IVSmallerThanExpectedFault(TeslaFleetInformationFault):
     """IV smaller than expected fault on signed command."""
 
     message = "IV smaller than expected fault on signed command."
     code = 3
+
 
 class InvalidTokenFault(TeslaFleetInformationFault):
     """Invalid token fault on signed command."""
@@ -473,164 +479,182 @@ class TeslaFleetMessageFault(TeslaFleetError):
 
 
 class TeslaFleetMessageFaultBusy(TeslaFleetMessageFault):
-    """Vehicle is busy"""
+    """Required vehicle subsystem is busy. Try again"""
 
-    message = "Vehicle is busy"
+    message = "Required vehicle subsystem is busy. Try again"
     code = 1
 
 
 class TeslaFleetMessageFaultTimeout(TeslaFleetMessageFault):
-    """Vehicle timed out"""
+    """Vehicle subsystem did not respond. Try again"""
 
-    message = "Vehicle timed out"
+    message = "Vehicle subsystem did not respond. Try again"
     code = 2
 
 
 class TeslaFleetMessageFaultUnknownKeyId(TeslaFleetMessageFault):
-    """Unknown Key ID"""
+    """Vehicle did not recognize the key used to authorize command. Make sure your key is paired with the vehicle"""
 
-    message = "Unknown Key ID"
+    message = "Vehicle did not recognize the key used to authorize command. Make sure your key is paired with the vehicle"
     code = 3
 
 
 class TeslaFleetMessageFaultInactiveKey(TeslaFleetMessageFault):
-    """Inactive Key"""
+    """Key used to authorize command has been disabled"""
 
-    message = "Inactive Key"
+    message = "Key used to authorize command has been disabled"
     code = 4
 
 
 class TeslaFleetMessageFaultInvalidSignature(TeslaFleetMessageFault):
-    """Invalid Signature"""
+    """Command signature/MAC is incorrect. Use included session info to update session and try again"""
 
-    message = "Invalid Signature"
+    message = "Command signature/MAC is incorrect. Use included session info to update session and try again"
     code = 5
 
 
 class TeslaFleetMessageFaultInvalidTokenOrCounter(TeslaFleetMessageFault):
-    """Invalid Token or Counter"""
+    """Command anti-replay counter has been used before. Use included session info to update session and try again"""
 
-    message = "Invalid Token or Counter"
+    message = "Command anti-replay counter has been used before. Use included session info to update session and try again"
     code = 6
 
 
 class TeslaFleetMessageFaultInsufficientPrivileges(TeslaFleetMessageFault):
-    """Insufficient Privileges"""
+    """User is not authorized to execute command. This can be because of the role or because of vehicle state"""
 
-    message = "Insufficient Privileges"
+    message = "User is not authorized to execute command. This can be because of the role or because of vehicle state"
     code = 7
 
 
 class TeslaFleetMessageFaultInvalidDomains(TeslaFleetMessageFault):
-    """Invalid Domains"""
+    """Command was malformed or addressed to an unrecognized vehicle system. May indicate client error or older vehicle firmware"""
 
-    message = "Invalid Domains"
+    message = "Command was malformed or addressed to an unrecognized vehicle system. May indicate client error or older vehicle firmware"
     code = 8
 
 
 class TeslaFleetMessageFaultInvalidCommand(TeslaFleetMessageFault):
-    """Invalid Command"""
+    """Unrecognized command. May indicate client error or unsupported vehicle firmware"""
 
-    message = "Invalid Command"
+    message = "Unrecognized command. May indicate client error or unsupported vehicle firmware"
     code = 9
 
 
 class TeslaFleetMessageFaultDecoding(TeslaFleetMessageFault):
-    """Decoding Error"""
+    """Could not parse command. Indicates client error"""
 
-    message = "Decoding Error"
+    message = "Could not parse command. Indicates client error"
     code = 10
 
 
 class TeslaFleetMessageFaultInternal(TeslaFleetMessageFault):
-    """Internal Error"""
+    """Internal vehicle error. Try again. Most commonly encountered when the vehicle has not finished booting"""
 
-    message = "Internal Error"
+    message = "Internal vehicle error. Try again. Most commonly encountered when the vehicle has not finished booting"
     code = 11
 
 
 class TeslaFleetMessageFaultWrongPersonalization(TeslaFleetMessageFault):
-    """Wrong Personalization"""
+    """Command sent to wrong VIN"""
 
-    message = "Wrong Personalization"
+    message = "Command sent to wrong VIN"
     code = 12
 
 
 class TeslaFleetMessageFaultBadParameter(TeslaFleetMessageFault):
-    """Bad Parameter"""
+    """Command was malformed or used a deprecated parameter"""
 
-    message = "Bad Parameter"
+    message = "Command was malformed or used a deprecated parameter"
     code = 13
 
 
 class TeslaFleetMessageFaultKeychainIsFull(TeslaFleetMessageFault):
-    """Keychain is Full"""
+    """Vehicle's keychain is full. You must delete a key before you can add another"""
 
-    message = "Keychain is Full"
+    message = (
+        "Vehicle's keychain is full. You must delete a key before you can add another"
+    )
     code = 14
 
 
 class TeslaFleetMessageFaultIncorrectEpoch(TeslaFleetMessageFault):
-    """Incorrect Epoch"""
+    """Session ID mismatch. Use included session info to update session and try again"""
 
-    message = "Incorrect Epoch"
+    message = (
+        "Session ID mismatch. Use included session info to update session and try again"
+    )
     code = 15
 
 
 class TeslaFleetMessageFaultIVIncorrectLength(TeslaFleetMessageFault):
-    """IV Incorrect Length"""
+    """Initialization Value length is incorrect (AES-GCM must use 12-byte IVs). Indicates a client programming error"""
 
-    message = "IV Incorrect Length"
+    message = "Initialization Value length is incorrect (AES-GCM must use 12-byte IVs). Indicates a client programming error"
     code = 16
 
 
 class TeslaFleetMessageFaultTimeExpired(TeslaFleetMessageFault):
-    """Time Expired"""
+    """Command expired. Use included session info to determine if clocks have desynchronized and try again"""
 
-    message = "Time Expired"
+    message = "Command expired. Use included session info to determine if clocks have desynchronized and try again"
     code = 17
 
 
 class TeslaFleetMessageFaultNotProvisionedWithIdentity(TeslaFleetMessageFault):
-    """Not Provisioned with Identity"""
+    """Vehicle has not been provisioned with a VIN and may require service"""
 
-    message = "Not Provisioned with Identity"
+    message = "Vehicle has not been provisioned with a VIN and may require service"
     code = 18
 
 
 class TeslaFleetMessageFaultCouldNotHashMetadata(TeslaFleetMessageFault):
-    """Could not Hash Metadata"""
+    """Internal vehicle error"""
 
-    message = "Could not Hash Metadata"
+    message = "Internal vehicle error"
     code = 19
 
 
 class TeslaFleetMessageFaultTimeToLiveTooLong(TeslaFleetMessageFault):
-    """Time to Live Too Long"""
+    """Vehicle rejected command because its expiration time was too far in the future. This is a security precaution"""
 
-    message = "Time to Live Too Long"
+    message = "Vehicle rejected command because its expiration time was too far in the future. This is a security precaution"
     code = 20
 
 
 class TeslaFleetMessageFaultRemoteAccessDisabled(TeslaFleetMessageFault):
-    """Remote Access Disabled"""
+    """The vehicle owner has disabled Mobile access"""
 
-    message = "Remote Access Disabled"
+    message = "The vehicle owner has disabled Mobile access"
     code = 21
 
 
 class TeslaFleetMessageFaultRemoteServiceAccessDisabled(TeslaFleetMessageFault):
-    """Remote Service Access Disabled"""
+    """The command was authorized with a Service key, but the vehicle has not been configured to permit remote service commands"""
 
-    message = "Remote Service Access Disabled"
+    message = "The command was authorized with a Service key, but the vehicle has not been configured to permit remote service commands"
     code = 22
 
 
 class TeslaFleetMessageFaultCommandRequiresAccountCredentials(TeslaFleetMessageFault):
-    """Command Requires Account Credentials"""
+    """The command requires proof of Tesla account credentials but was not sent over a channel that provides this proof. Resend the command using Fleet API"""
 
-    message = "Command Requires Account Credentials"
+    message = "The command requires proof of Tesla account credentials but was not sent over a channel that provides this proof. Resend the command using Fleet API"
     code = 23
+
+
+class TeslaFleetMessageFaultFieldExceedsMTU(TeslaFleetMessageFault):
+    """Client sent a request with a field that exceeds MTU"""
+
+    message = "Client sent a request with a field that exceeds MTU"
+    code = 24
+
+
+class TeslaFleetMessageFaultResponseSizeExceedsMTU(TeslaFleetMessageFault):
+    """Client's request was received, but response size exceeded MTU"""
+
+    message = "Client's request was received, but response size exceeded MTU"
+    code = 25
 
 
 MESSAGE_FAULTS = [
@@ -658,6 +682,175 @@ MESSAGE_FAULTS = [
     TeslaFleetMessageFaultRemoteAccessDisabled,
     TeslaFleetMessageFaultRemoteServiceAccessDisabled,
     TeslaFleetMessageFaultCommandRequiresAccountCredentials,
+    TeslaFleetMessageFaultFieldExceedsMTU,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
+    None,
+    None,
+    None,
+]
+
+class SignedMessageInformationFault(TeslaFleetError):
+    """Vehicle has responded with an error when sending a signed command"""
+
+    message = "Vehicle has responded with an error when sending a signed command"
+
+
+class SignedMessageInformationFaultUnknown(SignedMessageInformationFault):
+    """Unknown fault on signed command."""
+
+    message = "Unknown fault on signed command."
+    code = 1
+
+
+class SignedMessageInformationFaultNotOnWhitelist(SignedMessageInformationFault):
+    """Not on whitelist fault on signed command."""
+
+    message = "Not on whitelist fault on signed command."
+    code = 2
+
+
+class SignedMessageInformationFaultIVSmallerThanExpected(SignedMessageInformationFault):
+    """IV smaller than expected fault on signed command."""
+
+    message = "IV smaller than expected fault on signed command."
+    code = 3
+
+
+class SignedMessageInformationFaultInvalidToken(SignedMessageInformationFault):
+    """Invalid token fault on signed command."""
+
+    message = "Invalid token fault on signed command."
+    code = 4
+
+
+class SignedMessageInformationFaultTokenAndCounterInvalid(SignedMessageInformationFault):
+    """Token and counter invalid fault on signed command."""
+
+    message = "Token and counter invalid fault on signed command."
+    code = 5
+
+
+class SignedMessageInformationFaultAESDecryptAuth(SignedMessageInformationFault):
+    """AES decrypt auth fault on signed command."""
+
+    message = "AES decrypt auth fault on signed command."
+    code = 6
+
+
+class SignedMessageInformationFaultECDSAInput(SignedMessageInformationFault):
+    """ECDSA input fault on signed command."""
+
+    message = "ECDSA input fault on signed command."
+    code = 7
+
+
+class SignedMessageInformationFaultECDSASignature(SignedMessageInformationFault):
+    """ECDSA signature fault on signed command."""
+
+    message = "ECDSA signature fault on signed command."
+    code = 8
+
+
+class SignedMessageInformationFaultLocalEntityStart(SignedMessageInformationFault):
+    """Local entity start fault on signed command."""
+
+    message = "Local entity start fault on signed command."
+    code = 9
+
+
+class SignedMessageInformationFaultLocalEntityResult(SignedMessageInformationFault):
+    """Local entity result fault on signed command."""
+
+    message = "Local entity result fault on signed command."
+    code = 10
+
+
+class SignedMessageInformationFaultCouldNotRetrieveKey(SignedMessageInformationFault):
+    """Could not retrieve key fault on signed command."""
+
+    message = "Could not retrieve key fault on signed command."
+    code = 11
+
+
+class SignedMessageInformationFaultCouldNotRetrieveToken(SignedMessageInformationFault):
+    """Could not retrieve token fault on signed command."""
+
+    message = "Could not retrieve token fault on signed command."
+    code = 12
+
+
+class SignedMessageInformationFaultSignatureTooShort(SignedMessageInformationFault):
+    """Signature too short fault on signed command."""
+
+    message = "Signature too short fault on signed command."
+    code = 13
+
+
+class SignedMessageInformationFaultTokenIsIncorrectLength(SignedMessageInformationFault):
+    """Token is incorrect length fault on signed command."""
+
+    message = "Token is incorrect length fault on signed command."
+    code = 14
+
+
+class SignedMessageInformationFaultIncorrectEpoch(SignedMessageInformationFault):
+    """Incorrect epoch fault on signed command."""
+
+    message = "Incorrect epoch fault on signed command."
+    code = 15
+
+
+class SignedMessageInformationFaultIVIncorrectLength(SignedMessageInformationFault):
+    """IV incorrect length fault on signed command."""
+
+    message = "IV incorrect length fault on signed command."
+    code = 16
+
+
+class SignedMessageInformationFaultTimeExpired(SignedMessageInformationFault):
+    """Time expired fault on signed command."""
+
+    message = "Time expired fault on signed command."
+    code = 17
+
+
+class SignedMessageInformationFaultNotProvisionedWithIdentity(
+    SignedMessageInformationFault
+):
+    """Not provisioned with identity fault on signed command."""
+
+    message = "Not provisioned with identity fault on signed command."
+    code = 18
+
+
+class SignedMessageInformationFaultCouldNotHashMetadata(SignedMessageInformationFault):
+    """Could not hash metadata fault on signed command."""
+
+    message = "Could not hash metadata fault on signed command."
+    code = 19
+
+
+SIGNED_MESSAGE_INFORMATION_FAULTS = [
+    None,
+    SignedMessageInformationFaultUnknown,
+    SignedMessageInformationFaultNotOnWhitelist,
+    SignedMessageInformationFaultIVSmallerThanExpected,
+    SignedMessageInformationFaultInvalidToken,
+    SignedMessageInformationFaultTokenAndCounterInvalid,
+    SignedMessageInformationFaultAESDecryptAuth,
+    SignedMessageInformationFaultECDSAInput,
+    SignedMessageInformationFaultECDSASignature,
+    SignedMessageInformationFaultLocalEntityStart,
+    SignedMessageInformationFaultLocalEntityResult,
+    SignedMessageInformationFaultCouldNotRetrieveKey,
+    SignedMessageInformationFaultCouldNotRetrieveToken,
+    SignedMessageInformationFaultSignatureTooShort,
+    SignedMessageInformationFaultTokenIsIncorrectLength,
+    SignedMessageInformationFaultIncorrectEpoch,
+    SignedMessageInformationFaultIVIncorrectLength,
+    SignedMessageInformationFaultTimeExpired,
+    SignedMessageInformationFaultNotProvisionedWithIdentity,
+    SignedMessageInformationFaultCouldNotHashMetadata,
 ]
 
 

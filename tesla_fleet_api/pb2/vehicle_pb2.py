@@ -1,278 +1,125 @@
 """Generated protocol buffer code."""
-from google.protobuf.internal import enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
-from google.protobuf import message as _message
-from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
+from google.protobuf.internal import builder as _builder
 _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from . import vcsec_pb2 as vcsec__pb2
 from . import common_pb2 as common__pb2
 from . import managed_charging_pb2 as managed__charging__pb2
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rvehicle.proto\x12\tCarServer\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0bvcsec.proto\x1a\x0ccommon.proto\x1a\x16managed_charging.proto"\xad\x05\n\x0bVehicleData\x12,\n\x0ccharge_state\x18\x03 \x01(\x0b2\x16.CarServer.ChargeState\x12.\n\rclimate_state\x18\x04 \x01(\x0b2\x17.CarServer.ClimateState\x12*\n\x0bdrive_state\x18\x05 \x01(\x0b2\x15.CarServer.DriveState\x120\n\x0elocation_state\x18\x08 \x01(\x0b2\x18.CarServer.LocationState\x120\n\x0eclosures_state\x18\t \x01(\x0b2\x18.CarServer.ClosuresState\x12=\n\x15charge_schedule_state\x18\x0f \x01(\x0b2\x1e.CarServer.ChargeScheduleState\x12O\n\x1epreconditioning_schedule_state\x18\x10 \x01(\x0b2\'.CarServer.PreconditioningScheduleState\x129\n\x13tire_pressure_state\x18\x13 \x01(\x0b2\x1c.CarServer.TirePressureState\x12*\n\x0bmedia_state\x18\x14 \x01(\x0b2\x15.CarServer.MediaState\x127\n\x12media_detail_state\x18\x15 \x01(\x0b2\x1b.CarServer.MediaDetailState\x12=\n\x15software_update_state\x18\x17 \x01(\x0b2\x1e.CarServer.SoftwareUpdateState\x12A\n\x17parental_controls_state\x18\x18 \x01(\x0b2 .CarServer.ParentalControlsState"\x8f\x13\n\rClosuresState\x12 \n\x16door_open_driver_front\x18e \x01(\x08H\x00\x12\x1f\n\x15door_open_driver_rear\x18f \x01(\x08H\x01\x12#\n\x19door_open_passenger_front\x18g \x01(\x08H\x02\x12"\n\x18door_open_passenger_rear\x18h \x01(\x08H\x03\x12\x1f\n\x15door_open_trunk_front\x18i \x01(\x08H\x04\x12\x1e\n\x14door_open_trunk_rear\x18j \x01(\x08H\x05\x12"\n\x18window_open_driver_front\x18k \x01(\x08H\x06\x12%\n\x1bwindow_open_passenger_front\x18l \x01(\x08H\x07\x12!\n\x17window_open_driver_rear\x18m \x01(\x08H\x08\x12$\n\x1awindow_open_passenger_rear\x18n \x01(\x08H\t\x12=\n\x0esun_roof_state\x18\x0b \x01(\x0b2%.CarServer.ClosuresState.SunRoofState\x12\x1f\n\x15sun_roof_percent_open\x18p \x01(\x05H\n\x12\x10\n\x06locked\x18q \x01(\x08H\x0b\x12\x19\n\x0fis_user_present\x18r \x01(\x08H\x0c\x12C\n\x14center_display_state\x18\x0f \x01(\x0b2%.CarServer.ClosuresState.DisplayState\x12\x16\n\x0cremote_start\x18t \x01(\x08H\r\x12\x14\n\nvalet_mode\x18u \x01(\x08H\x0e\x12\x1a\n\x10valet_pin_needed\x18v \x01(\x08H\x0f\x12C\n\x11sentry_mode_state\x18\x13 \x01(\x0b2(.CarServer.ClosuresState.SentryModeState\x12\x1f\n\x15sentry_mode_available\x18x \x01(\x08H\x10\x123\n\x10speed_limit_mode\x18\x16 \x01(\x0b2\x19.CarServer.SpeedLimitMode\x12.\n\rtonneau_state\x18\x17 \x01(\x0e2\x15.VCSEC.ClosureState_EH\x11\x12\x1e\n\x14tonneau_percent_open\x18\x18 \x01(\rH\x12\x12\x1b\n\x11tonneau_in_motion\x18\x19 \x01(\x08H\x13\x12.\n\ttimestamp\x18\xd0\x0f \x01(\x0b2\x1a.google.protobuf.Timestamp\x1a\xea\x01\n\x0cSunRoofState\x12"\n\x07Unknown\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12&\n\x0bCalibrating\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12!\n\x06Closed\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1f\n\x04Open\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12!\n\x06Moving\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1f\n\x04Vent\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1a\xf2\x02\n\x0cDisplayState\x12\x1e\n\x03Off\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03Dim\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12$\n\tAccessory\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1d\n\x02On\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12"\n\x07Driving\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12#\n\x08Charging\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1f\n\x04Lock\x18\x07 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12!\n\x06Sentry\x18\x08 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03Dog\x18\t \x01(\x0b2\x0f.CarServer.VoidH\x00\x12(\n\rEntertainment\x18\n \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1a\xe2\x01\n\x0fSentryModeState\x12\x1e\n\x03Off\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1f\n\x04Idle\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Armed\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Aware\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Panic\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Quiet\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04typeB!\n\x1foptional_door_open_driver_frontB \n\x1eoptional_door_open_driver_rearB$\n"optional_door_open_passenger_frontB#\n!optional_door_open_passenger_rearB \n\x1eoptional_door_open_trunk_frontB\x1f\n\x1doptional_door_open_trunk_rearB#\n!optional_window_open_driver_frontB&\n$optional_window_open_passenger_frontB"\n optional_window_open_driver_rearB%\n#optional_window_open_passenger_rearB \n\x1eoptional_sun_roof_percent_openB\x11\n\x0foptional_lockedB\x1a\n\x18optional_is_user_presentB\x17\n\x15optional_remote_startB\x15\n\x13optional_valet_modeB\x1b\n\x19optional_valet_pin_neededB \n\x1eoptional_sentry_mode_availableB\x18\n\x16optional_tonneau_stateB\x1f\n\x1doptional_tonneau_percent_openB\x1c\n\x1aoptional_tonneau_in_motion"\xda\x03\n\x13ChargeScheduleState\x123\n\x10charge_schedules\x18\x01 \x03(\x0b2\x19.CarServer.ChargeSchedule\x12;\n\x16charge_schedule_window\x18\x02 \x01(\x0b2\x19.CarServer.ChargeScheduleH\x00\x12\x17\n\rcharge_buffer\x18\x03 \x01(\x05H\x01\x12"\n\x18max_num_charge_schedules\x18\x04 \x01(\rH\x02\x12\x17\n\rnext_schedule\x18\x05 \x01(\x08H\x03\x12&\n\x1cshow_schedule_complete_state\x18\x06 \x01(\x08H\x04\x12.\n\ttimestamp\x18\xd0\x0f \x01(\x0b2\x1a.google.protobuf.TimestampB!\n\x1foptional_charge_schedule_windowB\x18\n\x16optional_charge_bufferB#\n!optional_max_num_charge_schedulesB\x18\n\x16optional_next_scheduleB\'\n%optional_show_schedule_complete_state"\x8f\x03\n\x1cPreconditioningScheduleState\x12?\n\x16precondition_schedules\x18\x01 \x03(\x0b2\x1f.CarServer.PreconditionSchedule\x12J\n\x1fpreconditioning_schedule_window\x18\x02 \x01(\x0b2\x1f.CarServer.PreconditionScheduleH\x00\x12(\n\x1emax_num_precondition_schedules\x18\x03 \x01(\rH\x01\x12\x17\n\rnext_schedule\x18\x04 \x01(\x08H\x02\x12.\n\ttimestamp\x18\xd0\x0f \x01(\x0b2\x1a.google.protobuf.TimestampB*\n(optional_preconditioning_schedule_windowB)\n\'optional_max_num_precondition_schedulesB\x18\n\x16optional_next_schedule"\x87\x02\n\x0eSpeedLimitMode\x12\x10\n\x06active\x18g \x01(\x08H\x00\x12\x16\n\x0cpin_code_set\x18h \x01(\x08H\x01\x12\x17\n\rmax_limit_mph\x18j \x01(\x02H\x02\x12\x17\n\rmin_limit_mph\x18k \x01(\x02H\x03\x12\x1b\n\x11current_limit_mph\x18l \x01(\x02H\x04B\x11\n\x0foptional_activeB\x17\n\x15optional_pin_code_setB\x18\n\x16optional_max_limit_mphB\x18\n\x16optional_min_limit_mphB\x1c\n\x1aoptional_current_limit_mph"\xc5\x04\n\x18ParentalControlsSettings\x12\x1d\n\x13speed_limit_enabled\x18\x01 \x01(\x08H\x00\x12\x17\n\rmax_limit_mph\x18\x02 \x01(\x02H\x01\x12\x17\n\rmin_limit_mph\x18\x03 \x01(\x02H\x02\x12\x1b\n\x11current_limit_mph\x18\x04 \x01(\x02H\x03\x12$\n\x1achill_acceleration_enabled\x18\x05 \x01(\x08H\x04\x12)\n\x1frequire_safety_settings_enabled\x18\x06 \x01(\x08H\x05\x12\x18\n\x0ecurfew_enabled\x18\x07 \x01(\x08H\x06\x12\x1b\n\x11curfew_start_time\x18\x08 \x01(\x05H\x07\x12\x19\n\x0fcurfew_end_time\x18\t \x01(\x05H\x08B\x1e\n\x1coptional_speed_limit_enabledB\x18\n\x16optional_max_limit_mphB\x18\n\x16optional_min_limit_mphB\x1c\n\x1aoptional_current_limit_mphB%\n#optional_chill_acceleration_enabledB*\n(optional_require_safety_settings_enabledB\x19\n\x17optional_curfew_enabledB\x1c\n\x1aoptional_curfew_start_timeB\x1a\n\x18optional_curfew_end_time"\xa3\x02\n\x15ParentalControlsState\x12-\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12"\n\x18parental_controls_active\x18\x02 \x01(\x08H\x00\x12#\n\x19parental_controls_pin_set\x18\x03 \x01(\x08H\x01\x12G\n\x1aparental_controls_settings\x18\x04 \x01(\x0b2#.CarServer.ParentalControlsSettingsB#\n!optional_parental_controls_activeB$\n"optional_parental_controls_pin_set"\xed\x05\n\x13SoftwareUpdateState\x12C\n\x06status\x18\x01 \x01(\x0b23.CarServer.SoftwareUpdateState.SoftwareUpdateStatus\x12\x1b\n\x11scheduled_time_ms\x18f \x01(\x04H\x00\x12#\n\x19warning_time_remaining_ms\x18g \x01(\x04H\x01\x12\x1f\n\x15expected_duration_sec\x18h \x01(\rH\x02\x12\x17\n\rdownload_perc\x18i \x01(\rH\x03\x12\x16\n\x0cinstall_perc\x18j \x01(\rH\x04\x12\x11\n\x07version\x18k \x01(\tH\x05\x12-\n\ttimestamp\x18l \x01(\x0b2\x1a.google.protobuf.Timestamp\x1a\x8d\x02\n\x14SoftwareUpdateStatus\x12"\n\x07Unknown\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12%\n\nInstalling\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12$\n\tScheduled\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12$\n\tAvailable\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12.\n\x13DownloadingWifiWait\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12&\n\x0bDownloading\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04typeB\x1c\n\x1aoptional_scheduled_time_msB$\n"optional_warning_time_remaining_msB \n\x1eoptional_expected_duration_secB\x18\n\x16optional_download_percB\x17\n\x15optional_install_percB\x12\n\x10optional_version"\x84\x07\n\nDriveState\x12*\n\x0bshift_state\x18\x01 \x01(\x0b2\x15.CarServer.ShiftState\x12\x0f\n\x05speed\x18f \x01(\rH\x00\x12\x0f\n\x05power\x18g \x01(\x05H\x01\x12-\n\ttimestamp\x18\x04 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12*\n odometer_in_hundredths_of_a_mile\x18i \x01(\x05H\x02\x12\x15\n\x0bspeed_float\x18j \x01(\x02H\x03\x12"\n\x18active_route_destination\x18\x07 \x01(\tH\x04\x12)\n\x1factive_route_minutes_to_arrival\x18\x08 \x01(\x02H\x05\x12\'\n\x1dactive_route_miles_to_arrival\x18\t \x01(\x02H\x06\x12,\n"active_route_traffic_minutes_delay\x18\n \x01(\x02H\x07\x12(\n\x1eactive_route_energy_at_arrival\x18\x0b \x01(\x02H\x08\x12\x1b\n\x11last_route_update\x18\x0e \x01(\rH\t\x127\n\x13last_traffic_update\x18\x0f \x01(\x0b2\x1a.google.protobuf.Timestamp\x124\n\x18active_route_coordinates\x18\x0c \x01(\x0b2\x12.CarServer.LatLongB\x10\n\x0eoptional_speedB\x10\n\x0eoptional_powerB+\n)optional_odometer_in_hundredths_of_a_mileB\x16\n\x14optional_speed_floatB#\n!optional_active_route_destinationB*\n(optional_active_route_minutes_to_arrivalB(\n&optional_active_route_miles_to_arrivalB-\n+optional_active_route_traffic_minutes_delayB)\n\'optional_active_route_energy_at_arrivalB\x1c\n\x1aoptional_last_route_update"\xfb<\n\x0bChargeState\x12<\n\x0echarging_state\x18\x01 \x01(\x0b2$.CarServer.ChargeState.ChargingState\x12=\n\x11fast_charger_type\x18\x02 \x01(\x0b2".CarServer.ChargeState.ChargerType\x12?\n\x12fast_charger_brand\x18\x03 \x01(\x0b2#.CarServer.ChargeState.ChargerBrand\x12\x1a\n\x10charge_limit_soc\x18h \x01(\x05H\x00\x12\x1e\n\x14charge_limit_soc_std\x18i \x01(\x05H\x01\x12\x1e\n\x14charge_limit_soc_min\x18j \x01(\x05H\x02\x12\x1e\n\x14charge_limit_soc_max\x18k \x01(\x05H\x03\x12"\n\x18max_range_charge_counter\x18m \x01(\x05H\x04\x12\x1e\n\x14fast_charger_present\x18n \x01(\x08H\x05\x12\x17\n\rbattery_range\x18o \x01(\x02H\x06\x12\x1b\n\x11est_battery_range\x18p \x01(\x02H\x07\x12\x1d\n\x13ideal_battery_range\x18q \x01(\x02H\x08\x12\x17\n\rbattery_level\x18r \x01(\x05H\t\x12\x1e\n\x14usable_battery_level\x18s \x01(\x05H\n\x12\x1d\n\x13charge_energy_added\x18t \x01(\x02H\x0b\x12"\n\x18charge_miles_added_rated\x18u \x01(\x02H\x0c\x12"\n\x18charge_miles_added_ideal\x18v \x01(\x02H\r\x12\x19\n\x0fcharger_voltage\x18w \x01(\x05H\x0e\x12\x1f\n\x15charger_pilot_current\x18x \x01(\x05H\x0f\x12 \n\x16charger_actual_current\x18y \x01(\x05H\x10\x12\x17\n\rcharger_power\x18z \x01(\x05H\x11\x12 \n\x16minutes_to_full_charge\x18{ \x01(\x05H\x12\x12"\n\x17minutes_to_charge_limit\x18\x8e\x01 \x01(\x05H\x13\x12\x17\n\rtrip_charging\x18} \x01(\x08H\x14\x12\x19\n\x0fcharge_rate_mph\x18~ \x01(\x05H\x15\x12\x1f\n\x15charge_port_door_open\x18\x7f \x01(\x08H\x16\x12;\n\x11conn_charge_cable\x18\x1c \x01(\x0b2 .CarServer.ChargeState.CableType\x12(\n\x1dscheduled_charging_start_time\x18\x81\x01 \x01(\x04H\x17\x12%\n\x1ascheduled_charging_pending\x18\x82\x01 \x01(\x08H\x18\x12<\n\x18scheduled_departure_time\x18\x1f \x01(\x0b2\x1a.google.protobuf.Timestamp\x12%\n\x1auser_charge_enable_request\x18\x84\x01 \x01(\x08H\x19\x12 \n\x15charge_enable_request\x18\x85\x01 \x01(\x08H\x1a\x12\x19\n\x0echarger_phases\x18\x86\x01 \x01(\x05H\x1b\x12:\n\x11charge_port_latch\x18# \x01(\x0b2\x1f.CarServer.ChargePortLatchState\x12(\n\x1dcharge_port_cold_weather_mode\x18\x88\x01 \x01(\x08H\x1c\x12!\n\x16charge_current_request\x18\x89\x01 \x01(\x05H\x1d\x12%\n\x1acharge_current_request_max\x18\x8a\x01 \x01(\x05H\x1e\x12"\n\x17managed_charging_active\x18\x8b\x01 \x01(\x08H\x1f\x12)\n\x1emanaged_charging_user_canceled\x18\x8c\x01 \x01(\x08H \x12&\n\x1bmanaged_charging_start_time\x18\x8d\x01 \x01(\x04H!\x12-\n\ttimestamp\x18, \x01(\x0b2\x1a.google.protobuf.Timestamp\x12>\n\x15preconditioning_times\x18- \x01(\x0b2\x1f.CarServer.PreconditioningTimes\x12@\n\x17off_peak_charging_times\x18. \x01(\x0b2\x1f.CarServer.OffPeakChargingTimes\x12"\n\x17off_peak_hours_end_time\x18\x93\x01 \x01(\rH"\x12P\n\x17scheduled_charging_mode\x18\x94\x01 \x01(\x0e2,.CarServer.ChargeState.ScheduledChargingModeH#\x12\x18\n\rcharging_amps\x18\x95\x01 \x01(\x05H$\x120\n%scheduled_charging_start_time_minutes\x18\x96\x01 \x01(\rH%\x12+\n scheduled_departure_time_minutes\x18\x97\x01 \x01(\rH&\x12"\n\x17preconditioning_enabled\x18\x98\x01 \x01(\x08H\'\x12,\n!scheduled_charging_start_time_app\x18\x99\x01 \x01(\x11H(\x12,\n!supercharger_session_trip_planner\x18\x9a\x01 \x01(\x08H)\x12F\n\x11charge_port_color\x18\x9b\x01 \x01(\x0e2(.CarServer.ChargeState.ChargePortColor_EH*\x12 \n\x15charge_rate_mph_float\x18\x9c\x01 \x01(\x02H+\x12H\n\x13charge_limit_reason\x18\x9d\x01 \x01(\x0e2(.CarServer.ChargeState.ChargeLimitReasonH,\x12@\n\x16managed_charging_state\x18\x9e\x01 \x01(\x0b2\x1f.CarServer.ManagedChargingState\x12!\n\x16charge_cable_unlatched\x18\x9f\x01 \x01(\x08H-\x12;\n\x0coutlet_state\x18\xa0\x01 \x01(\x0e2".CarServer.ChargeState.OutletStateH.\x12B\n\x10power_feed_state\x18\xa1\x01 \x01(\x0e2%.CarServer.ChargeState.PowerFeedStateH/\x12\x1b\n\x10outlet_soc_limit\x18\xa2\x01 \x01(\x05H0\x12\x1f\n\x14power_feed_soc_limit\x18\xa3\x01 \x01(\x05H1\x12 \n\x15outlet_time_remaining\x18\xa4\x01 \x01(\x03H2\x12$\n\x19power_feed_time_remaining\x18\xa5\x01 \x01(\x03H3\x12%\n\x1apowershare_feature_allowed\x18\xa6\x01 \x01(\x08H4\x12%\n\x1apowershare_feature_enabled\x18\xa7\x01 \x01(\x08H5\x12\x1d\n\x12powershare_request\x18\xa8\x01 \x01(\x08H6\x12A\n\x0fpowershare_type\x18\xa9\x01 \x01(\x0e2%.CarServer.ChargeState.PowershareTypeH7\x12E\n\x11powershare_status\x18\xaa\x01 \x01(\x0e2\'.CarServer.ChargeState.PowershareStatusH8\x12N\n\x16powershare_stop_reason\x18\xab\x01 \x01(\x0e2+.CarServer.ChargeState.PowershareStopReasonH9\x12+\n powershare_instantaneous_load_kw\x18\xac\x01 \x01(\x02H:\x12,\n!powershare_vehicle_energy_left_hr\x18\xad\x01 \x01(\x05H;\x12\x1f\n\x14powershare_soc_limit\x18\xae\x01 \x01(\x05H<\x12\x1d\n\x12one_time_soc_limit\x18\xaf\x01 \x01(\x05H=\x12,\n\rhome_location\x18\xb0\x01 \x01(\x0b2\x12.CarServer.LatLongH>\x12,\n\rwork_location\x18\xb1\x01 \x01(\x0b2\x12.CarServer.LatLongH?\x12#\n\x18outlet_max_timer_minutes\x18\xb2\x01 \x01(\x05H@\x1a\xb7\x01\n\tCableType\x12\x1e\n\x03SNA\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03IEC\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03SAE\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05GB_AC\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05GB_DC\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1a\xdf\x02\n\x0bChargerType\x12\x1e\n\x03SNA\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\'\n\x0cSupercharger\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12"\n\x07Chademo\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1d\n\x02Gb\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12*\n\x0fACSingleWireCAN\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Combo\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12*\n\x0fMCSingleWireCAN\x18\x07 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Other\x18\x08 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Tesla\x18\t \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1a\xc3\x02\n\rChargingState\x12"\n\x07Unknown\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\'\n\x0cDisconnected\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12"\n\x07NoPower\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12#\n\x08Starting\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12#\n\x08Charging\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12#\n\x08Complete\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12"\n\x07Stopped\x18\x07 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12&\n\x0bCalibrating\x18\x08 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1aX\n\x0cChargerBrand\x12 \n\x05Tesla\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03SNA\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type"z\n\x15ScheduledChargingMode\x12\x1c\n\x18ScheduledChargingModeOff\x10\x00\x12 \n\x1cScheduledChargingModeStartAt\x10\x01\x12!\n\x1dScheduledChargingModeDepartBy\x10\x02"\xc2\x02\n\x11ChargePortColor_E\x12\x16\n\x12ChargePortColorOff\x10\x00\x12\x16\n\x12ChargePortColorRed\x10\x01\x12\x18\n\x14ChargePortColorGreen\x10\x02\x12\x17\n\x13ChargePortColorBlue\x10\x03\x12\x18\n\x14ChargePortColorWhite\x10\x04\x12 \n\x1cChargePortColorFlashingGreen\x10\x05\x12 \n\x1cChargePortColorFlashingAmber\x10\x06\x12\x18\n\x14ChargePortColorAmber\x10\x07\x12\x17\n\x13ChargePortColorRave\x10\x08\x12\x18\n\x14ChargePortColorDebug\x10\t\x12\x1f\n\x1bChargePortColorFlashingBlue\x10\n"\xc3\x01\n\x11ChargeLimitReason\x12\x1c\n\x18ChargeLimitReasonUnknown\x10\x00\x12\x19\n\x15ChargeLimitReasonNone\x10\x01\x12\x19\n\x15ChargeLimitReasonEvse\x10\x02\x12 \n\x1cChargeLimitReasonBattTempLow\x10\x03\x12\x1c\n\x18ChargeLimitReasonHighSoc\x10\x04\x12\x1a\n\x16ChargeLimitReasonCabin\x10\x05"S\n\x0bOutletState\x12\x12\n\x0eOutletStateOff\x10\x00\x12\x1a\n\x16OutletStateCabinAndBed\x10\x01\x12\x14\n\x10OutletStateCabin\x10\x02"_\n\x0ePowerFeedState\x12\x15\n\x11PowerFeedStateOff\x10\x00\x12\x1d\n\x19PowerFeedStateCabinAndBed\x10\x01\x12\x17\n\x13PowerFeedStateCabin\x10\x02"\xd0\x01\n\x10PowershareStatus\x12\x1c\n\x18PowershareStatusInactive\x10\x00\x12\x18\n\x14PowershareStatusInit\x10\x01\x12\x1a\n\x16PowershareStatusActive\x10\x02\x12\x1b\n\x17PowershareStatusStopped\x10\x03\x12\x1f\n\x1bPowershareStatusHandshaking\x10\x04\x12*\n&PowershareStatusActiveReconnectingSoon\x10\x05"X\n\x0ePowershareType\x12\x16\n\x12PowershareTypeNone\x10\x00\x12\x16\n\x12PowershareTypeLoad\x10\x01\x12\x16\n\x12PowershareTypeHome\x10\x02"\x81\x02\n\x14PowershareStopReason\x12\x1c\n\x18PowershareStopReasonNone\x10\x00\x12!\n\x1dPowershareStopReasonSOCTooLow\x10\x01\x12\x1d\n\x19PowershareStopReasonRetry\x10\x02\x12\x1d\n\x19PowershareStopReasonFault\x10\x03\x12\x1c\n\x18PowershareStopReasonUser\x10\x04\x12$\n PowershareStopReasonReconnecting\x10\x05\x12&\n"PowershareStopReasonAuthentication\x10\x06B\x1b\n\x19optional_charge_limit_socB\x1f\n\x1doptional_charge_limit_soc_stdB\x1f\n\x1doptional_charge_limit_soc_minB\x1f\n\x1doptional_charge_limit_soc_maxB#\n!optional_max_range_charge_counterB\x1f\n\x1doptional_fast_charger_presentB\x18\n\x16optional_battery_rangeB\x1c\n\x1aoptional_est_battery_rangeB\x1e\n\x1coptional_ideal_battery_rangeB\x18\n\x16optional_battery_levelB\x1f\n\x1doptional_usable_battery_levelB\x1e\n\x1coptional_charge_energy_addedB#\n!optional_charge_miles_added_ratedB#\n!optional_charge_miles_added_idealB\x1a\n\x18optional_charger_voltageB \n\x1eoptional_charger_pilot_currentB!\n\x1foptional_charger_actual_currentB\x18\n\x16optional_charger_powerB!\n\x1foptional_minutes_to_full_chargeB"\n optional_minutes_to_charge_limitB\x18\n\x16optional_trip_chargingB\x1a\n\x18optional_charge_rate_mphB \n\x1eoptional_charge_port_door_openB(\n&optional_scheduled_charging_start_timeB%\n#optional_scheduled_charging_pendingB%\n#optional_user_charge_enable_requestB \n\x1eoptional_charge_enable_requestB\x19\n\x17optional_charger_phasesB(\n&optional_charge_port_cold_weather_modeB!\n\x1foptional_charge_current_requestB%\n#optional_charge_current_request_maxB"\n optional_managed_charging_activeB)\n\'optional_managed_charging_user_canceledB&\n$optional_managed_charging_start_timeB"\n optional_off_peak_hours_end_timeB"\n optional_scheduled_charging_modeB\x18\n\x16optional_charging_ampsB0\n.optional_scheduled_charging_start_time_minutesB+\n)optional_scheduled_departure_time_minutesB"\n optional_preconditioning_enabledB,\n*optional_scheduled_charging_start_time_appB,\n*optional_supercharger_session_trip_plannerB\x1c\n\x1aoptional_charge_port_colorB \n\x1eoptional_charge_rate_mph_floatB\x1e\n\x1coptional_charge_limit_reasonB!\n\x1foptional_charge_cable_unlatchedB\x17\n\x15optional_outlet_stateB\x1b\n\x19optional_power_feed_stateB\x19\n\x17option_outlet_soc_limitB\x1d\n\x1boption_power_feed_soc_limitB\x1e\n\x1coption_outlet_time_remainingB"\n option_power_feed_time_remainingB%\n#optional_powershare_feature_allowedB%\n#optional_powershare_feature_enabledB\x1d\n\x1boptional_powershare_requestB\x1a\n\x18optional_powershare_typeB\x1c\n\x1aoptional_powershare_statusB!\n\x1foptional_powershare_stop_reasonB+\n)optional_powershare_instantaneous_load_kwB,\n*optional_powershare_vehicle_energy_left_hrB\x1f\n\x1doptional_powershare_soc_limitB\x1d\n\x1boptional_one_time_soc_limitB\x18\n\x16optional_home_locationB\x18\n\x16optional_work_locationB#\n!optional_outlet_max_timer_minutesJ\x04\x08\x08\x10\tJ\x04\x08*\x10+J\x04\x08+\x10,"\xaf\x02\n\x14ManagedChargingState\x12<\n\x15charge_on_solar_state\x18\x01 \x01(\x0b2\x1d.CarServer.ChargeOnSolarState\x12%\n\x1bcharge_on_solar_gateway_din\x18\x02 \x01(\tH\x00\x12!\n\x17tesla_electric_asset_id\x18\x03 \x01(\tH\x01\x12 \n\x16minutes_to_lower_limit\x18\x04 \x01(\x05H\x02B&\n$optional_charge_on_solar_gateway_dinB"\n optional_tesla_electric_asset_idB!\n\x1foptional_minutes_to_lower_limit"\xe7\x04\n\x12ChargeOnSolarState\x12>\n\x0bnot_allowed\x18\x01 \x01(\x0b2\'.CarServer.ChargeOnSolarStateNotAllowedH\x00\x12Q\n\x15no_charge_recommended\x18\x02 \x01(\x0b20.CarServer.ChargeOnSolarStateNoChargeRecommendedH\x00\x12V\n\x18charging_on_excess_solar\x18\x03 \x01(\x0b22.CarServer.ChargeOnSolarStateChargingOnExcessSolarH\x00\x12O\n\x14charging_on_anything\x18\x04 \x01(\x0b2/.CarServer.ChargeOnSolarStateChargingOnAnythingH\x00\x12B\n\ruser_disabled\x18\x06 \x01(\x0b2).CarServer.ChargeOnSolarStateUserDisabledH\x00\x12K\n\x12waiting_for_server\x18\x07 \x01(\x0b2-.CarServer.ChargeOnSolarStateWaitingForServerH\x00\x123\n\x05error\x18\x08 \x01(\x0b2".CarServer.ChargeOnSolarStateErrorH\x00\x12@\n\x0cuser_stopped\x18\t \x01(\x0b2(.CarServer.ChargeOnSolarStateUserStoppedH\x00B\x07\n\x05stateJ\x04\x08\x05\x10\x06"\x1e\n\x1cChargeOnSolarStateNotAllowed"e\n%ChargeOnSolarStateNoChargeRecommended\x12<\n\x06reason\x18\x01 \x01(\x0e2,.ManagedCharging.ChargeOnSolarNoChargeReason")\n\'ChargeOnSolarStateChargingOnExcessSolar"&\n$ChargeOnSolarStateChargingOnAnything" \n\x1eChargeOnSolarStateUserDisabled"$\n"ChargeOnSolarStateWaitingForServer"\x19\n\x17ChargeOnSolarStateError"\x1f\n\x1dChargeOnSolarStateUserStopped"\xaa\t\n\rLocationState\x12\x12\n\x08latitude\x18e \x01(\x02H\x00\x12\x13\n\tlongitude\x18f \x01(\x02H\x01\x12\x11\n\x07heading\x18g \x01(\rH\x02\x12\x13\n\tgps_as_of\x18h \x01(\x04H\x03\x12#\n\x19native_location_supported\x18i \x01(\x08H\x04\x12\x19\n\x0fnative_latitude\x18j \x01(\x02H\x05\x12\x1a\n\x10native_longitude\x18k \x01(\x02H\x06\x12?\n\x0bnative_type\x18\x08 \x01(\x0b2*.CarServer.LocationState.GPSCoordinateType\x12\x1c\n\x12corrected_latitude\x18m \x01(\x02H\x07\x12\x1d\n\x13corrected_longitude\x18n \x01(\x02H\x08\x12-\n\ttimestamp\x18\x0b \x01(\x0b2\x1a.google.protobuf.Timestamp\x12\x19\n\x0fhomelink_nearby\x18p \x01(\x08H\t\x12\x17\n\rlocation_name\x18q \x01(\tH\n\x12\x16\n\x0cgeo_latitude\x18r \x01(\x02H\x0b\x12\x17\n\rgeo_longitude\x18s \x01(\x02H\x0c\x12\x15\n\x0bgeo_heading\x18t \x01(\x02H\r\x12\x17\n\rgeo_elevation\x18u \x01(\x02H\x0e\x12\x16\n\x0cgeo_accuracy\x18v \x01(\x02H\x0f\x12\x1d\n\x13estimated_gps_valid\x18w \x01(\x08H\x10\x12#\n\x19estimated_to_raw_distance\x18x \x01(\x02H\x11\x1a[\n\x11GPSCoordinateType\x12\x1e\n\x03GCJ\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03WGS\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04typeB\x13\n\x11optional_latitudeB\x14\n\x12optional_longitudeB\x12\n\x10optional_headingB\x14\n\x12optional_gps_as_ofB$\n"optional_native_location_supportedB\x1a\n\x18optional_native_latitudeB\x1b\n\x19optional_native_longitudeB\x1d\n\x1boptional_corrected_latitudeB\x1e\n\x1coptional_corrected_longitudeB\x1a\n\x18optional_homelink_nearbyB\x18\n\x16optional_location_nameB\x17\n\x15optional_geo_latitudeB\x18\n\x16optional_geo_longitudeB\x16\n\x14optional_geo_headingB\x18\n\x16optional_geo_elevationB\x17\n\x15optional_geo_accuracyB\x1e\n\x1coptional_estimated_gps_validB$\n"optional_estimated_to_raw_distanceJ\x04\x08\x0c\x10\r"j\n\x0cVehicleState\x124\n\tguestMode\x18J \x01(\x0b2!.CarServer.VehicleState.GuestMode\x1a$\n\tGuestMode\x12\x17\n\x0fGuestModeActive\x18\x01 \x01(\x08"\xeb#\n\x0cClimateState\x12\x1d\n\x13inside_temp_celsius\x18e \x01(\x02H\x00\x12\x1e\n\x14outside_temp_celsius\x18f \x01(\x02H\x01\x12\x1d\n\x13driver_temp_setting\x18g \x01(\x02H\x02\x12 \n\x16passenger_temp_setting\x18h \x01(\x02H\x03\x12\x1d\n\x13left_temp_direction\x18i \x01(\x05H\x04\x12\x1e\n\x14right_temp_direction\x18j \x01(\x05H\x05\x12\x1f\n\x15is_front_defroster_on\x18k \x01(\x08H\x06\x12\x1e\n\x14is_rear_defroster_on\x18l \x01(\x08H\x07\x12\x14\n\nfan_status\x18m \x01(\x05H\x08\x12\x17\n\ris_climate_on\x18n \x01(\x08H\t\x12 \n\x16min_avail_temp_celsius\x18o \x01(\x02H\n\x12 \n\x16max_avail_temp_celsius\x18p \x01(\x02H\x0b\x12\x1a\n\x10seat_heater_left\x18q \x01(\x05H\x0c\x12\x1b\n\x11seat_heater_right\x18r \x01(\x05H\r\x12\x1f\n\x15seat_heater_rear_left\x18s \x01(\x05H\x0e\x12 \n\x16seat_heater_rear_right\x18t \x01(\x05H\x0f\x12!\n\x17seat_heater_rear_center\x18u \x01(\x05H\x10\x12%\n\x1bseat_heater_rear_right_back\x18v \x01(\x05H\x11\x12$\n\x1aseat_heater_rear_left_back\x18w \x01(\x05H\x12\x12%\n\x1bseat_heater_third_row_right\x18x \x01(\x05H\x13\x12$\n\x1aseat_heater_third_row_left\x18y \x01(\x05H\x14\x12\x18\n\x0ebattery_heater\x18z \x01(\x08H\x15\x12!\n\x17battery_heater_no_power\x18{ \x01(\x08H\x16\x12\x1f\n\x15steering_wheel_heater\x18} \x01(\x08H\x17\x12\x1c\n\x12wiper_blade_heater\x18~ \x01(\x08H\x18\x12\x1d\n\x13side_mirror_heaters\x18\x7f \x01(\x08H\x19\x12\x1d\n\x12is_preconditioning\x18\x80\x01 \x01(\x08H\x1a\x12(\n\x1dremote_heater_control_enabled\x18\x81\x01 \x01(\x08H\x1b\x12F\n\x13climate_keeper_mode\x18\x1e \x01(\x0b2).CarServer.ClimateState.ClimateKeeperMode\x12-\n\ttimestamp\x18! \x01(\x0b2\x1a.google.protobuf.Timestamp\x12\x1c\n\x11bioweapon_mode_on\x18\x86\x01 \x01(\x08H\x1c\x129\n\x0cdefrost_mode\x18# \x01(\x0b2#.CarServer.ClimateState.DefrostMode\x12"\n\x17is_auto_conditioning_on\x18\x88\x01 \x01(\x08H\x1d\x12!\n\x16auto_seat_climate_left\x18\x89\x01 \x01(\x08H\x1e\x12"\n\x17auto_seat_climate_right\x18\x8a\x01 \x01(\x08H\x1f\x12\x1e\n\x13seat_fan_front_left\x18\x8b\x01 \x01(\x05H \x12\x1f\n\x14seat_fan_front_right\x18\x8c\x01 \x01(\x05H!\x12*\n\x1fallow_cabin_overheat_protection\x18\x8d\x01 \x01(\x08H"\x126\n+supports_fan_only_cabin_overheat_protection\x18\x8e\x01 \x01(\x08H#\x12W\n\x19cabin_overheat_protection\x18\x8f\x01 \x01(\x0e21.CarServer.ClimateState.CabinOverheatProtection_EH$\x125\n*cabin_overheat_protection_actively_cooling\x18\x90\x01 \x01(\x08H%\x12P\n\x1acop_activation_temperature\x18\x92\x01 \x01(\x0e2).CarServer.ClimateState.CopActivationTempH&\x12#\n\x18auto_steering_wheel_heat\x18\x93\x01 \x01(\x08H\'\x12=\n\x19steering_wheel_heat_level\x18\x94\x01 \x01(\x0e2\x17.CarServer.StwHeatLevelH(\x12E\n\x11hvac_auto_request\x18\x96\x01 \x01(\x0e2\'.CarServer.ClimateState.HvacAutoRequestH)\x12N\n\x16cop_not_running_reason\x18\x97\x01 \x01(\x0e2+.CarServer.ClimateState.COPNotRunningReasonH*\x1a\xc0\x01\n\x11ClimateKeeperMode\x12"\n\x07Unknown\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03Off\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1d\n\x02On\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03Dog\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12 \n\x05Party\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type\x1ax\n\x0bDefrostMode\x12\x1e\n\x03Off\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12!\n\x06Normal\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03Max\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type"E\n\x0fHvacAutoRequest\x12\x15\n\x11HvacAutoRequestOn\x10\x00\x12\x1b\n\x17HvacAutoRequestOverride\x10\x01"~\n\x19CabinOverheatProtection_E\x12\x1e\n\x1aCabinOverheatProtectionOff\x10\x00\x12\x1d\n\x19CabinOverheatProtectionOn\x10\x01\x12"\n\x1eCabinOverheatProtectionFanOnly\x10\x02"t\n\x11SeatHeaterLevel_E\x12\x16\n\x12SeatHeaterLevelOff\x10\x00\x12\x16\n\x12SeatHeaterLevelLow\x10\x01\x12\x16\n\x12SeatHeaterLevelMed\x10\x02\x12\x17\n\x13SeatHeaterLevelHigh\x10\x03"y\n\x12SeatCoolingLevel_E\x12\x17\n\x13SeatCoolingLevelOff\x10\x00\x12\x17\n\x13SeatCoolingLevelLow\x10\x01\x12\x17\n\x13SeatCoolingLevelMed\x10\x02\x12\x18\n\x14SeatCoolingLevelHigh\x10\x03"\x87\x01\n\x11CopActivationTemp\x12 \n\x1cCopActivationTempUnspecified\x10\x00\x12\x18\n\x14CopActivationTempLow\x10\x01\x12\x1b\n\x17CopActivationTempMedium\x10\x02\x12\x19\n\x15CopActivationTempHigh\x10\x03"\x9e\x02\n\x13COPNotRunningReason\x12\x1f\n\x1bCOPNotRunningReasonNoReason\x10\x00\x12&\n"COPNotRunningReasonUserInteraction\x10\x01\x12/\n+COPNotRunningReasonEnergyConsumptionReached\x10\x02\x12\x1e\n\x1aCOPNotRunningReasonTimeout\x10\x03\x12#\n\x1fCOPNotRunningReasonLowSolarLoad\x10\x04\x12\x1c\n\x18COPNotRunningReasonFault\x10\x05\x12*\n&COPNotRunningReasonCabinBelowThreshold\x10\x06B\x1e\n\x1coptional_inside_temp_celsiusB\x1f\n\x1doptional_outside_temp_celsiusB\x1e\n\x1coptional_driver_temp_settingB!\n\x1foptional_passenger_temp_settingB\x1e\n\x1coptional_left_temp_directionB\x1f\n\x1doptional_right_temp_directionB \n\x1eoptional_is_front_defroster_onB\x1f\n\x1doptional_is_rear_defroster_onB\x15\n\x13optional_fan_statusB\x18\n\x16optional_is_climate_onB!\n\x1foptional_min_avail_temp_celsiusB!\n\x1foptional_max_avail_temp_celsiusB\x1b\n\x19optional_seat_heater_leftB\x1c\n\x1aoptional_seat_heater_rightB \n\x1eoptional_seat_heater_rear_leftB!\n\x1foptional_seat_heater_rear_rightB"\n optional_seat_heater_rear_centerB&\n$optional_seat_heater_rear_right_backB%\n#optional_seat_heater_rear_left_backB&\n$optional_seat_heater_third_row_rightB%\n#optional_seat_heater_third_row_leftB\x19\n\x17optional_battery_heaterB"\n optional_battery_heater_no_powerB \n\x1eoptional_steering_wheel_heaterB\x1d\n\x1boptional_wiper_blade_heaterB\x1e\n\x1coptional_side_mirror_heatersB\x1d\n\x1boptional_is_preconditioningB(\n&optional_remote_heater_control_enabledB\x1c\n\x1aoptional_bioweapon_mode_onB"\n optional_is_auto_conditioning_onB!\n\x1foptional_auto_seat_climate_leftB"\n optional_auto_seat_climate_rightB\x1e\n\x1coptional_seat_fan_front_leftB\x1f\n\x1doptional_seat_fan_front_rightB*\n(optional_allow_cabin_overheat_protectionB6\n4optional_supports_fan_only_cabin_overheat_protectionB$\n"optional_cabin_overheat_protectionB5\n3optional_cabin_overheat_protection_actively_coolingB%\n#optional_cop_activation_temperatureB#\n!optional_auto_steering_wheel_heatB$\n"optional_steering_wheel_heat_levelB\x1c\n\x1aoptional_hvac_auto_requestB!\n\x1foptional_cop_not_running_reasonJ\x06\x08\x91\x01\x10\x92\x01"\xc2\t\n\x11TirePressureState\x12-\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12\x1a\n\x10tpms_pressure_fl\x18\x02 \x01(\x02H\x00\x12\x1a\n\x10tpms_pressure_fr\x18\x03 \x01(\x02H\x01\x12\x1a\n\x10tpms_pressure_rl\x18\x04 \x01(\x02H\x02\x12\x1a\n\x10tpms_pressure_rr\x18\x05 \x01(\x02H\x03\x12C\n\x1ftpms_last_seen_pressure_time_fl\x18\x06 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12C\n\x1ftpms_last_seen_pressure_time_fr\x18\x07 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12C\n\x1ftpms_last_seen_pressure_time_rl\x18\x08 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12C\n\x1ftpms_last_seen_pressure_time_rr\x18\t \x01(\x0b2\x1a.google.protobuf.Timestamp\x12\x1e\n\x14tpms_hard_warning_fl\x18\n \x01(\x08H\x04\x12\x1e\n\x14tpms_hard_warning_fr\x18\x0b \x01(\x08H\x05\x12\x1e\n\x14tpms_hard_warning_rl\x18\x0c \x01(\x08H\x06\x12\x1e\n\x14tpms_hard_warning_rr\x18\r \x01(\x08H\x07\x12\x1e\n\x14tpms_soft_warning_fl\x18\x0e \x01(\x08H\x08\x12\x1e\n\x14tpms_soft_warning_fr\x18\x0f \x01(\x08H\t\x12\x1e\n\x14tpms_soft_warning_rl\x18\x10 \x01(\x08H\n\x12\x1e\n\x14tpms_soft_warning_rr\x18\x11 \x01(\x08H\x0b\x12\x1e\n\x14tpms_rcp_front_value\x18\x12 \x01(\x02H\x0c\x12\x1d\n\x13tpms_rcp_rear_value\x18\x13 \x01(\x02H\rB\x1b\n\x19optional_tpms_pressure_flB\x1b\n\x19optional_tpms_pressure_frB\x1b\n\x19optional_tpms_pressure_rlB\x1b\n\x19optional_tpms_pressure_rrB\x1f\n\x1doptional_tpms_hard_warning_flB\x1f\n\x1doptional_tpms_hard_warning_frB\x1f\n\x1doptional_tpms_hard_warning_rlB\x1f\n\x1doptional_tpms_hard_warning_rrB\x1f\n\x1doptional_tpms_soft_warning_flB\x1f\n\x1doptional_tpms_soft_warning_frB\x1f\n\x1doptional_tpms_soft_warning_rlB\x1f\n\x1doptional_tpms_soft_warning_rrB\x1f\n\x1doptional_tpms_rcp_front_valueB\x1e\n\x1coptional_tpms_rcp_rear_value"\xe3\x04\n\nMediaState\x12-\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12 \n\x16remote_control_enabled\x18\x02 \x01(\x08H\x00\x12\x1c\n\x12now_playing_artist\x18\x03 \x01(\tH\x01\x12\x1b\n\x11now_playing_title\x18\x04 \x01(\tH\x02\x12\x16\n\x0caudio_volume\x18\x05 \x01(\x02H\x03\x12 \n\x16audio_volume_increment\x18\x06 \x01(\x02H\x04\x12\x1a\n\x10audio_volume_max\x18\x07 \x01(\x02H\x05\x128\n\x12now_playing_source\x18\x08 \x01(\x0e2\x1a.CarServer.MediaSourceTypeH\x06\x12?\n\x15media_playback_status\x18\t \x01(\x0e2\x1e.CarServer.MediaPlaybackStatusH\x07B!\n\x1foptional_remote_control_enabledB\x1d\n\x1boptional_now_playing_artistB\x1c\n\x1aoptional_now_playing_titleB\x17\n\x15optional_audio_volumeB!\n\x1foptional_audio_volume_incrementB\x1b\n\x19optional_audio_volume_maxB\x1d\n\x1boptional_now_playing_sourceB \n\x1eoptional_media_playback_status"\xbf\x03\n\x10MediaDetailState\x12-\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.Timestamp\x12\x1e\n\x14now_playing_duration\x18\x02 \x01(\x05H\x00\x12\x1d\n\x13now_playing_elapsed\x18\x03 \x01(\x05H\x01\x12#\n\x19now_playing_source_string\x18\x04 \x01(\tH\x02\x12\x1b\n\x11now_playing_album\x18\x05 \x01(\tH\x03\x12\x1d\n\x13now_playing_station\x18\x06 \x01(\tH\x04\x12\x1a\n\x10a2dp_source_name\x18\x07 \x01(\tH\x05B\x1f\n\x1doptional_now_playing_durationB\x1e\n\x1coptional_now_playing_elapsedB$\n"optional_now_playing_source_stringB\x1c\n\x1aoptional_now_playing_albumB\x1e\n\x1coptional_now_playing_stationB\x1b\n\x19optional_a2dp_source_name"\xd0\x01\n\nShiftState\x12"\n\x07Invalid\x18\x01 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1c\n\x01P\x18\x02 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1c\n\x01R\x18\x03 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1c\n\x01N\x18\x04 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1c\n\x01D\x18\x05 \x01(\x0b2\x0f.CarServer.VoidH\x00\x12\x1e\n\x03SNA\x18\x06 \x01(\x0b2\x0f.CarServer.VoidH\x00B\x06\n\x04type*\xcc\x07\n\x0fMediaSourceType\x12\x18\n\x14MediaSourceType_None\x10\x00\x12\x16\n\x12MediaSourceType_AM\x10\x01\x12\x16\n\x12MediaSourceType_FM\x10\x02\x12\x16\n\x12MediaSourceType_XM\x10\x03\x12\x1b\n\x17MediaSourceType_Slacker\x10\x05\x12\x1e\n\x1aMediaSourceType_LocalFiles\x10\x06\x12\x18\n\x14MediaSourceType_iPod\x10\x07\x12\x1d\n\x19MediaSourceType_Bluetooth\x10\x08\x12\x19\n\x15MediaSourceType_AuxIn\x10\t\x12\x17\n\x13MediaSourceType_DAB\x10\n\x12\x18\n\x14MediaSourceType_Rdio\x10\x0b\x12\x1b\n\x17MediaSourceType_Spotify\x10\x0c\x12\x1b\n\x17MediaSourceType_USRadio\x10\r\x12\x1b\n\x17MediaSourceType_EURadio\x10\x0e\x12\x1d\n\x19MediaSourceType_MediaFile\x10\x10\x12\x1a\n\x16MediaSourceType_TuneIn\x10\x11\x12\x1c\n\x18MediaSourceType_Stingray\x10\x12\x12\x1c\n\x18MediaSourceType_SiriusXM\x10\x13\x12\x19\n\x15MediaSourceType_Tidal\x10\x14\x12\x1b\n\x17MediaSourceType_QQMusic\x10\x15\x12\x1c\n\x18MediaSourceType_QQMusic2\x10\x16\x12\x1c\n\x18MediaSourceType_Ximalaya\x10\x17\x12\x1f\n\x1bMediaSourceType_OnlineRadio\x10\x18\x12 \n\x1cMediaSourceType_OnlineRadio2\x10\x19\x12 \n\x1cMediaSourceType_NetEaseMusic\x10\x1a\x12\x1b\n\x17MediaSourceType_Browser\x10\x1c\x12\x1b\n\x17MediaSourceType_Theater\x10\x1d\x12\x18\n\x14MediaSourceType_Game\x10\x1e\x12\x1c\n\x18MediaSourceType_Tutorial\x10\x1f\x12\x1a\n\x16MediaSourceType_Toybox\x10 \x12$\n MediaSourceType_RecentsFavorites\x10!\x12\x1c\n\x18MediaSourceType_HomeApps\x10"\x12\x1a\n\x16MediaSourceType_Search\x10#Bx\n%com.tesla.generated.carserver.vehicleB\x07VehicleZFgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserverb\x06proto3')
-_MEDIASOURCETYPE = DESCRIPTOR.enum_types_by_name['MediaSourceType']
-MediaSourceType = enum_type_wrapper.EnumTypeWrapper(_MEDIASOURCETYPE)
-MediaSourceType_None = 0
-MediaSourceType_AM = 1
-MediaSourceType_FM = 2
-MediaSourceType_XM = 3
-MediaSourceType_Slacker = 5
-MediaSourceType_LocalFiles = 6
-MediaSourceType_iPod = 7
-MediaSourceType_Bluetooth = 8
-MediaSourceType_AuxIn = 9
-MediaSourceType_DAB = 10
-MediaSourceType_Rdio = 11
-MediaSourceType_Spotify = 12
-MediaSourceType_USRadio = 13
-MediaSourceType_EURadio = 14
-MediaSourceType_MediaFile = 16
-MediaSourceType_TuneIn = 17
-MediaSourceType_Stingray = 18
-MediaSourceType_SiriusXM = 19
-MediaSourceType_Tidal = 20
-MediaSourceType_QQMusic = 21
-MediaSourceType_QQMusic2 = 22
-MediaSourceType_Ximalaya = 23
-MediaSourceType_OnlineRadio = 24
-MediaSourceType_OnlineRadio2 = 25
-MediaSourceType_NetEaseMusic = 26
-MediaSourceType_Browser = 28
-MediaSourceType_Theater = 29
-MediaSourceType_Game = 30
-MediaSourceType_Tutorial = 31
-MediaSourceType_Toybox = 32
-MediaSourceType_RecentsFavorites = 33
-MediaSourceType_HomeApps = 34
-MediaSourceType_Search = 35
-_VEHICLEDATA = DESCRIPTOR.message_types_by_name['VehicleData']
-_CLOSURESSTATE = DESCRIPTOR.message_types_by_name['ClosuresState']
-_CLOSURESSTATE_SUNROOFSTATE = _CLOSURESSTATE.nested_types_by_name['SunRoofState']
-_CLOSURESSTATE_DISPLAYSTATE = _CLOSURESSTATE.nested_types_by_name['DisplayState']
-_CLOSURESSTATE_SENTRYMODESTATE = _CLOSURESSTATE.nested_types_by_name['SentryModeState']
-_CHARGESCHEDULESTATE = DESCRIPTOR.message_types_by_name['ChargeScheduleState']
-_PRECONDITIONINGSCHEDULESTATE = DESCRIPTOR.message_types_by_name['PreconditioningScheduleState']
-_SPEEDLIMITMODE = DESCRIPTOR.message_types_by_name['SpeedLimitMode']
-_PARENTALCONTROLSSETTINGS = DESCRIPTOR.message_types_by_name['ParentalControlsSettings']
-_PARENTALCONTROLSSTATE = DESCRIPTOR.message_types_by_name['ParentalControlsState']
-_SOFTWAREUPDATESTATE = DESCRIPTOR.message_types_by_name['SoftwareUpdateState']
-_SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS = _SOFTWAREUPDATESTATE.nested_types_by_name['SoftwareUpdateStatus']
-_DRIVESTATE = DESCRIPTOR.message_types_by_name['DriveState']
-_CHARGESTATE = DESCRIPTOR.message_types_by_name['ChargeState']
-_CHARGESTATE_CABLETYPE = _CHARGESTATE.nested_types_by_name['CableType']
-_CHARGESTATE_CHARGERTYPE = _CHARGESTATE.nested_types_by_name['ChargerType']
-_CHARGESTATE_CHARGINGSTATE = _CHARGESTATE.nested_types_by_name['ChargingState']
-_CHARGESTATE_CHARGERBRAND = _CHARGESTATE.nested_types_by_name['ChargerBrand']
-_MANAGEDCHARGINGSTATE = DESCRIPTOR.message_types_by_name['ManagedChargingState']
-_CHARGEONSOLARSTATE = DESCRIPTOR.message_types_by_name['ChargeOnSolarState']
-_CHARGEONSOLARSTATENOTALLOWED = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateNotAllowed']
-_CHARGEONSOLARSTATENOCHARGERECOMMENDED = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateNoChargeRecommended']
-_CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateChargingOnExcessSolar']
-_CHARGEONSOLARSTATECHARGINGONANYTHING = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateChargingOnAnything']
-_CHARGEONSOLARSTATEUSERDISABLED = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateUserDisabled']
-_CHARGEONSOLARSTATEWAITINGFORSERVER = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateWaitingForServer']
-_CHARGEONSOLARSTATEERROR = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateError']
-_CHARGEONSOLARSTATEUSERSTOPPED = DESCRIPTOR.message_types_by_name['ChargeOnSolarStateUserStopped']
-_LOCATIONSTATE = DESCRIPTOR.message_types_by_name['LocationState']
-_LOCATIONSTATE_GPSCOORDINATETYPE = _LOCATIONSTATE.nested_types_by_name['GPSCoordinateType']
-_VEHICLESTATE = DESCRIPTOR.message_types_by_name['VehicleState']
-_VEHICLESTATE_GUESTMODE = _VEHICLESTATE.nested_types_by_name['GuestMode']
-_CLIMATESTATE = DESCRIPTOR.message_types_by_name['ClimateState']
-_CLIMATESTATE_CLIMATEKEEPERMODE = _CLIMATESTATE.nested_types_by_name['ClimateKeeperMode']
-_CLIMATESTATE_DEFROSTMODE = _CLIMATESTATE.nested_types_by_name['DefrostMode']
-_TIREPRESSURESTATE = DESCRIPTOR.message_types_by_name['TirePressureState']
-_MEDIASTATE = DESCRIPTOR.message_types_by_name['MediaState']
-_MEDIADETAILSTATE = DESCRIPTOR.message_types_by_name['MediaDetailState']
-_SHIFTSTATE = DESCRIPTOR.message_types_by_name['ShiftState']
-_CHARGESTATE_SCHEDULEDCHARGINGMODE = _CHARGESTATE.enum_types_by_name['ScheduledChargingMode']
-_CHARGESTATE_CHARGEPORTCOLOR_E = _CHARGESTATE.enum_types_by_name['ChargePortColor_E']
-_CHARGESTATE_CHARGELIMITREASON = _CHARGESTATE.enum_types_by_name['ChargeLimitReason']
-_CHARGESTATE_OUTLETSTATE = _CHARGESTATE.enum_types_by_name['OutletState']
-_CHARGESTATE_POWERFEEDSTATE = _CHARGESTATE.enum_types_by_name['PowerFeedState']
-_CHARGESTATE_POWERSHARESTATUS = _CHARGESTATE.enum_types_by_name['PowershareStatus']
-_CHARGESTATE_POWERSHARETYPE = _CHARGESTATE.enum_types_by_name['PowershareType']
-_CHARGESTATE_POWERSHARESTOPREASON = _CHARGESTATE.enum_types_by_name['PowershareStopReason']
-_CLIMATESTATE_HVACAUTOREQUEST = _CLIMATESTATE.enum_types_by_name['HvacAutoRequest']
-_CLIMATESTATE_CABINOVERHEATPROTECTION_E = _CLIMATESTATE.enum_types_by_name['CabinOverheatProtection_E']
-_CLIMATESTATE_SEATHEATERLEVEL_E = _CLIMATESTATE.enum_types_by_name['SeatHeaterLevel_E']
-_CLIMATESTATE_SEATCOOLINGLEVEL_E = _CLIMATESTATE.enum_types_by_name['SeatCoolingLevel_E']
-_CLIMATESTATE_COPACTIVATIONTEMP = _CLIMATESTATE.enum_types_by_name['CopActivationTemp']
-_CLIMATESTATE_COPNOTRUNNINGREASON = _CLIMATESTATE.enum_types_by_name['COPNotRunningReason']
-VehicleData = _reflection.GeneratedProtocolMessageType('VehicleData', (_message.Message,), {'DESCRIPTOR': _VEHICLEDATA, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(VehicleData)
-ClosuresState = _reflection.GeneratedProtocolMessageType('ClosuresState', (_message.Message,), {'SunRoofState': _reflection.GeneratedProtocolMessageType('SunRoofState', (_message.Message,), {'DESCRIPTOR': _CLOSURESSTATE_SUNROOFSTATE, '__module__': 'vehicle_pb2'}), 'DisplayState': _reflection.GeneratedProtocolMessageType('DisplayState', (_message.Message,), {'DESCRIPTOR': _CLOSURESSTATE_DISPLAYSTATE, '__module__': 'vehicle_pb2'}), 'SentryModeState': _reflection.GeneratedProtocolMessageType('SentryModeState', (_message.Message,), {'DESCRIPTOR': _CLOSURESSTATE_SENTRYMODESTATE, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _CLOSURESSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ClosuresState)
-_sym_db.RegisterMessage(ClosuresState.SunRoofState)
-_sym_db.RegisterMessage(ClosuresState.DisplayState)
-_sym_db.RegisterMessage(ClosuresState.SentryModeState)
-ChargeScheduleState = _reflection.GeneratedProtocolMessageType('ChargeScheduleState', (_message.Message,), {'DESCRIPTOR': _CHARGESCHEDULESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeScheduleState)
-PreconditioningScheduleState = _reflection.GeneratedProtocolMessageType('PreconditioningScheduleState', (_message.Message,), {'DESCRIPTOR': _PRECONDITIONINGSCHEDULESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(PreconditioningScheduleState)
-SpeedLimitMode = _reflection.GeneratedProtocolMessageType('SpeedLimitMode', (_message.Message,), {'DESCRIPTOR': _SPEEDLIMITMODE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(SpeedLimitMode)
-ParentalControlsSettings = _reflection.GeneratedProtocolMessageType('ParentalControlsSettings', (_message.Message,), {'DESCRIPTOR': _PARENTALCONTROLSSETTINGS, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ParentalControlsSettings)
-ParentalControlsState = _reflection.GeneratedProtocolMessageType('ParentalControlsState', (_message.Message,), {'DESCRIPTOR': _PARENTALCONTROLSSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ParentalControlsState)
-SoftwareUpdateState = _reflection.GeneratedProtocolMessageType('SoftwareUpdateState', (_message.Message,), {'SoftwareUpdateStatus': _reflection.GeneratedProtocolMessageType('SoftwareUpdateStatus', (_message.Message,), {'DESCRIPTOR': _SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _SOFTWAREUPDATESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(SoftwareUpdateState)
-_sym_db.RegisterMessage(SoftwareUpdateState.SoftwareUpdateStatus)
-DriveState = _reflection.GeneratedProtocolMessageType('DriveState', (_message.Message,), {'DESCRIPTOR': _DRIVESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(DriveState)
-ChargeState = _reflection.GeneratedProtocolMessageType('ChargeState', (_message.Message,), {'CableType': _reflection.GeneratedProtocolMessageType('CableType', (_message.Message,), {'DESCRIPTOR': _CHARGESTATE_CABLETYPE, '__module__': 'vehicle_pb2'}), 'ChargerType': _reflection.GeneratedProtocolMessageType('ChargerType', (_message.Message,), {'DESCRIPTOR': _CHARGESTATE_CHARGERTYPE, '__module__': 'vehicle_pb2'}), 'ChargingState': _reflection.GeneratedProtocolMessageType('ChargingState', (_message.Message,), {'DESCRIPTOR': _CHARGESTATE_CHARGINGSTATE, '__module__': 'vehicle_pb2'}), 'ChargerBrand': _reflection.GeneratedProtocolMessageType('ChargerBrand', (_message.Message,), {'DESCRIPTOR': _CHARGESTATE_CHARGERBRAND, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _CHARGESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeState)
-_sym_db.RegisterMessage(ChargeState.CableType)
-_sym_db.RegisterMessage(ChargeState.ChargerType)
-_sym_db.RegisterMessage(ChargeState.ChargingState)
-_sym_db.RegisterMessage(ChargeState.ChargerBrand)
-ManagedChargingState = _reflection.GeneratedProtocolMessageType('ManagedChargingState', (_message.Message,), {'DESCRIPTOR': _MANAGEDCHARGINGSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ManagedChargingState)
-ChargeOnSolarState = _reflection.GeneratedProtocolMessageType('ChargeOnSolarState', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarState)
-ChargeOnSolarStateNotAllowed = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateNotAllowed', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATENOTALLOWED, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateNotAllowed)
-ChargeOnSolarStateNoChargeRecommended = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateNoChargeRecommended', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATENOCHARGERECOMMENDED, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateNoChargeRecommended)
-ChargeOnSolarStateChargingOnExcessSolar = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateChargingOnExcessSolar', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateChargingOnExcessSolar)
-ChargeOnSolarStateChargingOnAnything = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateChargingOnAnything', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATECHARGINGONANYTHING, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateChargingOnAnything)
-ChargeOnSolarStateUserDisabled = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateUserDisabled', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATEUSERDISABLED, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateUserDisabled)
-ChargeOnSolarStateWaitingForServer = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateWaitingForServer', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATEWAITINGFORSERVER, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateWaitingForServer)
-ChargeOnSolarStateError = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateError', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATEERROR, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateError)
-ChargeOnSolarStateUserStopped = _reflection.GeneratedProtocolMessageType('ChargeOnSolarStateUserStopped', (_message.Message,), {'DESCRIPTOR': _CHARGEONSOLARSTATEUSERSTOPPED, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ChargeOnSolarStateUserStopped)
-LocationState = _reflection.GeneratedProtocolMessageType('LocationState', (_message.Message,), {'GPSCoordinateType': _reflection.GeneratedProtocolMessageType('GPSCoordinateType', (_message.Message,), {'DESCRIPTOR': _LOCATIONSTATE_GPSCOORDINATETYPE, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _LOCATIONSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(LocationState)
-_sym_db.RegisterMessage(LocationState.GPSCoordinateType)
-VehicleState = _reflection.GeneratedProtocolMessageType('VehicleState', (_message.Message,), {'GuestMode': _reflection.GeneratedProtocolMessageType('GuestMode', (_message.Message,), {'DESCRIPTOR': _VEHICLESTATE_GUESTMODE, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _VEHICLESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(VehicleState)
-_sym_db.RegisterMessage(VehicleState.GuestMode)
-ClimateState = _reflection.GeneratedProtocolMessageType('ClimateState', (_message.Message,), {'ClimateKeeperMode': _reflection.GeneratedProtocolMessageType('ClimateKeeperMode', (_message.Message,), {'DESCRIPTOR': _CLIMATESTATE_CLIMATEKEEPERMODE, '__module__': 'vehicle_pb2'}), 'DefrostMode': _reflection.GeneratedProtocolMessageType('DefrostMode', (_message.Message,), {'DESCRIPTOR': _CLIMATESTATE_DEFROSTMODE, '__module__': 'vehicle_pb2'}), 'DESCRIPTOR': _CLIMATESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ClimateState)
-_sym_db.RegisterMessage(ClimateState.ClimateKeeperMode)
-_sym_db.RegisterMessage(ClimateState.DefrostMode)
-TirePressureState = _reflection.GeneratedProtocolMessageType('TirePressureState', (_message.Message,), {'DESCRIPTOR': _TIREPRESSURESTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(TirePressureState)
-MediaState = _reflection.GeneratedProtocolMessageType('MediaState', (_message.Message,), {'DESCRIPTOR': _MEDIASTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(MediaState)
-MediaDetailState = _reflection.GeneratedProtocolMessageType('MediaDetailState', (_message.Message,), {'DESCRIPTOR': _MEDIADETAILSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(MediaDetailState)
-ShiftState = _reflection.GeneratedProtocolMessageType('ShiftState', (_message.Message,), {'DESCRIPTOR': _SHIFTSTATE, '__module__': 'vehicle_pb2'})
-_sym_db.RegisterMessage(ShiftState)
+_globals = globals()
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'vehicle_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
-    DESCRIPTOR._options = None
-    DESCRIPTOR._serialized_options = b'\n%com.tesla.generated.carserver.vehicleB\x07VehicleZFgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver'
-    _MEDIASOURCETYPE._serialized_start = 24400
-    _MEDIASOURCETYPE._serialized_end = 25372
-    _VEHICLEDATA._serialized_start = 113
-    _VEHICLEDATA._serialized_end = 798
-    _CLOSURESSTATE._serialized_start = 801
-    _CLOSURESSTATE._serialized_end = 3248
-    _CLOSURESSTATE_SUNROOFSTATE._serialized_start = 1768
-    _CLOSURESSTATE_SUNROOFSTATE._serialized_end = 2002
-    _CLOSURESSTATE_DISPLAYSTATE._serialized_start = 2005
-    _CLOSURESSTATE_DISPLAYSTATE._serialized_end = 2375
-    _CLOSURESSTATE_SENTRYMODESTATE._serialized_start = 2378
-    _CLOSURESSTATE_SENTRYMODESTATE._serialized_end = 2604
-    _CHARGESCHEDULESTATE._serialized_start = 3251
-    _CHARGESCHEDULESTATE._serialized_end = 3725
-    _PRECONDITIONINGSCHEDULESTATE._serialized_start = 3728
-    _PRECONDITIONINGSCHEDULESTATE._serialized_end = 4127
-    _SPEEDLIMITMODE._serialized_start = 4130
-    _SPEEDLIMITMODE._serialized_end = 4393
-    _PARENTALCONTROLSSETTINGS._serialized_start = 4396
-    _PARENTALCONTROLSSETTINGS._serialized_end = 4977
-    _PARENTALCONTROLSSTATE._serialized_start = 4980
-    _PARENTALCONTROLSSTATE._serialized_end = 5271
-    _SOFTWAREUPDATESTATE._serialized_start = 5274
-    _SOFTWAREUPDATESTATE._serialized_end = 6023
-    _SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS._serialized_start = 5581
-    _SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS._serialized_end = 5850
-    _DRIVESTATE._serialized_start = 6026
-    _DRIVESTATE._serialized_end = 6926
-    _CHARGESTATE._serialized_start = 6929
-    _CHARGESTATE._serialized_end = 14732
-    _CHARGESTATE_CABLETYPE._serialized_start = 10144
-    _CHARGESTATE_CABLETYPE._serialized_end = 10327
-    _CHARGESTATE_CHARGERTYPE._serialized_start = 10330
-    _CHARGESTATE_CHARGERTYPE._serialized_end = 10681
-    _CHARGESTATE_CHARGINGSTATE._serialized_start = 10684
-    _CHARGESTATE_CHARGINGSTATE._serialized_end = 11007
-    _CHARGESTATE_CHARGERBRAND._serialized_start = 11009
-    _CHARGESTATE_CHARGERBRAND._serialized_end = 11097
-    _CHARGESTATE_SCHEDULEDCHARGINGMODE._serialized_start = 11099
-    _CHARGESTATE_SCHEDULEDCHARGINGMODE._serialized_end = 11221
-    _CHARGESTATE_CHARGEPORTCOLOR_E._serialized_start = 11224
-    _CHARGESTATE_CHARGEPORTCOLOR_E._serialized_end = 11546
-    _CHARGESTATE_CHARGELIMITREASON._serialized_start = 11549
-    _CHARGESTATE_CHARGELIMITREASON._serialized_end = 11744
-    _CHARGESTATE_OUTLETSTATE._serialized_start = 11746
-    _CHARGESTATE_OUTLETSTATE._serialized_end = 11829
-    _CHARGESTATE_POWERFEEDSTATE._serialized_start = 11831
-    _CHARGESTATE_POWERFEEDSTATE._serialized_end = 11926
-    _CHARGESTATE_POWERSHARESTATUS._serialized_start = 11929
-    _CHARGESTATE_POWERSHARESTATUS._serialized_end = 12137
-    _CHARGESTATE_POWERSHARETYPE._serialized_start = 12139
-    _CHARGESTATE_POWERSHARETYPE._serialized_end = 12227
-    _CHARGESTATE_POWERSHARESTOPREASON._serialized_start = 12230
-    _CHARGESTATE_POWERSHARESTOPREASON._serialized_end = 12487
-    _MANAGEDCHARGINGSTATE._serialized_start = 14735
-    _MANAGEDCHARGINGSTATE._serialized_end = 15038
-    _CHARGEONSOLARSTATE._serialized_start = 15041
-    _CHARGEONSOLARSTATE._serialized_end = 15656
-    _CHARGEONSOLARSTATENOTALLOWED._serialized_start = 15658
-    _CHARGEONSOLARSTATENOTALLOWED._serialized_end = 15688
-    _CHARGEONSOLARSTATENOCHARGERECOMMENDED._serialized_start = 15690
-    _CHARGEONSOLARSTATENOCHARGERECOMMENDED._serialized_end = 15791
-    _CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR._serialized_start = 15793
-    _CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR._serialized_end = 15834
-    _CHARGEONSOLARSTATECHARGINGONANYTHING._serialized_start = 15836
-    _CHARGEONSOLARSTATECHARGINGONANYTHING._serialized_end = 15874
-    _CHARGEONSOLARSTATEUSERDISABLED._serialized_start = 15876
-    _CHARGEONSOLARSTATEUSERDISABLED._serialized_end = 15908
-    _CHARGEONSOLARSTATEWAITINGFORSERVER._serialized_start = 15910
-    _CHARGEONSOLARSTATEWAITINGFORSERVER._serialized_end = 15946
-    _CHARGEONSOLARSTATEERROR._serialized_start = 15948
-    _CHARGEONSOLARSTATEERROR._serialized_end = 15973
-    _CHARGEONSOLARSTATEUSERSTOPPED._serialized_start = 15975
-    _CHARGEONSOLARSTATEUSERSTOPPED._serialized_end = 16006
-    _LOCATIONSTATE._serialized_start = 16009
-    _LOCATIONSTATE._serialized_end = 17203
-    _LOCATIONSTATE_GPSCOORDINATETYPE._serialized_start = 16613
-    _LOCATIONSTATE_GPSCOORDINATETYPE._serialized_end = 16704
-    _VEHICLESTATE._serialized_start = 17205
-    _VEHICLESTATE._serialized_end = 17311
-    _VEHICLESTATE_GUESTMODE._serialized_start = 17275
-    _VEHICLESTATE_GUESTMODE._serialized_end = 17311
-    _CLIMATESTATE._serialized_start = 17314
-    _CLIMATESTATE._serialized_end = 21901
-    _CLIMATESTATE_CLIMATEKEEPERMODE._serialized_start = 19200
-    _CLIMATESTATE_CLIMATEKEEPERMODE._serialized_end = 19392
-    _CLIMATESTATE_DEFROSTMODE._serialized_start = 19394
-    _CLIMATESTATE_DEFROSTMODE._serialized_end = 19514
-    _CLIMATESTATE_HVACAUTOREQUEST._serialized_start = 19516
-    _CLIMATESTATE_HVACAUTOREQUEST._serialized_end = 19585
-    _CLIMATESTATE_CABINOVERHEATPROTECTION_E._serialized_start = 19587
-    _CLIMATESTATE_CABINOVERHEATPROTECTION_E._serialized_end = 19713
-    _CLIMATESTATE_SEATHEATERLEVEL_E._serialized_start = 19715
-    _CLIMATESTATE_SEATHEATERLEVEL_E._serialized_end = 19831
-    _CLIMATESTATE_SEATCOOLINGLEVEL_E._serialized_start = 19833
-    _CLIMATESTATE_SEATCOOLINGLEVEL_E._serialized_end = 19954
-    _CLIMATESTATE_COPACTIVATIONTEMP._serialized_start = 19957
-    _CLIMATESTATE_COPACTIVATIONTEMP._serialized_end = 20092
-    _CLIMATESTATE_COPNOTRUNNINGREASON._serialized_start = 20095
-    _CLIMATESTATE_COPNOTRUNNINGREASON._serialized_end = 20381
-    _TIREPRESSURESTATE._serialized_start = 21904
-    _TIREPRESSURESTATE._serialized_end = 23122
-    _MEDIASTATE._serialized_start = 23125
-    _MEDIASTATE._serialized_end = 23736
-    _MEDIADETAILSTATE._serialized_start = 23739
-    _MEDIADETAILSTATE._serialized_end = 24186
-    _SHIFTSTATE._serialized_start = 24189
-    _SHIFTSTATE._serialized_end = 24397
+    _globals['DESCRIPTOR']._options = None
+    _globals['DESCRIPTOR']._serialized_options = b'\n%com.tesla.generated.carserver.vehicleB\x07VehicleZFgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver'
+    _globals['_MEDIASOURCETYPE']._serialized_start = 24400
+    _globals['_MEDIASOURCETYPE']._serialized_end = 25372
+    _globals['_VEHICLEDATA']._serialized_start = 113
+    _globals['_VEHICLEDATA']._serialized_end = 798
+    _globals['_CLOSURESSTATE']._serialized_start = 801
+    _globals['_CLOSURESSTATE']._serialized_end = 3248
+    _globals['_CLOSURESSTATE_SUNROOFSTATE']._serialized_start = 1768
+    _globals['_CLOSURESSTATE_SUNROOFSTATE']._serialized_end = 2002
+    _globals['_CLOSURESSTATE_DISPLAYSTATE']._serialized_start = 2005
+    _globals['_CLOSURESSTATE_DISPLAYSTATE']._serialized_end = 2375
+    _globals['_CLOSURESSTATE_SENTRYMODESTATE']._serialized_start = 2378
+    _globals['_CLOSURESSTATE_SENTRYMODESTATE']._serialized_end = 2604
+    _globals['_CHARGESCHEDULESTATE']._serialized_start = 3251
+    _globals['_CHARGESCHEDULESTATE']._serialized_end = 3725
+    _globals['_PRECONDITIONINGSCHEDULESTATE']._serialized_start = 3728
+    _globals['_PRECONDITIONINGSCHEDULESTATE']._serialized_end = 4127
+    _globals['_SPEEDLIMITMODE']._serialized_start = 4130
+    _globals['_SPEEDLIMITMODE']._serialized_end = 4393
+    _globals['_PARENTALCONTROLSSETTINGS']._serialized_start = 4396
+    _globals['_PARENTALCONTROLSSETTINGS']._serialized_end = 4977
+    _globals['_PARENTALCONTROLSSTATE']._serialized_start = 4980
+    _globals['_PARENTALCONTROLSSTATE']._serialized_end = 5271
+    _globals['_SOFTWAREUPDATESTATE']._serialized_start = 5274
+    _globals['_SOFTWAREUPDATESTATE']._serialized_end = 6023
+    _globals['_SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS']._serialized_start = 5581
+    _globals['_SOFTWAREUPDATESTATE_SOFTWAREUPDATESTATUS']._serialized_end = 5850
+    _globals['_DRIVESTATE']._serialized_start = 6026
+    _globals['_DRIVESTATE']._serialized_end = 6926
+    _globals['_CHARGESTATE']._serialized_start = 6929
+    _globals['_CHARGESTATE']._serialized_end = 14732
+    _globals['_CHARGESTATE_CABLETYPE']._serialized_start = 10144
+    _globals['_CHARGESTATE_CABLETYPE']._serialized_end = 10327
+    _globals['_CHARGESTATE_CHARGERTYPE']._serialized_start = 10330
+    _globals['_CHARGESTATE_CHARGERTYPE']._serialized_end = 10681
+    _globals['_CHARGESTATE_CHARGINGSTATE']._serialized_start = 10684
+    _globals['_CHARGESTATE_CHARGINGSTATE']._serialized_end = 11007
+    _globals['_CHARGESTATE_CHARGERBRAND']._serialized_start = 11009
+    _globals['_CHARGESTATE_CHARGERBRAND']._serialized_end = 11097
+    _globals['_CHARGESTATE_SCHEDULEDCHARGINGMODE']._serialized_start = 11099
+    _globals['_CHARGESTATE_SCHEDULEDCHARGINGMODE']._serialized_end = 11221
+    _globals['_CHARGESTATE_CHARGEPORTCOLOR_E']._serialized_start = 11224
+    _globals['_CHARGESTATE_CHARGEPORTCOLOR_E']._serialized_end = 11546
+    _globals['_CHARGESTATE_CHARGELIMITREASON']._serialized_start = 11549
+    _globals['_CHARGESTATE_CHARGELIMITREASON']._serialized_end = 11744
+    _globals['_CHARGESTATE_OUTLETSTATE']._serialized_start = 11746
+    _globals['_CHARGESTATE_OUTLETSTATE']._serialized_end = 11829
+    _globals['_CHARGESTATE_POWERFEEDSTATE']._serialized_start = 11831
+    _globals['_CHARGESTATE_POWERFEEDSTATE']._serialized_end = 11926
+    _globals['_CHARGESTATE_POWERSHARESTATUS']._serialized_start = 11929
+    _globals['_CHARGESTATE_POWERSHARESTATUS']._serialized_end = 12137
+    _globals['_CHARGESTATE_POWERSHARETYPE']._serialized_start = 12139
+    _globals['_CHARGESTATE_POWERSHARETYPE']._serialized_end = 12227
+    _globals['_CHARGESTATE_POWERSHARESTOPREASON']._serialized_start = 12230
+    _globals['_CHARGESTATE_POWERSHARESTOPREASON']._serialized_end = 12487
+    _globals['_MANAGEDCHARGINGSTATE']._serialized_start = 14735
+    _globals['_MANAGEDCHARGINGSTATE']._serialized_end = 15038
+    _globals['_CHARGEONSOLARSTATE']._serialized_start = 15041
+    _globals['_CHARGEONSOLARSTATE']._serialized_end = 15656
+    _globals['_CHARGEONSOLARSTATENOTALLOWED']._serialized_start = 15658
+    _globals['_CHARGEONSOLARSTATENOTALLOWED']._serialized_end = 15688
+    _globals['_CHARGEONSOLARSTATENOCHARGERECOMMENDED']._serialized_start = 15690
+    _globals['_CHARGEONSOLARSTATENOCHARGERECOMMENDED']._serialized_end = 15791
+    _globals['_CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR']._serialized_start = 15793
+    _globals['_CHARGEONSOLARSTATECHARGINGONEXCESSSOLAR']._serialized_end = 15834
+    _globals['_CHARGEONSOLARSTATECHARGINGONANYTHING']._serialized_start = 15836
+    _globals['_CHARGEONSOLARSTATECHARGINGONANYTHING']._serialized_end = 15874
+    _globals['_CHARGEONSOLARSTATEUSERDISABLED']._serialized_start = 15876
+    _globals['_CHARGEONSOLARSTATEUSERDISABLED']._serialized_end = 15908
+    _globals['_CHARGEONSOLARSTATEWAITINGFORSERVER']._serialized_start = 15910
+    _globals['_CHARGEONSOLARSTATEWAITINGFORSERVER']._serialized_end = 15946
+    _globals['_CHARGEONSOLARSTATEERROR']._serialized_start = 15948
+    _globals['_CHARGEONSOLARSTATEERROR']._serialized_end = 15973
+    _globals['_CHARGEONSOLARSTATEUSERSTOPPED']._serialized_start = 15975
+    _globals['_CHARGEONSOLARSTATEUSERSTOPPED']._serialized_end = 16006
+    _globals['_LOCATIONSTATE']._serialized_start = 16009
+    _globals['_LOCATIONSTATE']._serialized_end = 17203
+    _globals['_LOCATIONSTATE_GPSCOORDINATETYPE']._serialized_start = 16613
+    _globals['_LOCATIONSTATE_GPSCOORDINATETYPE']._serialized_end = 16704
+    _globals['_VEHICLESTATE']._serialized_start = 17205
+    _globals['_VEHICLESTATE']._serialized_end = 17311
+    _globals['_VEHICLESTATE_GUESTMODE']._serialized_start = 17275
+    _globals['_VEHICLESTATE_GUESTMODE']._serialized_end = 17311
+    _globals['_CLIMATESTATE']._serialized_start = 17314
+    _globals['_CLIMATESTATE']._serialized_end = 21901
+    _globals['_CLIMATESTATE_CLIMATEKEEPERMODE']._serialized_start = 19200
+    _globals['_CLIMATESTATE_CLIMATEKEEPERMODE']._serialized_end = 19392
+    _globals['_CLIMATESTATE_DEFROSTMODE']._serialized_start = 19394
+    _globals['_CLIMATESTATE_DEFROSTMODE']._serialized_end = 19514
+    _globals['_CLIMATESTATE_HVACAUTOREQUEST']._serialized_start = 19516
+    _globals['_CLIMATESTATE_HVACAUTOREQUEST']._serialized_end = 19585
+    _globals['_CLIMATESTATE_CABINOVERHEATPROTECTION_E']._serialized_start = 19587
+    _globals['_CLIMATESTATE_CABINOVERHEATPROTECTION_E']._serialized_end = 19713
+    _globals['_CLIMATESTATE_SEATHEATERLEVEL_E']._serialized_start = 19715
+    _globals['_CLIMATESTATE_SEATHEATERLEVEL_E']._serialized_end = 19831
+    _globals['_CLIMATESTATE_SEATCOOLINGLEVEL_E']._serialized_start = 19833
+    _globals['_CLIMATESTATE_SEATCOOLINGLEVEL_E']._serialized_end = 19954
+    _globals['_CLIMATESTATE_COPACTIVATIONTEMP']._serialized_start = 19957
+    _globals['_CLIMATESTATE_COPACTIVATIONTEMP']._serialized_end = 20092
+    _globals['_CLIMATESTATE_COPNOTRUNNINGREASON']._serialized_start = 20095
+    _globals['_CLIMATESTATE_COPNOTRUNNINGREASON']._serialized_end = 20381
+    _globals['_TIREPRESSURESTATE']._serialized_start = 21904
+    _globals['_TIREPRESSURESTATE']._serialized_end = 23122
+    _globals['_MEDIASTATE']._serialized_start = 23125
+    _globals['_MEDIASTATE']._serialized_end = 23736
+    _globals['_MEDIADETAILSTATE']._serialized_start = 23739
+    _globals['_MEDIADETAILSTATE']._serialized_end = 24186
+    _globals['_SHIFTSTATE']._serialized_start = 24189
+    _globals['_SHIFTSTATE']._serialized_end = 24397
