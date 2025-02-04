@@ -91,15 +91,15 @@ class TeslaFleetApi:
         method: Method,
         path: str,
         params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = {},
     ) -> dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
 
         if not self.server:
             raise ValueError("Server was not set at init. Call find_server() first.")
 
-        if method == Method.GET and json is not None:
-            raise ValueError("GET requests cannot have a body.")
+        if method == Method.GET:
+            json = None
 
         # Call a pre-request hook if provided
         if self.refresh_hook is not None:
