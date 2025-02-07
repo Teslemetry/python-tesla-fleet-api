@@ -449,3 +449,57 @@ class VehicleSpecific:
     async def fleet_telemetry_config_delete(self) -> dict[str, Any]:
         """Configures fleet telemetry."""
         return await self._parent.fleet_telemetry_config_delete(self.vin)
+
+    async def add_charge_schedule(
+        self,
+        days_of_week: str,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        one_time: bool | None = None,
+        id: int | None = None,
+    ) -> dict[str, Any]:
+        """Adds a scheduled charging setting."""
+        return await self._parent.add_charge_schedule(
+            self.vin,
+            days_of_week,
+            enabled,
+            lat,
+            lon,
+            start_time,
+            end_time,
+            one_time,
+            id,
+        )
+
+    async def add_precondition_schedule(
+        self,
+        days_of_week: str,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        precondition_time: int,
+        id: int | None = None,
+        one_time: bool | None = None,
+    ) -> dict[str, Any]:
+        """Adds a scheduled precondition setting."""
+        return await self._parent.add_precondition_schedule(
+            self.vin,
+            days_of_week,
+            enabled,
+            lat,
+            lon,
+            precondition_time,
+            id,
+            one_time,
+        )
+
+    async def remove_charge_schedule(self, id: int) -> dict[str, Any]:
+        """Removes the scheduled charging settings."""
+        return await self._parent.remove_charge_schedule(self.vin, id)
+
+    async def remove_precondition_schedule(self, id: int) -> dict[str, Any]:
+        """Removes the scheduled precondition settings."""
+        return await self._parent.remove_precondition_schedule(self.vin, id)

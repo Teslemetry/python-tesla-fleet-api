@@ -791,3 +791,88 @@ class Vehicle:
         return await self._request(
             Method.DELETE, f"api/1/vehicles/{vehicle_tag}/fleet_telemetry_config"
         )
+
+    async def add_charge_schedule(
+        self,
+        vehicle_tag: str | int,
+        days_of_week: str,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        one_time: bool | None = None,
+        id: int | None = None,
+
+    ) -> dict[str, Any]:
+        """Add a schedule for vehicle charging."""
+        if not start_time and not end_time:
+            raise ValueError("Either start_time or end_time or both must be provided")
+        json_payload = {
+            "days_of_week": days_of_week,
+            "enabled": enabled,
+            "end_enabled": end_time is not None,
+            "lat": lat,
+            "lon": lon,
+            "start_enabled": start_time is not None,
+        }
+        if start_time is not None:
+            json_payload["start_time"] = start_time
+        if end_time is not None:
+            json_payload["end_time"] = end_time
+        if id is not None:
+            json_payload["id"] = id
+        if one_time is not None:
+            json_payload["one_time"] = one_time
+
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{vehicle_tag}/command/add_charge_schedule",
+            json=json_payload,
+        )
+
+    async def add_precondition_schedule(
+        self,
+        vehicle_tag: str | int,
+        days_of_week: str,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        precondition_time: int,
+        id: int | None = None,
+        one_time: bool | None = None,
+    ) -> dict[str, Any]:
+        """Add or modify a preconditioning schedule."""
+        json_payload = {
+            "days_of_week": days_of_week,
+            "enabled": enabled,
+            "lat": lat,
+            "lon": lon,
+            "precondition_time": precondition_time,
+        }
+        if id is not None:
+            json_payload["id"] = id
+        if one_time is not None:
+            json_payload["one_time"] = one_time
+
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{vehicle_tag}/command/add_precondition_schedule",
+            json=json_payload,
+        )
+
+    async def remove_charge_schedule(
+        self, vehicle_tag: str | int, id: int
+    ) -> dict[str, Any]:
+        """Removes the scheduled charging settings."""
+        return await self._request(
+            Method.POST, f"api/1/vehicles/{vehicle_tag}/command/remove_charge_schedule", json={"id": id}
+        )
+
+    async def remove_precondition_schedule(
+        self, vehicle_tag: str | int, id: int
+    ) -> dict[str, Any]:
+        """Removes the scheduled precondition settings."""
+        return await self._request(
+            Method.POST, f"api/1/vehicles/{vehicle_tag}/command/remove_precondition_schedule", json={"id": id}
+        )
