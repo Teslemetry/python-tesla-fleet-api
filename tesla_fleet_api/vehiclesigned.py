@@ -118,7 +118,7 @@ class Session:
     """A connect to a domain"""
 
     key: bytes
-    counter: int
+    counter: int = 0
     epoch: bytes
     delta: int
     hmac: bytes
