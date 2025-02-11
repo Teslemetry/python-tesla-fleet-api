@@ -118,7 +118,7 @@ class Session:
     """A connect to a domain"""
 
     key: bytes
-    counter: int = 0
+    counter: int
     epoch: bytes
     delta: int
     hmac: bytes
@@ -127,24 +127,26 @@ class Session:
 
     def __init__(self):
         self.lock = Lock()
+        self.counter = 0
 
     def update(self, sessionInfo: SessionInfo, privateKey: ec.EllipticCurvePrivateKey):
         """Update the session with new information"""
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        self.publicKey = sessionInfo.publicKey
-        self.key = hashlib.sha1(
-            privateKey.exchange(
-                ec.ECDH(),
-                ec.EllipticCurvePublicKey.from_encoded_point(
-                    ec.SECP256R1(), self.publicKey
+        if (self.publicKey != sessionInfo.publicKey):
+            self.publicKey = sessionInfo.publicKey
+            self.key = hashlib.sha1(
+                privateKey.exchange(
+                    ec.ECDH(),
+                    ec.EllipticCurvePublicKey.from_encoded_point(
+                        ec.SECP256R1(), self.publicKey
+                    ),
                 ),
-            )
-        ).digest()[:16]
-        self.hmac = hmac.new(
-            self.key, "authenticated command".encode(), hashlib.sha256
-        ).digest()
+            ).digest()[:16]
+            self.hmac = hmac.new(
+                self.key, "authenticated command".encode(), hashlib.sha256
+            ).digest()
 
     def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
