@@ -795,7 +795,7 @@ class Vehicle:
     async def add_charge_schedule(
         self,
         vehicle_tag: str | int,
-        days_of_week: str,
+        days_of_week: str | int,
         enabled: bool,
         lat: float,
         lon: float,
@@ -803,6 +803,7 @@ class Vehicle:
         end_time: int | None = None,
         one_time: bool | None = None,
         id: int | None = None,
+        name: str | None = None,
 
     ) -> dict[str, Any]:
         """Add a schedule for vehicle charging."""
@@ -834,13 +835,14 @@ class Vehicle:
     async def add_precondition_schedule(
         self,
         vehicle_tag: str | int,
-        days_of_week: str,
+        days_of_week: str | int,
         enabled: bool,
         lat: float,
         lon: float,
         precondition_time: int,
         id: int | None = None,
         one_time: bool | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Add or modify a preconditioning schedule."""
         json_payload = {

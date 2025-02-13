@@ -452,7 +452,7 @@ class VehicleSpecific:
 
     async def add_charge_schedule(
         self,
-        days_of_week: str,
+        days_of_week: str | int,
         enabled: bool,
         lat: float,
         lon: float,
@@ -460,6 +460,7 @@ class VehicleSpecific:
         end_time: int | None = None,
         one_time: bool | None = None,
         id: int | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Adds a scheduled charging setting."""
         return await self._parent.add_charge_schedule(
@@ -472,17 +473,19 @@ class VehicleSpecific:
             end_time,
             one_time,
             id,
+            name,
         )
 
     async def add_precondition_schedule(
         self,
-        days_of_week: str,
+        days_of_week: str | int,
         enabled: bool,
         lat: float,
         lon: float,
         precondition_time: int,
         id: int | None = None,
         one_time: bool | None = None,
+        name: str | None = None,
     ) -> dict[str, Any]:
         """Adds a scheduled precondition setting."""
         return await self._parent.add_precondition_schedule(
@@ -494,6 +497,7 @@ class VehicleSpecific:
             precondition_time,
             id,
             one_time,
+            name,
         )
 
     async def remove_charge_schedule(self, id: int) -> dict[str, Any]:
