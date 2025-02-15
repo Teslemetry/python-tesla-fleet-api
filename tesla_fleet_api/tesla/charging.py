@@ -1,5 +1,5 @@
 from typing import Any
-from .const import Method
+from ..const import Method
 
 
 class Charging:

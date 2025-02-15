@@ -1,8 +1,7 @@
 import aiohttp
 from typing import Any
-from .teslafleetapi import TeslaFleetApi
-from .const import Method
-
+from ..tesla.tesla import TeslaFleetApi
+from ..const import Method
 
 class Tessie(TeslaFleetApi):
     def __init__(

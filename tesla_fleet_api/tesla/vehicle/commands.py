@@ -1,20 +1,18 @@
 from __future__ import annotations
-import base64
+from abc import abstractmethod
+
 from random import randbytes
 from typing import Any, TYPE_CHECKING
 import time
-import struct
 import hmac
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
-from asyncio import Lock, sleep
+from asyncio import Lock
 
-from tesla_fleet_api.pb2.errors_pb2 import GenericError_E
+from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
-from .exceptions import MESSAGE_FAULTS, SIGNED_MESSAGE_INFORMATION_FAULTS, TeslaFleetMessageFaultIncorrectEpoch, TeslaFleetMessageFaultInvalidTokenOrCounter
-
-from .const import (
+from ...const import (
     LOGGER,
     Trunk,
     ClimateKeeperMode,
@@ -22,18 +20,12 @@ from .const import (
     SunRoofCommand,
     WindowCommand,
 )
-from .vehiclespecific import VehicleSpecific
 
-from .pb2.universal_message_pb2 import (
-    OPERATIONSTATUS_WAIT,
-    OPERATIONSTATUS_ERROR,
-    DOMAIN_VEHICLE_SECURITY,
-    DOMAIN_INFOTAINMENT,
+from .proto.universal_message_pb2 import (
     Domain,
     RoutableMessage,
 )
-from .pb2.car_server_pb2 import (
-    Response,
+from .proto.car_server_pb2 import (
     Action,
     MediaPlayAction,
     VehicleAction,
@@ -80,39 +72,58 @@ from .pb2.car_server_pb2 import (
     MediaPreviousTrack,
     MediaPreviousFavorite,
 )
-from .pb2.vehicle_pb2 import VehicleState
-from .pb2.vcsec_pb2 import (
-    # SignedMessage_information_E,
-    OPERATIONSTATUS_OK,
-    FromVCSECMessage,
+from .proto.vehicle_pb2 import VehicleState, ClimateState
+
+from .proto.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
     ClosureMoveRequest,
     ClosureMoveType_E,
 )
-from .pb2.signatures_pb2 import (
-    SIGNATURE_TYPE_HMAC_PERSONALIZED,
-    TAG_DOMAIN,
-    TAG_SIGNATURE_TYPE,
+from .proto.signatures_pb2 import (
     SessionInfo,
     HMAC_Personalized_Signature_Data,
-    TAG_PERSONALIZATION,
-    TAG_EPOCH,
-    TAG_EXPIRES_AT,
-    TAG_COUNTER,
-    TAG_END,
 )
-from .pb2.common_pb2 import (
+from .proto.common_pb2 import (
     Void,
     PreconditioningTimes,
     OffPeakChargingTimes,
-    # ChargeSchedule,
-    # PreconditionSchedule,
 )
 
 if TYPE_CHECKING:
-    from .vehicle import Vehicle
+    from ..tesla import TeslaFleetApi
 
+
+# ENUMs to convert ints to proto typed ints
+AutoSeatClimatePositions = (
+    AutoSeatClimateAction.AutoSeatPosition_FrontLeft,
+    AutoSeatClimateAction.AutoSeatPosition_FrontRight,
+)
+
+HvacSeatCoolerLevels = (
+    HvacSeatCoolerActions.HvacSeatCoolerLevel_Off,
+    HvacSeatCoolerActions.HvacSeatCoolerLevel_Low,
+    HvacSeatCoolerActions.HvacSeatCoolerLevel_Med,
+    HvacSeatCoolerActions.HvacSeatCoolerLevel_High,
+)
+
+HvacSeatCoolerPositions = (
+    HvacSeatCoolerActions.HvacSeatCoolerPosition_FrontLeft,
+    HvacSeatCoolerActions.HvacSeatCoolerPosition_FrontRight,
+)
+
+HvacClimateKeeperActions = (
+    HvacClimateKeeperAction.ClimateKeeperAction_Off,
+    HvacClimateKeeperAction.ClimateKeeperAction_On,
+    HvacClimateKeeperAction.ClimateKeeperAction_Dog,
+    HvacClimateKeeperAction.ClimateKeeperAction_Camp,
+)
+
+CopActivationTemps = (
+    ClimateState.CopActivationTemp.CopActivationTempLow,
+    ClimateState.CopActivationTemp.CopActivationTempMedium,
+    ClimateState.CopActivationTemp.CopActivationTempHigh,
+)
 
 class Session:
     """A connect to a domain"""
@@ -129,24 +140,24 @@ class Session:
         self.lock = Lock()
         self.counter = 0
 
-    def update(self, sessionInfo: SessionInfo, privateKey: ec.EllipticCurvePrivateKey):
+    def update(self, sessionInfo: SessionInfo, privateKey: ec.EllipticCurvePrivateKey | None = None):
         """Update the session with new information"""
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        if (self.publicKey != sessionInfo.publicKey):
+        if (privateKey and self.publicKey != sessionInfo.publicKey):
             self.publicKey = sessionInfo.publicKey
-            self.key = hashlib.sha1(
-                privateKey.exchange(
-                    ec.ECDH(),
-                    ec.EllipticCurvePublicKey.from_encoded_point(
-                        ec.SECP256R1(), self.publicKey
-                    ),
-                ),
-            ).digest()[:16]
-            self.hmac = hmac.new(
-                self.key, "authenticated command".encode(), hashlib.sha256
-            ).digest()
+            self.hmac = self.tag(self.publicKey, privateKey)
+
+    def tag(self, publicKey: bytes, private_key: ec.EllipticCurvePrivateKey) -> bytes:
+        exchange = private_key.exchange(
+            ec.ECDH(),
+            ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), publicKey
+            ),
+        )
+        key = hashlib.sha1(exchange).digest()[:16]
+        return hmac.new(key, "authenticated command".encode(), hashlib.sha256).digest()
 
     def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
@@ -158,7 +169,7 @@ class Session:
         )
 
 
-class VehicleSigned(VehicleSpecific):
+class Commands(Vehicle):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     private_key: ec.EllipticCurvePrivateKey
@@ -167,44 +178,39 @@ class VehicleSigned(VehicleSpecific):
     _sessions: dict[int, Session]
 
     def __init__(
-        self, parent: Vehicle, vin: str, key: ec.EllipticCurvePrivateKey | None = None
+        self, parent: TeslaFleetApi, vin: str, key: ec.EllipticCurvePrivateKey | None = None, public_key: bytes | None = None
     ):
         super().__init__(parent, vin)
         if key:
             self.private_key = key
-        elif parent._parent.private_key:
-            self.private_key = parent._parent.private_key
+        elif parent.private_key:
+            self.private_key = parent.private_key
         else:
             raise ValueError("No private key.")
 
-        self._public_key = self.private_key.public_key().public_bytes(
+        self._public_key = public_key or self.private_key.public_key().public_bytes(
             encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
         )
         self._from_destination = randbytes(16)
         self._sessions = {}
 
+    @abstractmethod
     async def _send(self, msg: RoutableMessage) -> RoutableMessage:
+        """Transmit the message to the vehicle."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def _command(self, domain: Domain, command: bytes) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
+        raise NotImplementedError
 
-        async with self._sessions[msg.to_destination.domain].lock:
-            resp = await self.signed_command(
-                base64.b64encode(msg.SerializeToString()).decode()
-            )
+    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+        """Sign and send a message to Infotainment computer."""
+        return await self._command(Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
 
-            resp_msg = RoutableMessage.FromString(base64.b64decode(resp["response"]))
-
-            # Check UUID?
-            # Check RoutingAdress?
-
-            if resp_msg.session_info:
-                self._sessions[resp_msg.from_destination.domain].update(
-                    SessionInfo.FromString(resp_msg.session_info), self.private_key
-                )
-
-            if resp_msg.signedMessageStatus.signed_message_fault:
-                raise MESSAGE_FAULTS[resp_msg.signedMessageStatus.signed_message_fault]
-
-            return resp_msg
+    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
+        """Sign and send a message to Infotainment computer."""
+        return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
 
     async def _handshake(self, domain: Domain) -> Session:
         """Perform a handshake with the vehicle."""
@@ -224,126 +230,6 @@ class VehicleSigned(VehicleSpecific):
 
         return self._sessions[domain]
 
-    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
-        """Sign and send a message to Infotainment computer."""
-        return await self._sign(DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
-
-    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
-        """Sign and send a message to Infotainment computer."""
-        return await self._sign(DOMAIN_INFOTAINMENT, command.SerializeToString())
-
-    async def _sign(
-        self, domain: Domain, command: bytes, attempt: int = 1
-    ) -> dict[str, Any]:
-        """Send a signed message to the vehicle."""
-        LOGGER.debug(f"Sending to domain {Domain.Name(domain)}")
-
-        session = await self._handshake(domain)
-        hmac_personalized = session.get()
-
-        msg = RoutableMessage()
-        msg.to_destination.domain = domain
-        msg.from_destination.routing_address = self._from_destination
-        msg.protobuf_message_as_bytes = command
-        msg.uuid = randbytes(16)
-
-        metadata = bytes([
-            TAG_SIGNATURE_TYPE,
-            1,
-            SIGNATURE_TYPE_HMAC_PERSONALIZED,
-            TAG_DOMAIN,
-            1,
-            domain,
-            TAG_PERSONALIZATION,
-            17,
-            *self.vin.encode(),
-            TAG_EPOCH,
-            len(hmac_personalized.epoch),
-            *hmac_personalized.epoch,
-            TAG_EXPIRES_AT,
-            4,
-            *struct.pack(">I", hmac_personalized.expires_at),
-            TAG_COUNTER,
-            4,
-            *struct.pack(">I", hmac_personalized.counter),
-            TAG_END,
-        ])
-
-        hmac_personalized.tag = hmac.new(
-            session.hmac, metadata + command, hashlib.sha256
-        ).digest()
-
-        # I think this whole section could be improved
-        msg.signature_data.HMAC_Personalized_data.CopyFrom(hmac_personalized)
-        msg.signature_data.signer_identity.public_key = self._public_key
-
-        try:
-            resp = await self._send(msg)
-        except (
-            TeslaFleetMessageFaultIncorrectEpoch,
-            TeslaFleetMessageFaultInvalidTokenOrCounter,
-        ) as e:
-            attempt += 1
-            if attempt > 3:
-                # We tried 3 times, give up, raise the error
-                raise e
-            return await self._sign(domain, command, attempt)
-
-        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
-            attempt += 1
-            if attempt > 3:
-                # We tried 3 times, give up, raise the error
-                return {"response": {"result": False, "reason": "Too many retries"}}
-            async with session.lock:
-                await sleep(2)
-            return await self._sign(domain, command, attempt)
-
-        if resp.HasField("protobuf_message_as_bytes"):
-            if(resp.from_destination.domain == DOMAIN_VEHICLE_SECURITY):
-                vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
-                LOGGER.debug("VCSEC Response: %s", vcsec)
-                if vcsec.HasField("nominalError"):
-                    LOGGER.error("Command failed with reason: %s", vcsec.nominalError.genericError)
-                    return {
-                        "response": {
-                            "result": False,
-                            "reason": GenericError_E.Name(vcsec.nominalError.genericError)
-                        }
-                    }
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_OK:
-                    return {"response": {"result": True, "reason": ""}}
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_WAIT:
-                    attempt += 1
-                    if attempt > 3:
-                        # We tried 3 times, give up, raise the error
-                        return {"response": {"result": False, "reason": "Too many retries"}}
-                    async with session.lock:
-                        await sleep(2)
-                    return await self._sign(domain, command, attempt)
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_ERROR:
-                    if(resp.HasField("signedMessageStatus")):
-                        raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
-
-            elif(resp.from_destination.domain == DOMAIN_INFOTAINMENT):
-                response = Response.FromString(resp.protobuf_message_as_bytes)
-                LOGGER.debug("Infotainment Response: %s", response)
-                if (response.HasField("ping")):
-                    print(response.ping)
-                    return {
-                        "response": {
-                            "result": True,
-                            "reason": response.ping.local_timestamp
-                        }
-                    }
-                if response.HasField("actionStatus"):
-                    return {
-                        "response": {
-                            "result": response.actionStatus.result == OPERATIONSTATUS_OK,
-                            "reason": response.actionStatus.result_reason.plain_text or ""
-                            }
-                        }
-
-        return {"response": {"result": True, "reason": ""}}
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
@@ -363,6 +249,7 @@ class VehicleSigned(VehicleSpecific):
                     )
                 )
             )
+        raise ValueError("Invalid trunk.")
 
     async def adjust_volume(self, volume: float) -> dict[str, Any]:
         """Adjusts vehicle media playback volume."""
@@ -468,7 +355,7 @@ class VehicleSigned(VehicleSpecific):
             )
         )
 
-    async def clear_pin_to_drive_admin(self, pin: str):
+    async def clear_pin_to_drive_admin(self, pin: str | None = None):
         """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
         return await self._sendInfotainment(
             Action(
@@ -588,6 +475,7 @@ class VehicleSigned(VehicleSpecific):
     # navigation_gps_request doesnt require signing
     # navigation_request doesnt require signing
     # navigation_sc_request doesnt require signing
+    #
 
     async def remote_auto_seat_climate_request(
         self, auto_seat_position: int, auto_climate_on: bool
@@ -601,7 +489,7 @@ class VehicleSigned(VehicleSpecific):
                     autoSeatClimateAction=AutoSeatClimateAction(
                         carseat=[
                             AutoSeatClimateAction.CarSeat(
-                                on=auto_climate_on, seat_position=auto_seat_position
+                                on=auto_climate_on, seat_position=AutoSeatClimatePositions[auto_seat_position]
                             )
                         ]
                     )
@@ -612,6 +500,8 @@ class VehicleSigned(VehicleSpecific):
     # remote_auto_steering_wheel_heat_climate_request has no protobuf
 
     # remote_boombox not implemented
+    #
+
 
     async def remote_seat_cooler_request(
         self, seat_position: int, seat_cooler_level: int
@@ -631,8 +521,8 @@ class VehicleSigned(VehicleSpecific):
                     hvacSeatCoolerActions=HvacSeatCoolerActions(
                         hvacSeatCoolerAction=[
                             HvacSeatCoolerActions.HvacSeatCoolerAction(
-                                seat_cooler_level=seat_cooler_level + 1,
-                                seat_position=seat_position,
+                                seat_cooler_level=HvacSeatCoolerLevels[seat_cooler_level],
+                                seat_position=HvacSeatCoolerPositions[seat_position],
                             )
                         ]
                     )
@@ -817,11 +707,12 @@ class VehicleSigned(VehicleSpecific):
         """Enables climate keeper mode."""
         if isinstance(climate_keeper_mode, ClimateKeeperMode):
             climate_keeper_mode = climate_keeper_mode.value
+
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     hvacClimateKeeperAction=HvacClimateKeeperAction(
-                        ClimateKeeperAction=climate_keeper_mode,
+                        ClimateKeeperAction=HvacClimateKeeperActions[climate_keeper_mode],
                         # manual_override
                     )
                 )
@@ -837,7 +728,7 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    setCopTempAction=SetCopTempAction(copActivationTemp=cop_temp + 1)
+                    setCopTempAction=SetCopTempAction(copActivationTemp=CopActivationTemps[cop_temp])
                 )
             )
         )
@@ -876,7 +767,7 @@ class VehicleSigned(VehicleSpecific):
             Action(
                 vehicleAction=VehicleAction(
                     scheduledChargingAction=ScheduledChargingAction(
-                        enable=enable, charging_time=time
+                        enabled=enable, charging_time=time
                     )
                 )
             )
@@ -895,14 +786,14 @@ class VehicleSigned(VehicleSpecific):
         """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
 
         if preconditioning_weekdays_only:
-            preconditioning_times = PreconditioningTimes(weekdays=Void)
+            preconditioning_times = PreconditioningTimes(weekdays=Void())
         else:
-            preconditioning_times = PreconditioningTimes(all_week=Void)
+            preconditioning_times = PreconditioningTimes(all_week=Void())
 
         if off_peak_charging_weekdays_only:
-            off_peak_charging_times = OffPeakChargingTimes(weekdays=Void)
+            off_peak_charging_times = OffPeakChargingTimes(weekdays=Void())
         else:
-            off_peak_charging_times = OffPeakChargingTimes(all_week=Void)
+            off_peak_charging_times = OffPeakChargingTimes(all_week=Void())
 
         return await self._sendInfotainment(
             Action(
@@ -962,7 +853,7 @@ class VehicleSigned(VehicleSpecific):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    setVehicleNameAction=SetVehicleNameAction(vehicle_name=vehicle_name)
+                    setVehicleNameAction=SetVehicleNameAction(vehicleName=vehicle_name)
                 )
             )
         )
@@ -1076,6 +967,8 @@ class VehicleSigned(VehicleSpecific):
             action = VehicleControlWindowAction(vent=Void())
         elif command == "close":
             action = VehicleControlWindowAction(close=Void())
+        else:
+            raise ValueError(f"Invalid window command: {command}")
 
         return await self._sendInfotainment(
             Action(vehicleAction=VehicleAction(vehicleControlWindowAction=action))

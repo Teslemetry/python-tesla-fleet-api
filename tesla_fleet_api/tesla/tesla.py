@@ -11,13 +11,13 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
-from .exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
-from .const import SERVERS, Method, LOGGER, VERSION
+from ..exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
+from ..const import SERVERS, Method, LOGGER, VERSION
 from .charging import Charging
-from .energy import Energy
+from .energysite import EnergySites
 from .partner import Partner
 from .user import User
-from .vehicle import Vehicle
+from .vehicle.vehicle import Vehicles
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -63,13 +63,13 @@ class TeslaFleetApi:
         if charging_scope:
             self.charging = Charging(self)
         if energy_scope:
-            self.energy = Energy(self)
+            self.energySites = EnergySites(self)
         if user_scope:
             self.user = User(self)
         if partner_scope:
             self.partner = Partner(self)
         if vehicle_scope:
-            self.vehicle = Vehicle(self)
+            self.vehicles = Vehicles(self)
 
     async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""

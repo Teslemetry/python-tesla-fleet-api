@@ -3,15 +3,15 @@ import aiohttp
 import time
 
 from tesla_fleet_api.const import Method
-from .teslafleetapi import TeslaFleetApi
-from .const import Scope, SERVERS
+from . import TeslaFleetApi
+from ..const import Scope, SERVERS
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
     """Tesla Fleet OAuth API."""
 
     expires: int
-    refresh_token: str
+    refresh_token: str | None
     redirect_uri: str | None
     _client_secret: str | None
 

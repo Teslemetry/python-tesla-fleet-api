@@ -1,14 +1,14 @@
 from typing import Any
 
 import aiohttp
-from aiolimiter import AsyncLimiter
 
-from .const import LOGGER, Method
-from .teslafleetapi import TeslaFleetApi
+from tesla_fleet_api.tesla.charging import Charging
+from tesla_fleet_api.tesla.energysite import EnergySites
+from tesla_fleet_api.tesla.user import User
+from .vehicle import TeslemetryVehicles
 
-# Rate limit should be global, even if multiple instances are created
-rate_limit = AsyncLimiter(5, 10)
-
+from ..const import LOGGER, Method
+from ..tesla.tesla import TeslaFleetApi
 
 class Teslemetry(TeslaFleetApi):
     def __init__(
@@ -17,14 +17,14 @@ class Teslemetry(TeslaFleetApi):
         access_token: str,
     ):
         """Initialize the Teslemetry API."""
-        super().__init__(
-            session=session,
-            access_token=access_token,
-            server="https://api.teslemetry.com",
-            user_scope=False,
-            partner_scope=False,
-        )
-        self.rate_limit = rate_limit
+
+        self.session = session
+        self.access_token = access_token
+
+        self.charging = Charging(self)
+        self.energySites = EnergySites(self)
+        self.user = User(self)
+        self.vehicle = TeslemetryVehicles(self)
 
     async def ping(self) -> dict[str, bool]:
         """Send a ping."""
@@ -102,14 +102,3 @@ class Teslemetry(TeslaFleetApi):
             Method.GET,
             f"api/refresh/{vin}",
         )
-
-    async def _request(
-        self,
-        method: Method,
-        path: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Send a request to the Teslemetry API."""
-        async with rate_limit:
-            return await super()._request(method, path, params, json)
