@@ -1,5 +1,6 @@
 """Bluetooth only interface."""
 
+import re
 from tesla_fleet_api.tesla.tesla import Tesla
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 
@@ -12,6 +13,10 @@ class TeslaBluetooth(Tesla):
         """Initialize the Tesla Fleet API."""
 
         self.vehicles = Vehicles(self)
+
+    def valid_name(self, name: str) -> bool:
+        """Check if a BLE device name is a valid Tesla vehicle."""
+        return bool(re.match("^S[a-f0-9]{16}[A-F]$", name))
 
 class Vehicles(dict[str, VehicleBluetooth]):
     """Class containing and creating vehicles."""

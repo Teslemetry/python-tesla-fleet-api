@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from asyncio import Lock, sleep
 
 from ...exceptions import (
-    MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
@@ -38,7 +37,6 @@ from .proto.car_server_pb2 import (
     Response,
 )
 from .proto.signatures_pb2 import (
-    SIGNATURE_TYPE_AES_GCM,
     SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
     SIGNATURE_TYPE_HMAC_PERSONALIZED,
     TAG_COUNTER,
@@ -49,23 +47,23 @@ from .proto.signatures_pb2 import (
     TAG_PERSONALIZATION,
     TAG_SIGNATURE_TYPE,
     AES_GCM_Personalized_Signature_Data,
+    KeyIdentity,
     SessionInfo,
+    SignatureData,
 )
 from .proto.universal_message_pb2 import (
     DOMAIN_INFOTAINMENT,
     DOMAIN_VEHICLE_SECURITY,
     OPERATIONSTATUS_ERROR,
     OPERATIONSTATUS_WAIT,
+    Destination,
     Domain,
     RoutableMessage,
+    SessionInfoRequest,
 )
 from .proto.vcsec_pb2 import (
     OPERATIONSTATUS_OK,
     FromVCSECMessage,
-)
-from .proto.universal_message_pb2 import (
-    Domain,
-    RoutableMessage,
 )
 from .proto.car_server_pb2 import (
     Action,
@@ -98,7 +96,7 @@ from .proto.car_server_pb2 import (
     VehicleControlWindowAction,
     HvacBioweaponModeAction,
     AutoSeatClimateAction,
-    # Ping,
+    Ping,
     ScheduledChargingAction,
     ScheduledDepartureAction,
     HvacClimateKeeperAction,
@@ -122,7 +120,6 @@ from .proto.vcsec_pb2 import (
     ClosureMoveType_E,
 )
 from .proto.signatures_pb2 import (
-    SessionInfo,
     HMAC_Personalized_Signature_Data,
 )
 from .proto.common_pb2 import (
@@ -200,7 +197,7 @@ class Session:
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
-        self.counter = self.counter+1
+        self.counter += 1
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
             counter=self.counter,
@@ -209,7 +206,7 @@ class Session:
 
     def aes_gcm_personalized(self) -> AES_GCM_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
-        self.counter = self.counter+1
+        self.counter += 1
         return AES_GCM_Personalized_Signature_Data(
             epoch=self.epoch,
             nonce=randbytes(12),
@@ -381,15 +378,22 @@ class Commands(Vehicle):
             session.hmac, metadata + command, hashlib.sha256
         ).digest()
 
-        msg = RoutableMessage()
-        msg.to_destination.domain = session.domain
-        msg.from_destination.routing_address = self._from_destination
-        msg.protobuf_message_as_bytes = command
-        msg.uuid = randbytes(16)
-        msg.signature_data.HMAC_Personalized_data.CopyFrom(hmac_personalized)
-        msg.signature_data.signer_identity.public_key = self._public_key
-
-        return msg
+        return RoutableMessage(
+            to_destination=Destination(
+                domain=session.domain,
+            ),
+            from_destination=Destination(
+                routing_address=self._from_destination
+            ),
+            protobuf_message_as_bytes=command,
+            uuid=randbytes(16),
+            signature_data=SignatureData(
+                signer_identity=KeyIdentity(
+                    public_key=self._public_key
+                ),
+                HMAC_Personalized_data=hmac_personalized,
+            )
+        )
 
     async def _commandAes(self, session: Session, command: bytes, attempt: int = 1) -> RoutableMessage:
         """Create an encrypted message."""
@@ -428,15 +432,22 @@ class Commands(Vehicle):
         aes_personalized.tag = ct[-16:]
 
         # I think this whole section could be improved
-        msg = RoutableMessage()
-        msg.to_destination.domain = session.domain
-        msg.from_destination.routing_address = self._from_destination
-        msg.protobuf_message_as_bytes = ct[:-16]
-        msg.uuid = randbytes(16)
-        msg.signature_data.AES_GCM_Personalized_data.CopyFrom(aes_personalized)
-        msg.signature_data.signer_identity.public_key = self._public_key
-
-        return msg
+        return RoutableMessage(
+            to_destination=Destination(
+                domain=session.domain,
+            ),
+            from_destination=Destination(
+                routing_address=self._from_destination
+            ),
+            protobuf_message_as_bytes=ct[:-16],
+            uuid=randbytes(16),
+            signature_data=SignatureData(
+                signer_identity=KeyIdentity(
+                    public_key=self._public_key
+                ),
+                AES_GCM_Personalized_data=aes_personalized,
+            )
+        )
 
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
@@ -448,25 +459,23 @@ class Commands(Vehicle):
         return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
 
 
-    async def _handle_command(self, domain: Domain, command: str, attempt: int, retry) -> dict[str, Any]:
-        """Handle a command."""
-        if attempt > MAX_RETRIES:
-            return {"response": {"result": False, "reason": "Too many retries"}}
-        async with session.lock:
-            await sleep(2)
-        return await self._commandAes(domain, command, attempt)
-
     async def _handshake(self, domain: Domain) -> None:
         """Perform a handshake with the vehicle."""
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
-        msg = RoutableMessage()
-        msg.to_destination.domain = domain
-        msg.from_destination.routing_address = self._from_destination
-        msg.session_info_request.public_key = self._public_key
-        msg.uuid = randbytes(16)
+        msg = RoutableMessage(
+            to_destination=Destination(
+                domain=domain,
+            ),
+            from_destination=Destination(
+                routing_address=self._from_destination
+            ),
+            session_info_request=SessionInfoRequest(
+                public_key=self._public_key
+            ),
+            uuid=randbytes(16)
+        )
 
-        # Send handshake message
         await self._send(msg)
 
     async def ping(self) -> dict[str, Any]:
@@ -474,7 +483,7 @@ class Commands(Vehicle):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    ping=None
+                    ping=Ping(ping_id=0)
                 )
             )
         )
