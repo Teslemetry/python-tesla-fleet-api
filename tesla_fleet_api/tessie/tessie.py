@@ -1,22 +1,31 @@
 import aiohttp
 from typing import Any
+
+from ..tesla.charging import Charging
+from ..tesla.energysite import EnergySites
+from ..tesla.user import User
 from ..tesla import TeslaFleetApi
 from ..const import Method
+from .vehicle import TessieVehicles
 
 class Tessie(TeslaFleetApi):
+
+    server="https://api.tessie.com"
+
     def __init__(
         self,
         session: aiohttp.ClientSession,
         access_token: str,
     ):
         """Initialize the Tessie API."""
-        super().__init__(
-            session,
-            access_token,
-            server="https://api.tessie.com",
-            partner_scope=False,
-            user_scope=False,
-        )
+
+        self.session = session
+        self.access_token = access_token
+
+        self.charging = Charging(self)
+        self.energySites = EnergySites(self)
+        self.user = User(self)
+        self.vehicle = TessieVehicles(self)
 
     async def scopes(self) -> list[str]:
         """Get user scopes."""

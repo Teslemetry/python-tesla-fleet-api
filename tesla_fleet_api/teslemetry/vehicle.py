@@ -9,7 +9,7 @@ from ..tesla.vehicle.bluetooth import VehicleBluetooth
 from ..tesla.vehicle.fleet import VehicleFleet
 
 if TYPE_CHECKING:
-    from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
+    from .teslemetry import Teslemetry
 
 class TeslemetryVehicle(Vehicle):
     """Teslemetry specific base vehicle."""
@@ -50,18 +50,6 @@ class TeslemetryVehicleFleet(VehicleFleet):
             f"api/refresh/{self.vin}",
         )
 
-class TeslemetryVehicleBluetooth(VehicleBluetooth):
-    """Teslemetry specific Bluetooth vehicle."""
-
-    _hmacs: dict[Domain, bytes]
-    _require_keys = False
-
-    def __init__(
-        self, parent: Teslemetry, vin: str
-    ):
-        super().__init__(parent, vin)
-        self._request = parent._request
-
 
 class TeslemetryVehicles(Vehicles):
     """Class containing and creating vehicles."""
@@ -80,6 +68,6 @@ class TeslemetryVehicles(Vehicles):
         """Creates a specific vehicle."""
         raise NotImplementedError("Signing is handled by Teslemetry server-side")
 
-    def createBluetooth(self, vin: str) -> TeslemetryVehicleBluetooth:
+    def createBluetooth(self, vin: str):
         """Creates a specific vehicle."""
         raise NotImplementedError("Bluetooth is only handled locally")

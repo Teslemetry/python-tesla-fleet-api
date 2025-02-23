@@ -10,6 +10,9 @@ from ..const import LOGGER, Method
 from ..tesla import TeslaFleetApi
 
 class Teslemetry(TeslaFleetApi):
+
+    server = "https://api.teslemetry.com"
+
     def __init__(
         self,
         session: aiohttp.ClientSession,
