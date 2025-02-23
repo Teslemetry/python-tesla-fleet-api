@@ -1,0 +1,2 @@
+[tool.ruff]
+exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
