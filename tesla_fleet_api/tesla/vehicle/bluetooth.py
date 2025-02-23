@@ -84,19 +84,33 @@ class VehicleBluetooth(Commands):
             raise ValueError(f"Device {self.ble_name} not found")
         self._device = device
         self.client = BleakClient(self._device, services=[SERVICE_UUID])
-        LOGGER.info(f"Discovered device {self._device.name} {self._device.address}")
+        LOGGER.debug(f"Discovered device {self._device.name} {self._device.address}")
+        return self.client
+
+    def create_client(self, mac:str):
+        """Create a client with a MAC."""
+        self.client = BleakClient(mac, services=[SERVICE_UUID])
         return self.client
 
     async def connect(self, mac:str | None = None) -> None:
         """Connect to the Tesla BLE device."""
         if mac is not None:
-            self.client = BleakClient(mac, services=[SERVICE_UUID])
+            self.create_client(mac)
         await self.client.connect()
         await self.client.start_notify(READ_UUID, self._on_notify)
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
         return await self.client.disconnect()
+
+    async def __aenter__(self) -> VehicleBluetooth:
+        """Enter the async context."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the async context."""
+        await self.disconnect()
 
     def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray):
         """Receive data from the Tesla BLE device."""
@@ -157,15 +171,14 @@ class VehicleBluetooth(Commands):
         """Serialize a message and send to the vehicle and wait for a response."""
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
-            LOGGER.info(f"Sending message {msg}")
+            LOGGER.debug(f"Sending message {msg}")
             future = await self._create_future(domain)
             payload = prependLength(msg.SerializeToString())
-            LOGGER.info(f"Payload: {payload}")
 
             await self.client.write_gatt_char(WRITE_UUID, payload, True)
 
             resp = await future
-            LOGGER.info(f"Received message {resp}")
+            LOGGER.debug(f"Received message {resp}")
 
             if resp.signedMessageStatus.signed_message_fault:
                 raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]

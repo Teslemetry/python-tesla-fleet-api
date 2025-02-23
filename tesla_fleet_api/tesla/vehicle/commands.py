@@ -458,6 +458,13 @@ class Commands(Vehicle):
         """Sign and send a message to Infotainment computer."""
         return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
 
+    async def handshakeVehicleSecurity(self) -> None:
+        """Perform a handshake with the vehicle security domain."""
+        await self._handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+
+    async def handshakeInfotainment(self) -> None:
+        """Perform a handshake with the infotainment domain."""
+        await self._handshake(Domain.DOMAIN_INFOTAINMENT)
 
     async def _handshake(self, domain: Domain) -> None:
         """Perform a handshake with the vehicle."""
