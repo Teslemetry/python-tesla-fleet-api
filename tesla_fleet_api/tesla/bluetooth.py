@@ -1,8 +1,8 @@
 """Bluetooth only interface."""
 
 import re
-from tesla_fleet_api.tesla.tesla import Tesla
-from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from .tesla import Tesla
+from .vehicle.bluetooth import VehicleBluetooth
 
 class TeslaBluetooth(Tesla):
     """Class describing a Tesla Bluetooth connection."""

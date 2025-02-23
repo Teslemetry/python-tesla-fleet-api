@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from .fleet import VehicleFleet
 from .commands import Commands
@@ -13,7 +13,6 @@ from .proto.signatures_pb2 import (
     SessionInfo,
 )
 from .proto.universal_message_pb2 import (
-    Domain,
     RoutableMessage,
 )
 
