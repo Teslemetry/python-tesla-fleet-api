@@ -853,6 +853,123 @@ SIGNED_MESSAGE_INFORMATION_FAULTS = [
     SignedMessageInformationFaultCouldNotHashMetadata,
 ]
 
+class WhitelistOperationStatus(TeslaFleetError):
+    message = "Whitelist operation failed"
+
+class WhitelistOperationUndocumentedError(WhitelistOperationStatus):
+    message = "Undocumented whitelist operation error"
+    code = 1
+
+class WhitelistOperationNoPermissionToRemoveOneself(WhitelistOperationStatus):
+    message = "No permission to remove oneself from whitelist"
+    code = 2
+
+class WhitelistOperationKeyfobSlotsFull(WhitelistOperationStatus):
+    message = "Keyfob slots are full"
+    code = 3
+
+class WhitelistOperationWhitelistFull(WhitelistOperationStatus):
+    message = "Whitelist is full"
+    code = 4
+
+class WhitelistOperationNoPermissionToAdd(WhitelistOperationStatus):
+    message = "No permission to add to whitelist"
+    code = 5
+
+class WhitelistOperationInvalidPublicKey(WhitelistOperationStatus):
+    message = "Invalid public key"
+    code = 6
+
+class WhitelistOperationNoPermissionToRemove(WhitelistOperationStatus):
+    message = "No permission to remove from whitelist"
+    code = 7
+
+class WhitelistOperationNoPermissionToChangePermissions(WhitelistOperationStatus):
+    message = "No permission to change permissions"
+    code = 8
+
+class WhitelistOperationAttemptingToElevateOthersAboveOneself(WhitelistOperationStatus):
+    message = "Attempting to elevate others above oneself"
+    code = 9
+
+class WhitelistOperationAttemptingToDemoteSuperiorToOneself(WhitelistOperationStatus):
+    message = "Attempting to demote superior to oneself"
+    code = 10
+
+class WhitelistOperationAttemptingToRemoveOwnPermissions(WhitelistOperationStatus):
+    message = "Attempting to remove own permissions"
+    code = 11
+
+class WhitelistOperationPublicKeyNotOnWhitelist(WhitelistOperationStatus):
+    message = "Public key not on whitelist"
+    code = 12
+
+class WhitelistOperationAttemptingToAddExistingKey(WhitelistOperationStatus):
+    message = "Attempting to add key that is already on the whitelist"
+    code = 13
+
+class WhitelistOperationNotAllowedToAddUnlessOnReader(WhitelistOperationStatus):
+    message = "Not allowed to add unless on reader"
+    code = 14
+
+class WhitelistOperationFMModifyingOutsideOfFMode(WhitelistOperationStatus):
+    message = "FM modifying outside of F mode"
+    code = 15
+
+class WhitelistOperationFMAttemptingToAddPermanentKey(WhitelistOperationStatus):
+    message = "FM attempting to add permanent key"
+    code = 16
+
+class WhitelistOperationFMAttemptingToRemovePermanentKey(WhitelistOperationStatus):
+    message = "FM attempting to remove permanent key"
+    code = 17
+
+class WhitelistOperationKeychainWhileFSFull(WhitelistOperationStatus):
+    message = "Keychain while FS full"
+    code = 18
+
+class WhitelistOperationAttemptingToAddKeyWithoutRole(WhitelistOperationStatus):
+    message = "Attempting to add key without role"
+    code = 19
+
+class WhitelistOperationAttemptingToAddKeyWithServiceRole(WhitelistOperationStatus):
+    message = "Attempting to add key with service role"
+    code = 20
+
+class WhitelistOperationNonServiceKeyAttemptingToAddServiceTech(WhitelistOperationStatus):
+    message = "Non-service key attempting to add service tech"
+    code = 21
+
+class WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode(WhitelistOperationStatus):
+    message = "Service key attempting to add service tech outside service mode"
+    code = 22
+
+WHITELIST_OPERATION_STATUS = [
+    None,
+    WhitelistOperationUndocumentedError,
+    WhitelistOperationNoPermissionToRemoveOneself,
+    WhitelistOperationKeyfobSlotsFull,
+    WhitelistOperationWhitelistFull,
+    WhitelistOperationNoPermissionToAdd,
+    WhitelistOperationInvalidPublicKey,
+    WhitelistOperationNoPermissionToRemove,
+    WhitelistOperationNoPermissionToChangePermissions,
+    WhitelistOperationAttemptingToElevateOthersAboveOneself,
+    WhitelistOperationAttemptingToDemoteSuperiorToOneself,
+    WhitelistOperationAttemptingToRemoveOwnPermissions,
+    WhitelistOperationPublicKeyNotOnWhitelist,
+    WhitelistOperationAttemptingToAddExistingKey,
+    WhitelistOperationNotAllowedToAddUnlessOnReader,
+    WhitelistOperationFMModifyingOutsideOfFMode,
+    WhitelistOperationFMAttemptingToAddPermanentKey,
+    WhitelistOperationFMAttemptingToRemovePermanentKey,
+    WhitelistOperationKeychainWhileFSFull,
+    WhitelistOperationAttemptingToAddKeyWithoutRole,
+    WhitelistOperationAttemptingToAddKeyWithServiceRole,
+    WhitelistOperationNonServiceKeyAttemptingToAddServiceTech,
+    WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode
+]
+
 
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""

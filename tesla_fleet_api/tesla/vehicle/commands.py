@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod
 
+import struct
 from random import randbytes
 from typing import Any, TYPE_CHECKING
 import time
@@ -8,9 +9,19 @@ import hmac
 import hashlib
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
-from asyncio import Lock
+from cryptography.hazmat.primitives.hashes import Hash, SHA256
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from asyncio import Lock, sleep
 
-from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from ...exceptions import (
+    MESSAGE_FAULTS,
+    SIGNED_MESSAGE_INFORMATION_FAULTS,
+    TeslaFleetMessageFaultIncorrectEpoch,
+    TeslaFleetMessageFaultInvalidTokenOrCounter,
+)
+
+from .vehicle import Vehicle
+
 
 from ...const import (
     LOGGER,
@@ -21,6 +32,37 @@ from ...const import (
     WindowCommand,
 )
 
+# Protocol
+from .proto.errors_pb2 import GenericError_E
+from .proto.car_server_pb2 import (
+    Response,
+)
+from .proto.signatures_pb2 import (
+    SIGNATURE_TYPE_AES_GCM,
+    SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
+    SIGNATURE_TYPE_HMAC_PERSONALIZED,
+    TAG_COUNTER,
+    TAG_DOMAIN,
+    TAG_END,
+    TAG_EPOCH,
+    TAG_EXPIRES_AT,
+    TAG_PERSONALIZATION,
+    TAG_SIGNATURE_TYPE,
+    AES_GCM_Personalized_Signature_Data,
+    SessionInfo,
+)
+from .proto.universal_message_pb2 import (
+    DOMAIN_INFOTAINMENT,
+    DOMAIN_VEHICLE_SECURITY,
+    OPERATIONSTATUS_ERROR,
+    OPERATIONSTATUS_WAIT,
+    Domain,
+    RoutableMessage,
+)
+from .proto.vcsec_pb2 import (
+    OPERATIONSTATUS_OK,
+    FromVCSECMessage,
+)
 from .proto.universal_message_pb2 import (
     Domain,
     RoutableMessage,
@@ -73,7 +115,6 @@ from .proto.car_server_pb2 import (
     MediaPreviousFavorite,
 )
 from .proto.vehicle_pb2 import VehicleState, ClimateState
-
 from .proto.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
@@ -91,8 +132,7 @@ from .proto.common_pb2 import (
 )
 
 if TYPE_CHECKING:
-    from ..tesla import TeslaFleetApi
-
+    from ..tesla import Tesla
 
 # ENUMs to convert ints to proto typed ints
 AutoSeatClimatePositions = (
@@ -128,42 +168,51 @@ CopActivationTemps = (
 class Session:
     """A connect to a domain"""
 
+    domain: Domain
+    parent: Commands
     key: bytes
     counter: int
     epoch: bytes
     delta: int
+    sharedKey: bytes
     hmac: bytes
     publicKey: bytes
     lock: Lock
 
-    def __init__(self):
+    def __init__(self, parent: Commands, domain: Domain):
+        self.parent = parent
+        self.domain = domain
         self.lock = Lock()
         self.counter = 0
+        self.ready = False
 
-    def update(self, sessionInfo: SessionInfo, privateKey: ec.EllipticCurvePrivateKey | None = None):
+    def update(self, sessionInfo: SessionInfo):
         """Update the session with new information"""
+
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        if (privateKey and self.publicKey != sessionInfo.publicKey):
+        if (not self.ready or self.publicKey != sessionInfo.publicKey):
             self.publicKey = sessionInfo.publicKey
-            self.hmac = self.tag(self.publicKey, privateKey)
+            self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
+            self.hmac = hmac.new(self.sharedKey, "authenticated command".encode(), hashlib.sha256).digest()
+        self.ready = True
 
-    def tag(self, publicKey: bytes, private_key: ec.EllipticCurvePrivateKey) -> bytes:
-        exchange = private_key.exchange(
-            ec.ECDH(),
-            ec.EllipticCurvePublicKey.from_encoded_point(
-                ec.SECP256R1(), publicKey
-            ),
-        )
-        key = hashlib.sha1(exchange).digest()[:16]
-        return hmac.new(key, "authenticated command".encode(), hashlib.sha256).digest()
-
-    def get(self) -> HMAC_Personalized_Signature_Data:
+    def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
         self.counter = self.counter+1
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
+            counter=self.counter,
+            expires_at=int(time.time()) - self.delta + 10,
+        )
+
+    def aes_gcm_personalized(self) -> AES_GCM_Personalized_Signature_Data:
+        """Sign a command and return session metadata"""
+        self.counter = self.counter+1
+        return AES_GCM_Personalized_Signature_Data(
+            epoch=self.epoch,
+            nonce=randbytes(12),
             counter=self.counter,
             expires_at=int(time.time()) - self.delta + 10,
         )
@@ -176,23 +225,42 @@ class Commands(Vehicle):
     _public_key: bytes
     _from_destination: bytes
     _sessions: dict[int, Session]
+    _require_keys = True
+    _auth_method: str
 
     def __init__(
-        self, parent: TeslaFleetApi, vin: str, key: ec.EllipticCurvePrivateKey | None = None, public_key: bytes | None = None
+        self, parent: Tesla, vin: str, private_key: ec.EllipticCurvePrivateKey | None = None, public_key: bytes | None = None
     ):
         super().__init__(parent, vin)
-        if key:
-            self.private_key = key
-        elif parent.private_key:
-            self.private_key = parent.private_key
-        else:
-            raise ValueError("No private key.")
 
-        self._public_key = public_key or self.private_key.public_key().public_bytes(
-            encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
-        )
         self._from_destination = randbytes(16)
-        self._sessions = {}
+        self._sessions = {
+            Domain.DOMAIN_VEHICLE_SECURITY: Session(self, Domain.DOMAIN_VEHICLE_SECURITY),
+            Domain.DOMAIN_INFOTAINMENT: Session(self, Domain.DOMAIN_INFOTAINMENT),
+        }
+
+        if(self._require_keys):
+            if private_key:
+                self.private_key = private_key
+            elif parent.private_key:
+                self.private_key = parent.private_key
+            else:
+                raise ValueError("No private key.")
+
+            self._public_key = public_key or self.private_key.public_key().public_bytes(
+                encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
+        )
+
+
+    def shared_key(self, vehicleKey: bytes) -> bytes:
+        exchange = self.private_key.exchange(
+            ec.ECDH(),
+            ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), vehicleKey
+            ),
+        )
+        return hashlib.sha1(exchange).digest()[:16]
+
 
     @abstractmethod
     async def _send(self, msg: RoutableMessage) -> RoutableMessage:
@@ -200,9 +268,176 @@ class Commands(Vehicle):
         raise NotImplementedError
 
     @abstractmethod
-    async def _command(self, domain: Domain, command: bytes) -> dict[str, Any]:
+    async def _command(self, domain: Domain, command: bytes, attempt: int = 0) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
-        raise NotImplementedError
+        session = self._sessions[domain]
+        if not session.ready:
+            await self._handshake(domain)
+
+        if self._auth_method == "hmac":
+            msg = await self._commandHmac(session, command)
+        elif self._auth_method == "aes":
+            msg = await self._commandAes(session, command)
+        else:
+            raise ValueError(f"Unknown auth method: {self._auth_method}")
+
+        try:
+            resp = await self._send(msg)
+        except (
+            TeslaFleetMessageFaultIncorrectEpoch,
+            TeslaFleetMessageFaultInvalidTokenOrCounter,
+        ) as e:
+            attempt += 1
+            if attempt > 3:
+                # We tried 3 times, give up, raise the error
+                raise e
+            return await self._command(domain, command, attempt)
+
+        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
+            attempt += 1
+            if attempt > 3:
+                # We tried 3 times, give up, raise the error
+                return {"response": {"result": False, "reason": "Too many retries"}}
+            async with session.lock:
+                await sleep(2)
+            return await self._command(domain, command, attempt)
+
+        if resp.HasField("protobuf_message_as_bytes"):
+            if(resp.from_destination.domain == DOMAIN_VEHICLE_SECURITY):
+                vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
+                LOGGER.debug("VCSEC Response: %s", vcsec)
+                if vcsec.HasField("nominalError"):
+                    LOGGER.error("Command failed with reason: %s", vcsec.nominalError.genericError)
+                    return {
+                        "response": {
+                            "result": False,
+                            "reason": GenericError_E.Name(vcsec.nominalError.genericError)
+                        }
+                    }
+                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_OK:
+                    return {"response": {"result": True, "reason": ""}}
+                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_WAIT:
+                    attempt += 1
+                    if attempt > 3:
+                        # We tried 3 times, give up, raise the error
+                        return {"response": {"result": False, "reason": "Too many retries"}}
+                    async with session.lock:
+                        await sleep(2)
+                    return await self._command(domain, command, attempt)
+                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_ERROR:
+                    if(resp.HasField("signedMessageStatus")):
+                        raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
+
+            elif(resp.from_destination.domain == DOMAIN_INFOTAINMENT):
+                response = Response.FromString(resp.protobuf_message_as_bytes)
+                LOGGER.debug("Infotainment Response: %s", response)
+                if (response.HasField("ping")):
+                    print(response.ping)
+                    return {
+                        "response": {
+                            "result": True,
+                            "reason": response.ping.local_timestamp
+                        }
+                    }
+                if response.HasField("actionStatus"):
+                    return {
+                        "response": {
+                            "result": response.actionStatus.result == OPERATIONSTATUS_OK,
+                            "reason": response.actionStatus.result_reason.plain_text or ""
+                            }
+                        }
+
+        return {"response": {"result": True, "reason": ""}}
+
+    async def _commandHmac(self, session: Session, command: bytes, attempt: int = 1) -> RoutableMessage:
+        """Create a signed message."""
+        LOGGER.debug(f"Sending HMAC to domain {Domain.Name(session.domain)}")
+
+        hmac_personalized = session.hmac_personalized()
+
+        metadata = bytes([
+            TAG_SIGNATURE_TYPE,
+            1,
+            SIGNATURE_TYPE_HMAC_PERSONALIZED,
+            TAG_DOMAIN,
+            1,
+            session.domain,
+            TAG_PERSONALIZATION,
+            17,
+            *self.vin.encode(),
+            TAG_EPOCH,
+            len(hmac_personalized.epoch),
+            *hmac_personalized.epoch,
+            TAG_EXPIRES_AT,
+            4,
+            *struct.pack(">I", hmac_personalized.expires_at),
+            TAG_COUNTER,
+            4,
+            *struct.pack(">I", hmac_personalized.counter),
+            TAG_END,
+        ])
+
+        hmac_personalized.tag = hmac.new(
+            session.hmac, metadata + command, hashlib.sha256
+        ).digest()
+
+        msg = RoutableMessage()
+        msg.to_destination.domain = session.domain
+        msg.from_destination.routing_address = self._from_destination
+        msg.protobuf_message_as_bytes = command
+        msg.uuid = randbytes(16)
+        msg.signature_data.HMAC_Personalized_data.CopyFrom(hmac_personalized)
+        msg.signature_data.signer_identity.public_key = self._public_key
+
+        return msg
+
+    async def _commandAes(self, session: Session, command: bytes, attempt: int = 1) -> RoutableMessage:
+        """Create an encrypted message."""
+        LOGGER.debug(f"Sending AES to domain {Domain.Name(session.domain)}")
+
+        aes_personalized = session.aes_gcm_personalized()
+
+        metadata = bytes([
+            TAG_SIGNATURE_TYPE,
+            1,
+            SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
+            TAG_DOMAIN,
+            1,
+            session.domain,
+            TAG_PERSONALIZATION,
+            17,
+            *self.vin.encode(),
+            TAG_EPOCH,
+            len(aes_personalized.epoch),
+            *aes_personalized.epoch,
+            TAG_EXPIRES_AT,
+            4,
+            *struct.pack(">I", aes_personalized.expires_at),
+            TAG_COUNTER,
+            4,
+            *struct.pack(">I", aes_personalized.counter),
+            TAG_END,
+        ])
+
+        aad = Hash(SHA256())
+        aad.update(metadata)
+
+        aesgcm = AESGCM(session.sharedKey)
+        ct = aesgcm.encrypt(aes_personalized.nonce, command, aad.finalize())
+
+        aes_personalized.tag = ct[-16:]
+
+        # I think this whole section could be improved
+        msg = RoutableMessage()
+        msg.to_destination.domain = session.domain
+        msg.from_destination.routing_address = self._from_destination
+        msg.protobuf_message_as_bytes = ct[:-16]
+        msg.uuid = randbytes(16)
+        msg.signature_data.AES_GCM_Personalized_data.CopyFrom(aes_personalized)
+        msg.signature_data.signer_identity.public_key = self._public_key
+
+        return msg
+
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
@@ -212,11 +447,17 @@ class Commands(Vehicle):
         """Sign and send a message to Infotainment computer."""
         return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
 
-    async def _handshake(self, domain: Domain) -> Session:
+
+    async def _handle_command(self, domain: Domain, command: str, attempt: int, retry) -> dict[str, Any]:
+        """Handle a command."""
+        if attempt > MAX_RETRIES:
+            return {"response": {"result": False, "reason": "Too many retries"}}
+        async with session.lock:
+            await sleep(2)
+        return await self._commandAes(domain, command, attempt)
+
+    async def _handshake(self, domain: Domain) -> None:
         """Perform a handshake with the vehicle."""
-        if session := self._sessions.get(domain):
-            return session
-        self._sessions[domain] = Session()
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
         msg = RoutableMessage()
@@ -228,8 +469,15 @@ class Commands(Vehicle):
         # Send handshake message
         await self._send(msg)
 
-        return self._sessions[domain]
-
+    async def ping(self) -> dict[str, Any]:
+        """Ping the vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    ping=None
+                )
+            )
+        )
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""

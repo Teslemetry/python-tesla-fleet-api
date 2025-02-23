@@ -1,13 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from tesla_fleet_api.const import Method
-
-from ..tesla.vehicle.vehicle import Vehicle, Vehicles
-from ..tesla.vehicle.signed import VehicleSigned
+from ..const import Method
+from ..tesla.vehicle.proto.universal_message_pb2 import Domain
+from ..tesla.vehicle.vehicle import Vehicle
+from ..tesla.vehicle.vehicles import Vehicles
 from ..tesla.vehicle.bluetooth import VehicleBluetooth
 from ..tesla.vehicle.fleet import VehicleFleet
 
+if TYPE_CHECKING:
+    from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
 class TeslemetryVehicle(Vehicle):
     """Teslemetry specific base vehicle."""
@@ -50,10 +52,23 @@ class TeslemetryVehicleFleet(VehicleFleet):
 
 class TeslemetryVehicleBluetooth(VehicleBluetooth):
     """Teslemetry specific Bluetooth vehicle."""
-    pass
+
+    _hmacs: dict[Domain, bytes]
+    _require_keys = False
+
+    def __init__(
+        self, parent: Teslemetry, vin: str
+    ):
+        super().__init__(parent, vin)
+        self._request = parent._request
+
 
 class TeslemetryVehicles(Vehicles):
     """Class containing and creating vehicles."""
+
+    def create(self, vin: str) -> TeslemetryVehicleFleet:
+        """Creates a specific vehicle."""
+        return self.createFleet(vin)
 
     def createFleet(self, vin: str) -> TeslemetryVehicleFleet:
         """Creates a specific vehicle."""
@@ -67,6 +82,4 @@ class TeslemetryVehicles(Vehicles):
 
     def createBluetooth(self, vin: str) -> TeslemetryVehicleBluetooth:
         """Creates a specific vehicle."""
-        vehicle = TeslemetryVehicleBluetooth(self._parent, vin)
-        self[vin] = vehicle
-        return vehicle
+        raise NotImplementedError("Bluetooth is only handled locally")

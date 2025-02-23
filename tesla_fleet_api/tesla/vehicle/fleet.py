@@ -20,7 +20,7 @@ from .vehicle import Vehicle
 DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_","-")
 
 if TYPE_CHECKING:
-    from ..tesla import TeslaFleetApi
+    from ..fleet import TeslaFleetApi
 
 class VehicleFleet(Vehicle):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""

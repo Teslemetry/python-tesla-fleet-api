@@ -1,6 +1,6 @@
 import aiohttp
 from typing import Any
-from ..tesla.tesla import TeslaFleetApi
+from ..tesla import TeslaFleetApi
 from ..const import Method
 
 class Tessie(TeslaFleetApi):
