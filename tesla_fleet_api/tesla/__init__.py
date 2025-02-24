@@ -1,8 +1,8 @@
 """Tesla Fleet API classes."""
 
-from .fleet import TeslaFleetApi
-from .bluetooth import TeslaBluetooth
-from .oauth import TeslaFleetOAuth
+from tesla_fleet_api.tesla.fleet import TeslaFleetApi
+from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
+from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 
 __all__ = [
     "TeslaFleetApi",

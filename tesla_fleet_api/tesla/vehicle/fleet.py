@@ -4,7 +4,7 @@ from locale import getlocale
 from time import time
 from typing import TYPE_CHECKING, Any, List
 
-from ...const import (
+from tesla_fleet_api.const import (
     CabinOverheatProtectionTemp,
     ClimateKeeperMode,
     Level,
@@ -15,12 +15,12 @@ from ...const import (
     VehicleDataEndpoint,
     WindowCommand,
 )
-from .vehicle import Vehicle
+from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_","-")
 
 if TYPE_CHECKING:
-    from ..fleet import TeslaFleetApi
+    from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 class VehicleFleet(Vehicle):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""

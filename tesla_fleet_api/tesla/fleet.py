@@ -4,14 +4,14 @@ from json import dumps
 from typing import Any, Awaitable
 import aiohttp
 
-from .tesla import Tesla
-from ..exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
-from ..const import SERVERS, Method, LOGGER, VERSION
-from .charging import Charging
-from .energysite import EnergySites
-from .partner import Partner
-from .user import User
-from .vehicle.vehicles import Vehicles
+from tesla_fleet_api.tesla.tesla import Tesla
+from tesla_fleet_api.exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
+from tesla_fleet_api.const import SERVERS, Method, LOGGER, VERSION
+from tesla_fleet_api.tesla.charging import Charging
+from tesla_fleet_api.tesla.energysite import EnergySites
+from tesla_fleet_api.tesla.partner import Partner
+from tesla_fleet_api.tesla.user import User
+from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 
 
 # Based on https://developer.tesla.com/docs/fleet-api

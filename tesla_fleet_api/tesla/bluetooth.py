@@ -2,8 +2,9 @@
 
 import hashlib
 import re
-from .tesla import Tesla
-from .vehicle.bluetooth import VehicleBluetooth
+
+from tesla_fleet_api.tesla.tesla import Tesla
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 
 class TeslaBluetooth(Tesla):
     """Class describing a Tesla Bluetooth connection."""
@@ -30,6 +31,10 @@ class Vehicles(dict[str, VehicleBluetooth]):
 
     def __init__(self, parent: TeslaBluetooth):
         self._parent = parent
+
+    def create(self, vin: str) -> VehicleBluetooth:
+        """Creates a specific vehicle."""
+        return self.createBluetooth(vin)
 
     def createBluetooth(self, vin: str) -> VehicleBluetooth:
         """Creates a specific vehicle."""

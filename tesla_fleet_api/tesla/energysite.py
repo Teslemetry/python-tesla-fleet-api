@@ -1,9 +1,9 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
-from ..const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyPeriod
+from tesla_fleet_api.const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyPeriod
 
 if TYPE_CHECKING:
-    from . import TeslaFleetApi
+    from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 class EnergySite:
     """Class describing the Tesla Fleet API partner endpoints"""

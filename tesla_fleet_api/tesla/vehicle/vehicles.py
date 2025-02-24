@@ -1,13 +1,13 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from .signed import VehicleSigned
-from .bluetooth import VehicleBluetooth
-from .fleet import VehicleFleet
-from .vehicle import Vehicle
+from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
+from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 if TYPE_CHECKING:
-    from ..fleet import TeslaFleetApi
+    from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
 

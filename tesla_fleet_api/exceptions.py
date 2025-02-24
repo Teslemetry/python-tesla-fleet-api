@@ -1,5 +1,5 @@
 import aiohttp
-from .const import LOGGER
+from tesla_fleet_api.const import LOGGER
 
 
 class TeslaFleetError(BaseException):
@@ -856,6 +856,9 @@ SIGNED_MESSAGE_INFORMATION_FAULTS = [
 class WhitelistOperationStatus(TeslaFleetError):
     message = "Whitelist operation failed"
 
+    def __init__(self, message):
+        self.message = message
+
 class WhitelistOperationUndocumentedError(WhitelistOperationStatus):
     message = "Undocumented whitelist operation error"
     code = 1
@@ -944,6 +947,14 @@ class WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode(W
     message = "Service key attempting to add service tech outside service mode"
     code = 22
 
+# No idea what 23 & 24 are
+
+class WhitelistOperationServiceAuthorizationRequestTimedOut(WhitelistOperationStatus):
+    # This is observed but not documented
+    message = "Authorization request timed out"
+    code = 25
+
+
 WHITELIST_OPERATION_STATUS = [
     None,
     WhitelistOperationUndocumentedError,
@@ -967,7 +978,10 @@ WHITELIST_OPERATION_STATUS = [
     WhitelistOperationAttemptingToAddKeyWithoutRole,
     WhitelistOperationAttemptingToAddKeyWithServiceRole,
     WhitelistOperationNonServiceKeyAttemptingToAddServiceTech,
-    WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode
+    WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode,
+    WhitelistOperationStatus,
+    WhitelistOperationStatus,
+    WhitelistOperationServiceAuthorizationRequestTimedOut
 ]
 
 

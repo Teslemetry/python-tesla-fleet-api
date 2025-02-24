@@ -1,5 +1,5 @@
 from typing import Any
-from ..const import Method
+from tesla_fleet_api.const import Method
 
 
 class Charging:

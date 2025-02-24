@@ -12,34 +12,36 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.proto.keys_pb2 import Role
 
-from .commands import Commands
+from tesla_fleet_api.tesla.vehicle.commands import Commands
 
-from ...const import (
+from tesla_fleet_api.const import (
     LOGGER,
 )
-from ...exceptions import (
+from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     WHITELIST_OPERATION_STATUS,
+    WhitelistOperationStatus,
 )
 
 # Protocol
-from .proto.car_server_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Response,
 )
-from .proto.signatures_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SessionInfo,
 )
-from .proto.universal_message_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,
 )
-from .proto.vcsec_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     FromVCSECMessage,
     KeyFormFactor,
     KeyMetadata,
     PermissionChange,
     PublicKey,
+    RKEAction_E,
     UnsignedMessage,
     WhitelistOperation,
 
@@ -51,7 +53,7 @@ READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e"
 VERSION_UUID = "00000214-b2d1-43f0-9b88-960cebf8b91e"
 
 if TYPE_CHECKING:
-    from ..tesla import Tesla
+    from tesla_fleet_api.tesla.tesla import Tesla
 
 def prependLength(message: bytes) -> bytearray:
     """Prepend a 2-byte length to the payload."""
@@ -76,7 +78,7 @@ class VehicleBluetooth(Commands):
         self.ble_name = "S" + hashlib.sha1(vin.encode('utf-8')).hexdigest()[:16] + "C"
         self._futures = {}
 
-    async def discover(self, scanner: BleakScanner = BleakScanner()) -> BleakClient:
+    async def find_client(self, scanner: BleakScanner = BleakScanner()) -> BleakClient:
         """Find the Tesla BLE device."""
 
         device = await scanner.find_device_by_name(self.ble_name)
@@ -87,8 +89,8 @@ class VehicleBluetooth(Commands):
         LOGGER.debug(f"Discovered device {self._device.name} {self._device.address}")
         return self.client
 
-    def create_client(self, mac:str):
-        """Create a client with a MAC."""
+    def create_client(self, mac:str) -> BleakClient:
+        """Create a client using a MAC address."""
         self.client = BleakClient(mac, services=[SERVICE_UUID])
         return self.client
 
@@ -108,11 +110,11 @@ class VehicleBluetooth(Commands):
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the async context."""
         await self.disconnect()
 
-    def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray):
+    def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray) -> None:
         """Receive data from the Tesla BLE device."""
         if self._recv_len:
             self._recv += data
@@ -131,7 +133,7 @@ class VehicleBluetooth(Commands):
             self._recv = bytearray()
             self._recv_len = 0
 
-    def _on_message(self, data:bytes):
+    def _on_message(self, data:bytes) -> None:
         """Receive messages from the Tesla BLE data."""
         try:
             msg = RoutableMessage.FromString(data)
@@ -149,17 +151,17 @@ class VehicleBluetooth(Commands):
             # Get the ephemeral key here and save to self._ekey
             return
 
-        if msg.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
-            submsg = FromVCSECMessage.FromString(msg.protobuf_message_as_bytes)
-            print(submsg)
-        elif msg.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
-            submsg = Response.FromString(msg.protobuf_message_as_bytes)
-            print(submsg)
-
         if(self._futures[msg.from_destination.domain]):
             LOGGER.debug(f"Received response for request {msg.request_uuid}")
             self._futures[msg.from_destination.domain].set_result(msg)
             return
+
+        if msg.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
+            submsg = FromVCSECMessage.FromString(msg.protobuf_message_as_bytes)
+            LOGGER.warning(f"Received orphaned VCSEC response: {submsg}")
+        elif msg.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
+            submsg = Response.FromString(msg.protobuf_message_as_bytes)
+            LOGGER.warning(f"Received orphaned INFOTAINMENT response: {submsg}")
 
     async def _create_future(self, domain: Domain) -> Future:
         if(not self._sessions[domain].lock.locked):
@@ -210,10 +212,15 @@ class VehicleBluetooth(Commands):
         )
         resp = await self._send(msg)
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
-        print(respMsg)
         if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation):
             if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation < len(WHITELIST_OPERATION_STATUS)):
                 raise WHITELIST_OPERATION_STATUS[respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation]
             else:
-                raise ValueError(f"Unknown whitelist operation status: {respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation}")
+                raise WhitelistOperationStatus(f"Unknown whitelist operation failure: {respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation}")
         return
+
+    async def wake_up(self):
+        """Wake up the vehicle."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+        )

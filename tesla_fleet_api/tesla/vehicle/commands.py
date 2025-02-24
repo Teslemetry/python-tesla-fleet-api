@@ -13,16 +13,16 @@ from cryptography.hazmat.primitives.hashes import Hash, SHA256
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from asyncio import Lock, sleep
 
-from ...exceptions import (
+from tesla_fleet_api.exceptions import (
     SIGNED_MESSAGE_INFORMATION_FAULTS,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
 )
 
-from .vehicle import Vehicle
+from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 
-from ...const import (
+from tesla_fleet_api.const import (
     LOGGER,
     Trunk,
     ClimateKeeperMode,
@@ -32,11 +32,11 @@ from ...const import (
 )
 
 # Protocol
-from .proto.errors_pb2 import GenericError_E
-from .proto.car_server_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.errors_pb2 import GenericError_E
+from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Response,
 )
-from .proto.signatures_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
     SIGNATURE_TYPE_HMAC_PERSONALIZED,
     TAG_COUNTER,
@@ -51,7 +51,7 @@ from .proto.signatures_pb2 import (
     SessionInfo,
     SignatureData,
 )
-from .proto.universal_message_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     DOMAIN_INFOTAINMENT,
     DOMAIN_VEHICLE_SECURITY,
     OPERATIONSTATUS_ERROR,
@@ -61,11 +61,11 @@ from .proto.universal_message_pb2 import (
     RoutableMessage,
     SessionInfoRequest,
 )
-from .proto.vcsec_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     OPERATIONSTATUS_OK,
     FromVCSECMessage,
 )
-from .proto.car_server_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Action,
     MediaPlayAction,
     VehicleAction,
@@ -83,8 +83,6 @@ from .proto.car_server_pb2 import (
     HvacSteeringWheelHeaterAction,
     HvacTemperatureAdjustmentAction,
     GetNearbyChargingSites,
-    # NearbyChargingSites,
-    # Superchargers,
     VehicleControlCancelSoftwareUpdateAction,
     VehicleControlHonkHornAction,
     VehicleControlResetValetPinAction,
@@ -112,24 +110,24 @@ from .proto.car_server_pb2 import (
     MediaPreviousTrack,
     MediaPreviousFavorite,
 )
-from .proto.vehicle_pb2 import VehicleState, ClimateState
-from .proto.vcsec_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import VehicleState, ClimateState
+from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
     ClosureMoveRequest,
     ClosureMoveType_E,
 )
-from .proto.signatures_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     HMAC_Personalized_Signature_Data,
 )
-from .proto.common_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
     Void,
     PreconditioningTimes,
     OffPeakChargingTimes,
 )
 
 if TYPE_CHECKING:
-    from ..tesla import Tesla
+    from tesla_fleet_api.tesla.tesla import Tesla
 
 # ENUMs to convert ints to proto typed ints
 AutoSeatClimatePositions = (

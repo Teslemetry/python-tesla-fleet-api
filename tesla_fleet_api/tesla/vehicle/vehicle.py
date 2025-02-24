@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from ..tesla import Tesla
+    from tesla_fleet_api.tesla.tesla import Tesla
 
 
 class Vehicle:

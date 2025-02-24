@@ -3,21 +3,20 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING
 
-from .fleet import VehicleFleet
-from .commands import Commands
-
-from ...exceptions import (
+from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
+from tesla_fleet_api.tesla.vehicle.commands import Commands
+from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
 )
-from .proto.signatures_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SessionInfo,
 )
-from .proto.universal_message_pb2 import (
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     RoutableMessage,
 )
 
 if TYPE_CHECKING:
-    from ..fleet import TeslaFleetApi
+    from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
 class VehicleSigned(VehicleFleet, Commands):

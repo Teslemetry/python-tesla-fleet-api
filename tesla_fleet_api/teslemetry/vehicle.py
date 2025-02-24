@@ -1,15 +1,13 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from ..const import Method
-from ..tesla.vehicle.proto.universal_message_pb2 import Domain
-from ..tesla.vehicle.vehicle import Vehicle
-from ..tesla.vehicle.vehicles import Vehicles
-from ..tesla.vehicle.bluetooth import VehicleBluetooth
-from ..tesla.vehicle.fleet import VehicleFleet
+from tesla_fleet_api.const import Method
+from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
+from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 
 if TYPE_CHECKING:
-    from .teslemetry import Teslemetry
+    pass
 
 class TeslemetryVehicle(Vehicle):
     """Teslemetry specific base vehicle."""

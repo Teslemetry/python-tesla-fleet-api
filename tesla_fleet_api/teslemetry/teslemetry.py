@@ -2,12 +2,12 @@ from typing import Any
 
 import aiohttp
 
-from ..tesla.charging import Charging
-from ..tesla.energysite import EnergySites
-from ..tesla.user import User
-from .vehicle import TeslemetryVehicles
-from ..const import LOGGER, Method
-from ..tesla import TeslaFleetApi
+from tesla_fleet_api.tesla.charging import Charging
+from tesla_fleet_api.tesla.energysite import EnergySites
+from tesla_fleet_api.tesla.user import User
+from tesla_fleet_api.teslemetry.vehicle import TeslemetryVehicles
+from tesla_fleet_api.const import LOGGER, Method
+from tesla_fleet_api.tesla import TeslaFleetApi
 
 class Teslemetry(TeslaFleetApi):
 

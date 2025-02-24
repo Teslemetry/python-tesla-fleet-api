@@ -2,8 +2,8 @@ from typing import Any
 import aiohttp
 import time
 
-from . import TeslaFleetApi
-from ..const import Scope, SERVERS, Method
+from tesla_fleet_api.tesla import TeslaFleetApi
+from tesla_fleet_api.const import Scope, SERVERS, Method
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
