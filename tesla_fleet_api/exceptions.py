@@ -656,6 +656,26 @@ class TeslaFleetMessageFaultResponseSizeExceedsMTU(TeslaFleetMessageFault):
     message = "Client's request was received, but response size exceeded MTU"
     code = 25
 
+class TeslaFleetMessageFaultRepeatedCounter(TeslaFleetMessageFault):
+    """The vehicle has seen this counter value before. Reset the counter and try again"""
+
+    message = "The vehicle has seen this counter value before. Reset the counter and try again"
+    code = 26
+
+
+class TeslaFleetMessageFaultInvalidKeyHandle(TeslaFleetMessageFault):
+    """The key handle is not valid. The key may have been revoked or expired"""
+
+    message = "The key handle is not valid. The key may have been revoked or expired"
+    code = 27
+
+
+class TeslaFleetMessageFaultRequiresResponseEncryption(TeslaFleetMessageFault):
+    """The response requires encryption but encryption was not requested"""
+
+    message = "The response requires encryption but encryption was not requested"
+    code = 28
+
 
 MESSAGE_FAULTS = [
     None,
@@ -684,9 +704,9 @@ MESSAGE_FAULTS = [
     TeslaFleetMessageFaultCommandRequiresAccountCredentials,
     TeslaFleetMessageFaultFieldExceedsMTU,
     TeslaFleetMessageFaultResponseSizeExceedsMTU,
-    None,
-    None,
-    None,
+    TeslaFleetMessageFaultRepeatedCounter,
+    TeslaFleetMessageFaultInvalidKeyHandle,
+    TeslaFleetMessageFaultRequiresResponseEncryption,
 ]
 
 class SignedMessageInformationFault(TeslaFleetError):

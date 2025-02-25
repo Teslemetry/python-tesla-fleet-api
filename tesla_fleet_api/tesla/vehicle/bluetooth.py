@@ -16,19 +16,37 @@ from tesla_fleet_api.tesla.vehicle.commands import Commands
 
 from tesla_fleet_api.const import (
     LOGGER,
+    BluetoothVehicleData
 )
 from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     WHITELIST_OPERATION_STATUS,
     WhitelistOperationStatus,
+    NotOnWhitelistFault,
 )
 
 # Protocol
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+    Action,
+    VehicleAction,
     Response,
+    GetVehicleData,
+    GetChargeState,
+    GetClimateState,
+    GetDriveState,
+    GetLocationState,
+    GetClosuresState,
+    GetChargeScheduleState,
+    GetPreconditioningScheduleState,
+    GetTirePressureState,
+    GetMediaState,
+    GetMediaDetailState,
+    GetSoftwareUpdateState,
+    GetParentalControlsState,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SessionInfo,
+    Session_Info_Status
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Destination,
@@ -44,7 +62,6 @@ from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     RKEAction_E,
     UnsignedMessage,
     WhitelistOperation,
-
 )
 
 SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e"
@@ -64,7 +81,6 @@ class VehicleBluetooth(Commands):
 
     ble_name: str
     client: BleakClient
-    _device: BLEDevice
     _futures: dict[Domain, Future]
     _ekey: ec.EllipticCurvePublicKey
     _recv: bytearray = bytearray()
@@ -72,11 +88,13 @@ class VehicleBluetooth(Commands):
     _auth_method = "aes"
 
     def __init__(
-        self, parent: Tesla, vin: str, key: ec.EllipticCurvePrivateKey | None = None
+        self, parent: Tesla, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: None | str | BLEDevice = None
     ):
         super().__init__(parent, vin, key)
         self.ble_name = "S" + hashlib.sha1(vin.encode('utf-8')).hexdigest()[:16] + "C"
         self._futures = {}
+        if device is not None:
+            self.client = BleakClient(device, services=[SERVICE_UUID])
 
     async def find_client(self, scanner: BleakScanner = BleakScanner()) -> BleakClient:
         """Find the Tesla BLE device."""
@@ -84,20 +102,19 @@ class VehicleBluetooth(Commands):
         device = await scanner.find_device_by_name(self.ble_name)
         if not device:
             raise ValueError(f"Device {self.ble_name} not found")
-        self._device = device
-        self.client = BleakClient(self._device, services=[SERVICE_UUID])
-        LOGGER.debug(f"Discovered device {self._device.name} {self._device.address}")
+        self.client = BleakClient(device, services=[SERVICE_UUID])
+        LOGGER.debug(f"Discovered device {device.name} {device.address}")
         return self.client
 
-    def create_client(self, mac:str) -> BleakClient:
-        """Create a client using a MAC address."""
-        self.client = BleakClient(mac, services=[SERVICE_UUID])
+    def create_client(self, device: str|BLEDevice) -> BleakClient:
+        """Create a client using a MAC address or Bleak Device."""
+        self.client = BleakClient(device, services=[SERVICE_UUID])
         return self.client
 
-    async def connect(self, mac:str | None = None) -> None:
+    async def connect(self, device: str|BLEDevice | None = None) -> None:
         """Connect to the Tesla BLE device."""
-        if mac is not None:
-            self.create_client(mac)
+        if device is not None:
+            self.create_client(device)
         await self.client.connect()
         await self.client.start_notify(READ_UUID, self._on_notify)
 
@@ -139,12 +156,17 @@ class VehicleBluetooth(Commands):
             msg = RoutableMessage.FromString(data)
         except DecodeError as e:
             LOGGER.error(f"Error parsing message: {e}")
+            self._recv = bytearray()
+            self._recv_len = 0
             return
 
         # Update Session
         if(msg.session_info):
             info = SessionInfo.FromString(msg.session_info)
-            LOGGER.debug(f"Received session info: {info}")
+            # maybe dont?
+            if(info.status == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST):
+                 self._futures[msg.from_destination.domain].set_exception(NotOnWhitelistFault())
+                 return
             self._sessions[msg.from_destination.domain].update(info)
 
         if(msg.to_destination.routing_address != self._from_destination):
@@ -162,6 +184,8 @@ class VehicleBluetooth(Commands):
         elif msg.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
             submsg = Response.FromString(msg.protobuf_message_as_bytes)
             LOGGER.warning(f"Received orphaned INFOTAINMENT response: {submsg}")
+        else:
+            LOGGER.warning(f"Received orphaned response: {msg}")
 
     async def _create_future(self, domain: Domain) -> Future:
         if(not self._sessions[domain].lock.locked):
@@ -182,7 +206,7 @@ class VehicleBluetooth(Commands):
             resp = await future
             LOGGER.debug(f"Received message {resp}")
 
-            if resp.signedMessageStatus.signed_message_fault:
+            if resp.signedMessageStatus.signed_message_fault > 0:
                 raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]
 
             return resp
@@ -223,4 +247,27 @@ class VehicleBluetooth(Commands):
         """Wake up the vehicle."""
         return await self._sendVehicleSecurity(
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+        )
+
+    async def vehicle_data(self, endpoints: list[BluetoothVehicleData]):
+        """Get vehicle data."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getChargeState = GetChargeState() if BluetoothVehicleData.CHARGE_STATE in endpoints else None,
+                        getClimateState = GetClimateState() if BluetoothVehicleData.CLIMATE_STATE in endpoints else None,
+                        getDriveState = GetDriveState() if BluetoothVehicleData.DRIVE_STATE in endpoints else None,
+                        getLocationState = GetLocationState() if BluetoothVehicleData.LOCATION_STATE in endpoints else None,
+                        getClosuresState = GetClosuresState() if BluetoothVehicleData.CLOSURES_STATE in endpoints else None,
+                        getChargeScheduleState = GetChargeScheduleState() if BluetoothVehicleData.CHARGE_SCHEDULE_STATE in endpoints else None,
+                        getPreconditioningScheduleState = GetPreconditioningScheduleState() if BluetoothVehicleData.PRECONDITIONING_SCHEDULE_STATE in endpoints else None,
+                        getTirePressureState = GetTirePressureState() if BluetoothVehicleData.TIRE_PRESSURE_STATE in endpoints else None,
+                        getMediaState = GetMediaState() if BluetoothVehicleData.MEDIA_STATE in endpoints else None,
+                        getMediaDetailState = GetMediaDetailState() if BluetoothVehicleData.MEDIA_DETAIL_STATE in endpoints else None,
+                        getSoftwareUpdateState = GetSoftwareUpdateState() if BluetoothVehicleData.SOFTWARE_UPDATE_STATE in endpoints else None,
+                        getParentalControlsState = GetParentalControlsState() if BluetoothVehicleData.PARENTAL_CONTROLS_STATE in endpoints else None,
+                    )
+                )
+            )
         )

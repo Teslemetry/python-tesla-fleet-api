@@ -159,3 +159,17 @@ class TeslaEnergyPeriod(StrEnum):
     MONTH = "month"
     YEAR = "year"
     LIFETIME = "lifetime"
+
+class BluetoothVehicleData(StrEnum):
+    CHARGE_STATE = "GetChargeState"
+    CLIMATE_STATE = "GetClimateState"
+    DRIVE_STATE = "GetDriveState"
+    LOCATION_STATE = "GetLocationState"
+    CLOSURES_STATE = "GetClosuresState"
+    CHARGE_SCHEDULE_STATE = "GetChargeScheduleState"
+    PRECONDITIONING_SCHEDULE_STATE = "GetPreconditioningScheduleState"
+    TIRE_PRESSURE_STATE = "GetTirePressureState"
+    MEDIA_STATE = "GetMediaState"
+    MEDIA_DETAIL_STATE = "GetMediaDetailState"
+    SOFTWARE_UPDATE_STATE = "GetSoftwareUpdateState"
+    PARENTAL_CONTROLS_STATE = "GetParentalControlsState"

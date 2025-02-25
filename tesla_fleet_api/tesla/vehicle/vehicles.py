@@ -31,7 +31,7 @@ class Vehicles(dict[str, Vehicle]):
         self[vin] = vehicle
         return vehicle
 
-    def createBluetooth(self, vin: str) -> VehicleBluetooth:
+    def createBluetooth(self, vin: str):
         """Creates a bluetooth vehicle that uses command protocol."""
         vehicle = VehicleBluetooth(self._parent, vin)
         self[vin] = vehicle

@@ -15,6 +15,7 @@ from asyncio import Lock, sleep
 
 from tesla_fleet_api.exceptions import (
     SIGNED_MESSAGE_INFORMATION_FAULTS,
+    #TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
 )
@@ -37,29 +38,20 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Response,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
-    SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
-    SIGNATURE_TYPE_HMAC_PERSONALIZED,
-    TAG_COUNTER,
-    TAG_DOMAIN,
-    TAG_END,
-    TAG_EPOCH,
-    TAG_EXPIRES_AT,
-    TAG_PERSONALIZATION,
-    TAG_SIGNATURE_TYPE,
+    SignatureType,
+    Tag,
     AES_GCM_Personalized_Signature_Data,
     KeyIdentity,
     SessionInfo,
     SignatureData,
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
-    DOMAIN_INFOTAINMENT,
-    DOMAIN_VEHICLE_SECURITY,
-    OPERATIONSTATUS_ERROR,
-    OPERATIONSTATUS_WAIT,
+    OperationStatus_E,
     Destination,
     Domain,
     RoutableMessage,
     SessionInfoRequest,
+    Flags,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     OPERATIONSTATUS_OK,
@@ -279,6 +271,7 @@ class Commands(Vehicle):
         try:
             resp = await self._send(msg)
         except (
+            #TeslaFleetMessageFaultInvalidSignature,
             TeslaFleetMessageFaultIncorrectEpoch,
             TeslaFleetMessageFaultInvalidTokenOrCounter,
         ) as e:
@@ -288,7 +281,7 @@ class Commands(Vehicle):
                 raise e
             return await self._command(domain, command, attempt)
 
-        if resp.signedMessageStatus.operation_status == OPERATIONSTATUS_WAIT:
+        if resp.signedMessageStatus.operation_status == OperationStatus_E.OPERATIONSTATUS_WAIT:
             attempt += 1
             if attempt > 3:
                 # We tried 3 times, give up, raise the error
@@ -298,7 +291,46 @@ class Commands(Vehicle):
             return await self._command(domain, command, attempt)
 
         if resp.HasField("protobuf_message_as_bytes"):
-            if(resp.from_destination.domain == DOMAIN_VEHICLE_SECURITY):
+            #decrypt
+            if(resp.signature_data.HasField("AES_GCM_Response_data")):
+                print(resp.signature_data.AES_GCM_Response_data)
+                if(msg.signature_data.HasField("AES_GCM_Personalized_Signature_Data")):
+                    tag = bytes(SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED) + msg.signature_data.AES_GCM_Personalized_data.tag
+                elif(msg.signature_data.HasField("HMAC_Personalized_data")):
+                    tag = bytes(SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED) + msg.signature_data.HMAC_Personalized_data.tag[:16]
+                else:
+                    raise ValueError("Invalid request signature data")
+                metadata = bytes([
+                    Tag.TAG_SIGNATURE_TYPE,
+                    1,
+                    SignatureType.SIGNATURE_TYPE_AES_GCM_RESPONSE,
+                    Tag.TAG_DOMAIN,
+                    1,
+                    session.domain,
+                    Tag.TAG_PERSONALIZATION,
+                    17,
+                    *self.vin.encode(),
+                    Tag.TAG_COUNTER,
+                    4,
+                    *struct.pack(">I", session.counter),
+                    Tag.TAG_FLAGS,
+                    1,
+                    msg.flags,
+                    Tag.TAG_REQUEST_HASH,
+                    17,
+                    *tag,
+                    Tag.TAG_FAULT,
+                    1,
+                    resp.signedMessageStatus.signed_message_fault,
+                    Tag.TAG_END,
+                ])
+
+                aad = Hash(SHA256())
+                aad.update(metadata)
+                aesgcm = AESGCM(session.sharedKey)
+                resp.protobuf_message_as_bytes = aesgcm.decrypt(resp.signature_data.AES_GCM_Response_data.nonce, resp.protobuf_message_as_bytes, aad.finalize())
+
+            if(resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY):
                 vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
                 LOGGER.debug("VCSEC Response: %s", vcsec)
                 if vcsec.HasField("nominalError"):
@@ -309,9 +341,9 @@ class Commands(Vehicle):
                             "reason": GenericError_E.Name(vcsec.nominalError.genericError)
                         }
                     }
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_OK:
+                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_OK:
                     return {"response": {"result": True, "reason": ""}}
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_WAIT:
+                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_WAIT:
                     attempt += 1
                     if attempt > 3:
                         # We tried 3 times, give up, raise the error
@@ -319,15 +351,14 @@ class Commands(Vehicle):
                     async with session.lock:
                         await sleep(2)
                     return await self._command(domain, command, attempt)
-                elif vcsec.commandStatus.operationStatus == OPERATIONSTATUS_ERROR:
+                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_ERROR:
                     if(resp.HasField("signedMessageStatus")):
                         raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
 
-            elif(resp.from_destination.domain == DOMAIN_INFOTAINMENT):
+            elif(resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT):
                 response = Response.FromString(resp.protobuf_message_as_bytes)
                 LOGGER.debug("Infotainment Response: %s", response)
                 if (response.HasField("ping")):
-                    print(response.ping)
                     return {
                         "response": {
                             "result": True,
@@ -337,7 +368,7 @@ class Commands(Vehicle):
                 if response.HasField("actionStatus"):
                     return {
                         "response": {
-                            "result": response.actionStatus.result == OPERATIONSTATUS_OK,
+                            "result": response.actionStatus.result == OperationStatus_E.OPERATIONSTATUS_OK,
                             "reason": response.actionStatus.result_reason.plain_text or ""
                             }
                         }
@@ -351,25 +382,25 @@ class Commands(Vehicle):
         hmac_personalized = session.hmac_personalized()
 
         metadata = bytes([
-            TAG_SIGNATURE_TYPE,
+            Tag.TAG_SIGNATURE_TYPE,
             1,
-            SIGNATURE_TYPE_HMAC_PERSONALIZED,
-            TAG_DOMAIN,
+            SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED,
+            Tag.TAG_DOMAIN,
             1,
             session.domain,
-            TAG_PERSONALIZATION,
+            Tag.TAG_PERSONALIZATION,
             17,
             *self.vin.encode(),
-            TAG_EPOCH,
+            Tag.TAG_EPOCH,
             len(hmac_personalized.epoch),
             *hmac_personalized.epoch,
-            TAG_EXPIRES_AT,
+            Tag.TAG_EXPIRES_AT,
             4,
             *struct.pack(">I", hmac_personalized.expires_at),
-            TAG_COUNTER,
+            Tag.TAG_COUNTER,
             4,
             *struct.pack(">I", hmac_personalized.counter),
-            TAG_END,
+            Tag.TAG_END,
         ])
 
         hmac_personalized.tag = hmac.new(
@@ -400,25 +431,28 @@ class Commands(Vehicle):
         aes_personalized = session.aes_gcm_personalized()
 
         metadata = bytes([
-            TAG_SIGNATURE_TYPE,
+            Tag.TAG_SIGNATURE_TYPE,
             1,
-            SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
-            TAG_DOMAIN,
+            SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
+            Tag.TAG_DOMAIN,
             1,
             session.domain,
-            TAG_PERSONALIZATION,
+            Tag.TAG_PERSONALIZATION,
             17,
             *self.vin.encode(),
-            TAG_EPOCH,
+            Tag.TAG_EPOCH,
             len(aes_personalized.epoch),
             *aes_personalized.epoch,
-            TAG_EXPIRES_AT,
+            Tag.TAG_EXPIRES_AT,
             4,
             *struct.pack(">I", aes_personalized.expires_at),
-            TAG_COUNTER,
+            Tag.TAG_COUNTER,
             4,
             *struct.pack(">I", aes_personalized.counter),
-            TAG_END,
+            Tag.TAG_FLAGS,
+            4,
+            0,0,0,Flags.FLAG_ENCRYPT_RESPONSE,
+            Tag.TAG_END,
         ])
 
         aad = Hash(SHA256())
@@ -429,7 +463,6 @@ class Commands(Vehicle):
 
         aes_personalized.tag = ct[-16:]
 
-        # I think this whole section could be improved
         return RoutableMessage(
             to_destination=Destination(
                 domain=session.domain,
@@ -444,7 +477,8 @@ class Commands(Vehicle):
                     public_key=self._public_key
                 ),
                 AES_GCM_Personalized_data=aes_personalized,
-            )
+            ),
+            flags=Flags.FLAG_ENCRYPT_RESPONSE,
         )
 
 
@@ -464,7 +498,7 @@ class Commands(Vehicle):
         """Perform a handshake with the infotainment domain."""
         await self._handshake(Domain.DOMAIN_INFOTAINMENT)
 
-    async def _handshake(self, domain: Domain) -> None:
+    async def _handshake(self, domain: Domain) -> bool:
         """Perform a handshake with the vehicle."""
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
@@ -482,6 +516,7 @@ class Commands(Vehicle):
         )
 
         await self._send(msg)
+        return self._sessions[domain].ready
 
     async def ping(self) -> dict[str, Any]:
         """Ping the vehicle."""

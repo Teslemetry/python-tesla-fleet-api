@@ -2,6 +2,8 @@
 
 import hashlib
 import re
+from bleak.backends.device import BLEDevice
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.tesla import Tesla
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
@@ -36,8 +38,8 @@ class Vehicles(dict[str, VehicleBluetooth]):
         """Creates a specific vehicle."""
         return self.createBluetooth(vin)
 
-    def createBluetooth(self, vin: str) -> VehicleBluetooth:
+    def createBluetooth(self, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: None | str | BLEDevice = None) -> VehicleBluetooth:
         """Creates a specific vehicle."""
-        vehicle = VehicleBluetooth(self._parent, vin)
+        vehicle = VehicleBluetooth(self._parent, vin, key, device)
         self[vin] = vehicle
         return vehicle
