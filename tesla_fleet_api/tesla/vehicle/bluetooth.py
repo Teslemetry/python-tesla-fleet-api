@@ -55,14 +55,18 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     FromVCSECMessage,
+    InformationRequest,
+    InformationRequestType,
     KeyFormFactor,
     KeyMetadata,
     PermissionChange,
     PublicKey,
     RKEAction_E,
     UnsignedMessage,
+    VehicleStatus,
     WhitelistOperation,
 )
+from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import ChargeScheduleState, ChargeState, ClimateState, ClosuresState, DriveState, LocationState, MediaDetailState, MediaState, ParentalControlsState, PreconditioningScheduleState, SoftwareUpdateState, TirePressureState, VehicleData
 
 SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e"
 WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e"
@@ -173,9 +177,10 @@ class VehicleBluetooth(Commands):
             # Get the ephemeral key here and save to self._ekey
             return
 
-        if(self._futures[msg.from_destination.domain]):
+        if(msg.from_destination.domain in self._futures):
             LOGGER.debug(f"Received response for request {msg.request_uuid}")
             self._futures[msg.from_destination.domain].set_result(msg)
+            del self._futures[msg.from_destination.domain]
             return
 
         if msg.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
@@ -249,9 +254,9 @@ class VehicleBluetooth(Commands):
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
         )
 
-    async def vehicle_data(self, endpoints: list[BluetoothVehicleData]):
+    async def vehicle_data(self, endpoints: list[BluetoothVehicleData]) -> VehicleData:
         """Get vehicle data."""
-        return await self._sendInfotainment(
+        return await self._getInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     getVehicleData=GetVehicleData(
@@ -268,6 +273,147 @@ class VehicleBluetooth(Commands):
                         getSoftwareUpdateState = GetSoftwareUpdateState() if BluetoothVehicleData.SOFTWARE_UPDATE_STATE in endpoints else None,
                         getParentalControlsState = GetParentalControlsState() if BluetoothVehicleData.PARENTAL_CONTROLS_STATE in endpoints else None,
                     )
+                )
+            )
+        )
+
+    async def charge_state(self) -> ChargeState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getChargeState=GetChargeState()
+                    )
+                )
+            )
+        )).charge_state
+
+    async def climate_state(self) -> ClimateState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getClimateState=GetClimateState()
+                    )
+                )
+            )
+        )).climate_state
+
+    async def drive_state(self) -> DriveState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getDriveState=GetDriveState()
+                    )
+                )
+            )
+        )).drive_state
+
+    async def location_state(self) -> LocationState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getLocationState=GetLocationState()
+                    )
+                )
+            )
+        )).location_state
+
+    async def closures_state(self) -> ClosuresState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getClosuresState=GetClosuresState()
+                    )
+                )
+            )
+        )).closures_state
+
+    async def charge_schedule_state(self) -> ChargeScheduleState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getChargeScheduleState=GetChargeScheduleState()
+                    )
+                )
+            )
+        )).charge_schedule_state
+
+    async def preconditioning_schedule_state(self) -> PreconditioningScheduleState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getPreconditioningScheduleState=GetPreconditioningScheduleState()
+                    )
+                )
+            )
+        )).preconditioning_schedule_state
+
+    async def tire_pressure_state(self) -> TirePressureState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getTirePressureState=GetTirePressureState()
+                    )
+                )
+            )
+        )).tire_pressure_state
+
+    async def media_state(self) -> MediaState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getMediaState=GetMediaState()
+                    )
+                )
+            )
+        )).media_state
+
+    async def media_detail_state(self) -> MediaDetailState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getMediaDetailState=GetMediaDetailState()
+                    )
+                )
+            )
+        )).media_detail_state
+
+    async def software_update_state(self) -> SoftwareUpdateState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getSoftwareUpdateState=GetSoftwareUpdateState()
+                    )
+                )
+            )
+        )).software_update_state
+
+    async def parental_controls_state(self) -> ParentalControlsState:
+        return (await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getParentalControlsState=GetParentalControlsState()
+                    )
+                )
+            )
+        )).parental_controls_state
+
+    async def vehicle_state(self) -> VehicleStatus:
+        return await self._getVehicleSecurity(
+            UnsignedMessage(
+                InformationRequest=InformationRequest(
+                    informationRequestType=InformationRequestType.INFORMATION_REQUEST_TYPE_GET_STATUS
                 )
             )
         )

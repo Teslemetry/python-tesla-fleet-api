@@ -54,8 +54,8 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Flags,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
-    OPERATIONSTATUS_OK,
     FromVCSECMessage,
+    VehicleStatus,
 )
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Action,
@@ -102,7 +102,7 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     MediaPreviousTrack,
     MediaPreviousFavorite,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import VehicleState, ClimateState
+from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import VehicleData, VehicleState, ClimateState
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
@@ -165,6 +165,7 @@ class Session:
     hmac: bytes
     publicKey: bytes
     lock: Lock
+    ready: bool
 
     def __init__(self, parent: Commands, domain: Domain):
         self.parent = parent
@@ -293,42 +294,44 @@ class Commands(Vehicle):
         if resp.HasField("protobuf_message_as_bytes"):
             #decrypt
             if(resp.signature_data.HasField("AES_GCM_Response_data")):
-                print(resp.signature_data.AES_GCM_Response_data)
-                if(msg.signature_data.HasField("AES_GCM_Personalized_Signature_Data")):
-                    tag = bytes(SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED) + msg.signature_data.AES_GCM_Personalized_data.tag
+                if(msg.signature_data.HasField("AES_GCM_Personalized_data")):
+                    request_hash = bytes([SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED]) + msg.signature_data.AES_GCM_Personalized_data.tag
                 elif(msg.signature_data.HasField("HMAC_Personalized_data")):
-                    tag = bytes(SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED) + msg.signature_data.HMAC_Personalized_data.tag[:16]
+                    request_hash = bytes([SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED]) + msg.signature_data.HMAC_Personalized_data.tag
+                    if(session.domain == Domain.DOMAIN_VEHICLE_SECURITY):
+                        request_hash = request_hash[:17]
                 else:
                     raise ValueError("Invalid request signature data")
+
                 metadata = bytes([
                     Tag.TAG_SIGNATURE_TYPE,
                     1,
                     SignatureType.SIGNATURE_TYPE_AES_GCM_RESPONSE,
                     Tag.TAG_DOMAIN,
                     1,
-                    session.domain,
+                    resp.from_destination.domain,
                     Tag.TAG_PERSONALIZATION,
                     17,
                     *self.vin.encode(),
                     Tag.TAG_COUNTER,
                     4,
-                    *struct.pack(">I", session.counter),
+                    *struct.pack(">I", resp.signature_data.AES_GCM_Response_data.counter),
                     Tag.TAG_FLAGS,
-                    1,
-                    msg.flags,
+                    4,
+                    *struct.pack(">I", resp.flags),
                     Tag.TAG_REQUEST_HASH,
                     17,
-                    *tag,
+                    *request_hash,
                     Tag.TAG_FAULT,
-                    1,
-                    resp.signedMessageStatus.signed_message_fault,
+                    4,
+                    *struct.pack(">I", resp.signedMessageStatus.signed_message_fault),
                     Tag.TAG_END,
                 ])
 
                 aad = Hash(SHA256())
                 aad.update(metadata)
                 aesgcm = AESGCM(session.sharedKey)
-                resp.protobuf_message_as_bytes = aesgcm.decrypt(resp.signature_data.AES_GCM_Response_data.nonce, resp.protobuf_message_as_bytes, aad.finalize())
+                resp.protobuf_message_as_bytes = aesgcm.decrypt(resp.signature_data.AES_GCM_Response_data.nonce, resp.protobuf_message_as_bytes + resp.signature_data.AES_GCM_Response_data.tag, aad.finalize())
 
             if(resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY):
                 vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
@@ -365,6 +368,10 @@ class Commands(Vehicle):
                             "reason": response.ping.local_timestamp
                         }
                     }
+                if response.HasField("vehicleData"):
+                    return {
+                        "response": response.vehicleData
+                    }
                 if response.HasField("actionStatus"):
                     return {
                         "response": {
@@ -372,6 +379,7 @@ class Commands(Vehicle):
                             "reason": response.actionStatus.result_reason.plain_text or ""
                             }
                         }
+
 
         return {"response": {"result": True, "reason": ""}}
 
@@ -429,6 +437,7 @@ class Commands(Vehicle):
         LOGGER.debug(f"Sending AES to domain {Domain.Name(session.domain)}")
 
         aes_personalized = session.aes_gcm_personalized()
+        flags = 1 << Flags.FLAG_ENCRYPT_RESPONSE
 
         metadata = bytes([
             Tag.TAG_SIGNATURE_TYPE,
@@ -451,7 +460,7 @@ class Commands(Vehicle):
             *struct.pack(">I", aes_personalized.counter),
             Tag.TAG_FLAGS,
             4,
-            0,0,0,Flags.FLAG_ENCRYPT_RESPONSE,
+            *struct.pack(">I", flags),
             Tag.TAG_END,
         ])
 
@@ -478,7 +487,7 @@ class Commands(Vehicle):
                 ),
                 AES_GCM_Personalized_data=aes_personalized,
             ),
-            flags=Flags.FLAG_ENCRYPT_RESPONSE,
+            flags=flags,
         )
 
 
@@ -486,9 +495,19 @@ class Commands(Vehicle):
         """Sign and send a message to Infotainment computer."""
         return await self._command(Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
 
+    async def _getVehicleSecurity(self, command: UnsignedMessage) -> VehicleStatus:
+        """Sign and send a message to Infotainment computer."""
+        reply = await self._command(Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
+        return reply["response"]
+
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
         return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
+
+    async def _getInfotainment(self, command: Action) -> VehicleData:
+        """Sign and send a message to Infotainment computer."""
+        reply = await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
+        return reply["response"]
 
     async def handshakeVehicleSecurity(self) -> None:
         """Perform a handshake with the vehicle security domain."""
