@@ -14,7 +14,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from asyncio import Lock, sleep
 
 from tesla_fleet_api.exceptions import (
+    MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
+    NotOnWhitelistFault,
     #TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
@@ -38,6 +40,7 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Response,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
+    Session_Info_Status,
     SignatureType,
     Tag,
     AES_GCM_Personalized_Signature_Data,
@@ -251,9 +254,20 @@ class Commands(Vehicle):
 
 
     @abstractmethod
-    async def _send(self, msg: RoutableMessage) -> RoutableMessage:
+    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
         """Transmit the message to the vehicle."""
         raise NotImplementedError
+
+    def validate_msg(self, msg: RoutableMessage) -> None:
+        """Validate the message."""
+        if(msg.session_info):
+            info = SessionInfo.FromString(msg.session_info)
+            if(info.status == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST):
+                raise NotOnWhitelistFault
+            self._sessions[msg.from_destination.domain].update(info)
+
+        if msg.signedMessageStatus.signed_message_fault > 0:
+            raise MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
 
     @abstractmethod
     async def _command(self, domain: Domain, command: bytes, attempt: int = 0) -> dict[str, Any]:
@@ -270,7 +284,7 @@ class Commands(Vehicle):
             raise ValueError(f"Unknown auth method: {self._auth_method}")
 
         try:
-            resp = await self._send(msg)
+            resp = await self._send(msg, "protobuf_message_as_bytes")
         except (
             #TeslaFleetMessageFaultInvalidSignature,
             TeslaFleetMessageFaultIncorrectEpoch,
@@ -334,7 +348,11 @@ class Commands(Vehicle):
                 resp.protobuf_message_as_bytes = aesgcm.decrypt(resp.signature_data.AES_GCM_Response_data.nonce, resp.protobuf_message_as_bytes + resp.signature_data.AES_GCM_Response_data.tag, aad.finalize())
 
             if(resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY):
-                vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
+                try:
+                    vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
+                except Exception as e:
+                    LOGGER.error("Failed to parse VCSEC message: %s %s", e, resp)
+                    raise e
                 LOGGER.debug("VCSEC Response: %s", vcsec)
                 if vcsec.HasField("nominalError"):
                     LOGGER.error("Command failed with reason: %s", vcsec.nominalError.genericError)
@@ -343,6 +361,10 @@ class Commands(Vehicle):
                             "result": False,
                             "reason": GenericError_E.Name(vcsec.nominalError.genericError)
                         }
+                    }
+                elif vcsec.HasField("vehicleStatus"):
+                    return {
+                        "response": vcsec.vehicleStatus
                     }
                 elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_OK:
                     return {"response": {"result": True, "reason": ""}}
@@ -359,7 +381,11 @@ class Commands(Vehicle):
                         raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
 
             elif(resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT):
-                response = Response.FromString(resp.protobuf_message_as_bytes)
+                try:
+                    response = Response.FromString(resp.protobuf_message_as_bytes)
+                except Exception as e:
+                    LOGGER.error("Failed to parse Infotainment Response: %s %s", e, resp)
+                    raise e
                 LOGGER.debug("Infotainment Response: %s", response)
                 if (response.HasField("ping")):
                     return {
@@ -534,7 +560,7 @@ class Commands(Vehicle):
             uuid=randbytes(16)
         )
 
-        await self._send(msg)
+        await self._send(msg, "session_info")
         return self._sessions[domain].ready
 
     async def ping(self) -> dict[str, Any]:

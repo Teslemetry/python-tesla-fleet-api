@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from asyncio import Future, get_running_loop
+import asyncio
 from typing import TYPE_CHECKING
 from google.protobuf.message import DecodeError
 
@@ -85,7 +85,7 @@ class VehicleBluetooth(Commands):
 
     ble_name: str
     client: BleakClient
-    _futures: dict[Domain, Future]
+    _queues: dict[Domain, asyncio.Queue]
     _ekey: ec.EllipticCurvePublicKey
     _recv: bytearray = bytearray()
     _recv_len: int = 0
@@ -96,7 +96,10 @@ class VehicleBluetooth(Commands):
     ):
         super().__init__(parent, vin, key)
         self.ble_name = "S" + hashlib.sha1(vin.encode('utf-8')).hexdigest()[:16] + "C"
-        self._futures = {}
+        self._queues = {
+            Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
+            Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
+        }
         if device is not None:
             self.client = BleakClient(device, services=[SERVICE_UUID])
 
@@ -135,7 +138,7 @@ class VehicleBluetooth(Commands):
         """Exit the async context."""
         await self.disconnect()
 
-    def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray) -> None:
+    async def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray) -> None:
         """Receive data from the Tesla BLE device."""
         if self._recv_len:
             self._recv += data
@@ -145,16 +148,16 @@ class VehicleBluetooth(Commands):
         LOGGER.debug(f"Received {len(self._recv)} of {self._recv_len} bytes")
         while len(self._recv) > self._recv_len:
             LOGGER.warn(f"Received more data than expected: {len(self._recv)} > {self._recv_len}")
-            self._on_message(bytes(self._recv[:self._recv_len]))
+            await self._on_message(bytes(self._recv[:self._recv_len]))
             self._recv_len = int.from_bytes(self._recv[self._recv_len:self._recv_len+2], 'big')
             self._recv = self._recv[self._recv_len+2:]
             continue
         if len(self._recv) == self._recv_len:
-            self._on_message(bytes(self._recv))
+            await self._on_message(bytes(self._recv))
             self._recv = bytearray()
             self._recv_len = 0
 
-    def _on_message(self, data:bytes) -> None:
+    async def _on_message(self, data:bytes) -> None:
         """Receive messages from the Tesla BLE data."""
         try:
             msg = RoutableMessage.FromString(data)
@@ -164,57 +167,36 @@ class VehicleBluetooth(Commands):
             self._recv_len = 0
             return
 
-        # Update Session
-        if(msg.session_info):
-            info = SessionInfo.FromString(msg.session_info)
-            # maybe dont?
-            if(info.status == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST):
-                 self._futures[msg.from_destination.domain].set_exception(NotOnWhitelistFault())
-                 return
-            self._sessions[msg.from_destination.domain].update(info)
-
         if(msg.to_destination.routing_address != self._from_destination):
-            # Get the ephemeral key here and save to self._ekey
+            # Ignore ephemeral key broadcasts
             return
 
-        if(msg.from_destination.domain in self._futures):
-            LOGGER.debug(f"Received response for request {msg.request_uuid}")
-            self._futures[msg.from_destination.domain].set_result(msg)
-            del self._futures[msg.from_destination.domain]
-            return
+        LOGGER.info(f"Received response: {msg}")
+        await self._queues[msg.from_destination.domain].put(msg)
 
-        if msg.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
-            submsg = FromVCSECMessage.FromString(msg.protobuf_message_as_bytes)
-            LOGGER.warning(f"Received orphaned VCSEC response: {submsg}")
-        elif msg.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
-            submsg = Response.FromString(msg.protobuf_message_as_bytes)
-            LOGGER.warning(f"Received orphaned INFOTAINMENT response: {submsg}")
-        else:
-            LOGGER.warning(f"Received orphaned response: {msg}")
-
-    async def _create_future(self, domain: Domain) -> Future:
-        if(not self._sessions[domain].lock.locked):
-            raise ValueError("Session is not locked")
-        self._futures[domain] = get_running_loop().create_future()
-        return self._futures[domain]
-
-    async def _send(self, msg: RoutableMessage) -> RoutableMessage:
+    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response."""
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
             LOGGER.debug(f"Sending message {msg}")
-            future = await self._create_future(domain)
+
             payload = prependLength(msg.SerializeToString())
 
+            # Empty the queue before sending the message
+            while not self._queues[domain].empty():
+                await self._queues[domain].get()
             await self.client.write_gatt_char(WRITE_UUID, payload, True)
 
-            resp = await future
-            LOGGER.debug(f"Received message {resp}")
+            # Process the response
+            async with asyncio.timeout(10):
+                while True:
+                    resp = await self._queues[domain].get()
+                    LOGGER.debug(f"Received message {resp}")
 
-            if resp.signedMessageStatus.signed_message_fault > 0:
-                raise MESSAGE_FAULTS[resp.signedMessageStatus.signed_message_fault]
+                    self.validate_msg(resp)
 
-            return resp
+                    if resp.HasField(requires):
+                        return resp
 
     async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY):
         """Pair the key."""

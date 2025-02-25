@@ -7,8 +7,10 @@ from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.commands import Commands
 from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
+    NotOnWhitelistFault,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
+    Session_Info_Status,
     SessionInfo,
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
@@ -31,25 +33,17 @@ class VehicleSigned(VehicleFleet, Commands):
         super(Commands, self).__init__(parent, vin)
 
 
-    async def _send(self, msg: RoutableMessage) -> RoutableMessage:
+    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
+        # requires isnt used because Fleet API messages are singular
 
         async with self._sessions[msg.to_destination.domain].lock:
-            resp = await self.signed_command(
+            json = await self.signed_command(
                 base64.b64encode(msg.SerializeToString()).decode()
             )
 
-            resp_msg = RoutableMessage.FromString(base64.b64decode(resp["response"]))
+            resp = RoutableMessage.FromString(base64.b64decode(json["response"]))
 
-            # Check UUID?
-            # Check RoutingAdress?
+            self.validate_msg(resp)
 
-            if resp_msg.session_info:
-                self._sessions[resp_msg.from_destination.domain].update(
-                    SessionInfo.FromString(resp_msg.session_info), self.private_key
-                )
-
-            if resp_msg.signedMessageStatus.signed_message_fault:
-                raise MESSAGE_FAULTS[resp_msg.signedMessageStatus.signed_message_fault]
-
-            return resp_msg
+            return resp
