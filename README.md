@@ -1,8 +1,9 @@
 # Tesla Fleet Api
-Python library for Tesla Fleet API and Teslemetry.
+Python library for Tesla Fleet API and Tesla Command Protocol, including signed commands and encrypted local Bluetooth (BLE). Also provides interfaces for Teslemetry and Tessie.
 
-Based on [Tesla Developer documentation](https://developer.tesla.com/docs/fleet-api).
+Based on [Tesla Developer documentation](https://developer.tesla.com/docs/fleet-api) and [Tesla Command Protocol](https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md)
 
+**Documentation is currently outdated for V1.0.X**
 
 ## TeslaFleetApi
 This is the base class, however can also be used directly if you have a valid user access_token.
