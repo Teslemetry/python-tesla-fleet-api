@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="tesla_fleet_api",
-    version="1.0.3",
+    version="1.0.4",
     author="Brett Adams",
     author_email="hello@teslemetry.com",
     description="Tesla Fleet API library for Python",
@@ -20,5 +20,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.10",
-    install_requires=["aiohttp", "aiofiles", "aiolimiter", "cryptography", "protobuf", "bleak"],
+    install_requires=["aiohttp", "aiofiles", "aiolimiter", "cryptography", "protobuf", "bleak", "bleak-retry-connector"],
 )
