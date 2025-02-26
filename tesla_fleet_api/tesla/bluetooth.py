@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from google.protobuf.json_format import MessageToJson, MessageToDict
 from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -43,3 +44,11 @@ class Vehicles(dict[str, VehicleBluetooth]):
         vehicle = VehicleBluetooth(self._parent, vin, key, device)
         self[vin] = vehicle
         return vehicle
+
+def toJson(message) -> str:
+    """Convert a protobuf message to JSON."""
+    return MessageToJson(message, preserving_proto_field_name=True)
+
+def toDict(message) -> dict:
+    """Convert a protobuf message to a dictionary."""
+    return MessageToDict(message, preserving_proto_field_name=True)

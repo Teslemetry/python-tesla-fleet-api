@@ -4,7 +4,7 @@ import hashlib
 import asyncio
 from typing import TYPE_CHECKING
 from google.protobuf.message import DecodeError
-
+from bleak_retry_connector import establish_connection, MAX_CONNECT_ATTEMPTS
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
@@ -19,17 +19,14 @@ from tesla_fleet_api.const import (
     BluetoothVehicleData
 )
 from tesla_fleet_api.exceptions import (
-    MESSAGE_FAULTS,
     WHITELIST_OPERATION_STATUS,
     WhitelistOperationStatus,
-    NotOnWhitelistFault,
 )
 
 # Protocol
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Action,
     VehicleAction,
-    Response,
     GetVehicleData,
     GetChargeState,
     GetClimateState,
@@ -43,10 +40,6 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     GetMediaDetailState,
     GetSoftwareUpdateState,
     GetParentalControlsState,
-)
-from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
-    SessionInfo,
-    Session_Info_Status
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Destination,
@@ -84,6 +77,7 @@ class VehicleBluetooth(Commands):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     ble_name: str
+    device: BLEDevice
     client: BleakClient
     _queues: dict[Domain, asyncio.Queue]
     _ekey: ec.EllipticCurvePublicKey
@@ -103,26 +97,28 @@ class VehicleBluetooth(Commands):
         if device is not None:
             self.client = BleakClient(device, services=[SERVICE_UUID])
 
-    async def find_client(self, scanner: BleakScanner = BleakScanner()) -> BleakClient:
+    async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner = BleakScanner()) -> BLEDevice:
         """Find the Tesla BLE device."""
-
-        device = await scanner.find_device_by_name(self.ble_name)
+        if name is not None:
+            device = await scanner.find_device_by_name(name)
+        elif address is not None:
+            device = await scanner.find_device_by_address(address)
+        else:
+            device = await scanner.find_device_by_name(self.ble_name)
         if not device:
             raise ValueError(f"Device {self.ble_name} not found")
-        self.client = BleakClient(device, services=[SERVICE_UUID])
-        LOGGER.debug(f"Discovered device {device.name} {device.address}")
-        return self.client
+        self.device = device
+        return self.device
 
-    def create_client(self, device: str|BLEDevice) -> BleakClient:
-        """Create a client using a MAC address or Bleak Device."""
-        self.client = BleakClient(device, services=[SERVICE_UUID])
-        return self.client
+    def set_device(self, device: BLEDevice) -> None:
+        self.device = device
 
-    async def connect(self, device: str|BLEDevice | None = None) -> None:
+    def get_device(self) -> BLEDevice:
+        return self.device
+
+    async def connect(self, device: BLEDevice | None = None, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device."""
-        if device is not None:
-            self.create_client(device)
-        await self.client.connect()
+        self.client = await establish_connection(BleakClient, self.device, self.vin, max_attempts=max_attempts, ble_device_callback=self.get_device)
         await self.client.start_notify(READ_UUID, self._on_notify)
 
     async def disconnect(self) -> bool:

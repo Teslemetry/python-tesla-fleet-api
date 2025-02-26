@@ -4,3 +4,4 @@ cryptography==43.*
 protobuf==5.*
 aiofiles==24.*
 bleak==0.22.*
+bleak-retry-connector==3.9.*
