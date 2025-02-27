@@ -86,7 +86,7 @@ class VehicleBluetooth(Commands):
     _auth_method = "aes"
 
     def __init__(
-        self, parent: Tesla, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: None | str | BLEDevice = None
+        self, parent: Tesla, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: BLEDevice | None = None
     ):
         super().__init__(parent, vin, key)
         self.ble_name = "S" + hashlib.sha1(vin.encode('utf-8')).hexdigest()[:16] + "C"
@@ -95,7 +95,7 @@ class VehicleBluetooth(Commands):
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
         if device is not None:
-            self.client = BleakClient(device, services=[SERVICE_UUID])
+            self.device = device
 
     async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner = BleakScanner()) -> BLEDevice:
         """Find the Tesla BLE device."""
@@ -121,7 +121,7 @@ class VehicleBluetooth(Commands):
         if device:
             self.device = device
         if not self.device:
-            raise ValueError(f"Device {self.ble_name} not found")
+            raise ValueError(f"Device {self.ble_name} not found or provided")
         self.client = await establish_connection(
             BleakClient,
             self.device,
