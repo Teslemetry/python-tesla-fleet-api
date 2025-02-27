@@ -3,7 +3,7 @@
 from enum import Enum
 import logging
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 LOGGER = logging.getLogger(__package__)
 SERVERS = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
