@@ -8,7 +8,7 @@ from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
-
+    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 
 
 class Vehicles(dict[str, Vehicle]):
@@ -47,3 +47,19 @@ class Vehicles(dict[str, Vehicle]):
     def specificSigned(self, vin: str) -> VehicleSigned:
         """Legacy method for creating a Fleet API vehicle that uses command protocol."""
         return self.createSigned(vin)
+
+
+class VehiclesBluetooth(dict[str, Vehicle]):
+    """Class containing and creating bluetooth vehicles."""
+
+    _parent: TeslaBluetooth
+    Bluetooth = VehicleBluetooth
+
+    def __init__(self, parent: TeslaBluetooth):
+        self._parent = parent
+
+    def create(self, vin: str) -> VehicleBluetooth:
+        """Creates a bluetooth vehicle that uses command protocol."""
+        vehicle = self.Bluetooth(self._parent, vin)
+        self[vin] = vehicle
+        return vehicle

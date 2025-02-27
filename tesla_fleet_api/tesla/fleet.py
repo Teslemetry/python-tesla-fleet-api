@@ -7,11 +7,6 @@ import aiohttp
 from tesla_fleet_api.tesla.tesla import Tesla
 from tesla_fleet_api.exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
 from tesla_fleet_api.const import SERVERS, Method, LOGGER, VERSION
-from tesla_fleet_api.tesla.charging import Charging
-from tesla_fleet_api.tesla.energysite import EnergySites
-from tesla_fleet_api.tesla.partner import Partner
-from tesla_fleet_api.tesla.user import User
-from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -54,15 +49,15 @@ class TeslaFleetApi(Tesla):
         LOGGER.debug("Using server %s", self.server)
 
         if charging_scope:
-            self.charging = Charging(self)
+            self.charging = self.Charging(self)
         if energy_scope:
-            self.energySites = EnergySites(self)
+            self.energySites = self.EnergySites(self)
         if user_scope:
-            self.user = User(self)
+            self.user = self.User(self)
         if partner_scope:
-            self.partner = Partner(self)
+            self.partner = self.Partner(self)
         if vehicle_scope:
-            self.vehicles = Vehicles(self)
+            self.vehicles = self.Vehicles(self)
 
     async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""

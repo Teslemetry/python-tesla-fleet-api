@@ -3,6 +3,12 @@
 from os.path import exists
 import aiofiles
 
+from tesla_fleet_api.tesla.charging import Charging
+from tesla_fleet_api.tesla.energysite import EnergySites
+from tesla_fleet_api.tesla.partner import Partner
+from tesla_fleet_api.tesla.user import User
+from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
+
 # cryptography
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
@@ -10,6 +16,12 @@ from cryptography.hazmat.backends import default_backend
 
 class Tesla:
     """Base class describing interactions with Tesla products."""
+
+    Charging = Charging
+    EnergySites = EnergySites
+    Partner = Partner
+    User = User
+    Vehicles = Vehicles
 
     private_key: ec.EllipticCurvePrivateKey | None = None
 
