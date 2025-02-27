@@ -5,14 +5,6 @@ from typing import TYPE_CHECKING
 
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.commands import Commands
-from tesla_fleet_api.exceptions import (
-    MESSAGE_FAULTS,
-    NotOnWhitelistFault,
-)
-from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
-    Session_Info_Status,
-    SessionInfo,
-)
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     RoutableMessage,
 )
@@ -41,9 +33,6 @@ class VehicleSigned(VehicleFleet, Commands):
             json = await self.signed_command(
                 base64.b64encode(msg.SerializeToString()).decode()
             )
-
             resp = RoutableMessage.FromString(base64.b64decode(json["response"]))
-
             self.validate_msg(resp)
-
             return resp

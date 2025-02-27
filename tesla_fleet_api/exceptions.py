@@ -21,7 +21,6 @@ class ResponseError(TeslaFleetError):
     """The response from the server was not JSON."""
 
     message = "The response from the server was not JSON."
-    data: str | None = None
 
 
 class InvalidCommand(TeslaFleetError):

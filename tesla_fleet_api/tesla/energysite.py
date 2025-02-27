@@ -159,11 +159,12 @@ class EnergySites(dict[int, EnergySite]):
     """Class describing the Tesla Fleet API partner endpoints"""
 
     _parent: TeslaFleetApi
+    Site = EnergySite
 
     def __init__(self, parent: TeslaFleetApi):
         self._parent = parent
 
     def create(self, energy_site_id: int) -> EnergySite:
         """Create a specific energy site."""
-        self[energy_site_id] = EnergySite(self._parent, energy_site_id)
+        self[energy_site_id] = self.Site(self._parent, energy_site_id)
         return self[energy_site_id]
