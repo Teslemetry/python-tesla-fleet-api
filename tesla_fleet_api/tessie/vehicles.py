@@ -16,13 +16,15 @@ class TessieVehicleFleet(VehicleFleet):
 class TessieVehicles(Vehicles):
     """Class containing and creating vehicles."""
 
+    Fleet = TessieVehicleFleet
+
     def create(self, vin: str) -> TessieVehicleFleet:
         """Creates a specific vehicle."""
         return self.createFleet(vin)
 
     def createFleet(self, vin: str) -> TessieVehicleFleet:
         """Creates a specific vehicle."""
-        vehicle = TessieVehicleFleet(self._parent, vin)
+        vehicle = self.Fleet(self._parent, vin)
         self[vin] = vehicle
         return vehicle
 

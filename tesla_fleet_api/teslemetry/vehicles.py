@@ -52,13 +52,15 @@ class TeslemetryVehicleFleet(VehicleFleet):
 class TeslemetryVehicles(Vehicles):
     """Class containing and creating vehicles."""
 
+    Fleet = TeslemetryVehicleFleet
+
     def create(self, vin: str) -> TeslemetryVehicleFleet:
         """Creates a specific vehicle."""
         return self.createFleet(vin)
 
     def createFleet(self, vin: str) -> TeslemetryVehicleFleet:
         """Creates a specific vehicle."""
-        vehicle = TeslemetryVehicleFleet(self._parent, vin)
+        vehicle = self.Fleet(self._parent, vin)
         self[vin] = vehicle
         return vehicle
 

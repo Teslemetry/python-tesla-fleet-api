@@ -6,7 +6,7 @@ from tesla_fleet_api.tesla.energysite import EnergySites
 from tesla_fleet_api.tesla.user import User
 from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.const import Method
-from tesla_fleet_api.tessie.vehicle import TessieVehicles
+from tesla_fleet_api.tessie.vehicles import TessieVehicles
 
 class Tessie(TeslaFleetApi):
 
@@ -25,7 +25,7 @@ class Tessie(TeslaFleetApi):
         self.charging = Charging(self)
         self.energySites = EnergySites(self)
         self.user = User(self)
-        self.vehicle = TessieVehicles(self)
+        self.vehicles = TessieVehicles(self)
 
     async def scopes(self) -> list[str]:
         """Get user scopes."""

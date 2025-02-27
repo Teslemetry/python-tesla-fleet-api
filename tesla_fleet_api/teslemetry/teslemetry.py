@@ -5,7 +5,7 @@ import aiohttp
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites
 from tesla_fleet_api.tesla.user import User
-from tesla_fleet_api.teslemetry.vehicle import TeslemetryVehicles
+from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
 from tesla_fleet_api.const import LOGGER, Method
 from tesla_fleet_api.tesla import TeslaFleetApi
 
@@ -26,7 +26,7 @@ class Teslemetry(TeslaFleetApi):
         self.charging = Charging(self)
         self.energySites = EnergySites(self)
         self.user = User(self)
-        self.vehicle = TeslemetryVehicles(self)
+        self.vehicles = TeslemetryVehicles(self)
 
     async def ping(self) -> dict[str, bool]:
         """Send a ping."""
