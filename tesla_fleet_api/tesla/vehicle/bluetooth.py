@@ -99,10 +99,11 @@ class VehicleBluetooth(Commands):
 
     async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner = BleakScanner()) -> BLEDevice:
         """Find the Tesla BLE device."""
-        if name is not None:
-            device = await scanner.find_device_by_name(name)
-        elif address is not None:
+
+        if address is not None:
             device = await scanner.find_device_by_address(address)
+        elif name is not None:
+            device = await scanner.find_device_by_name(name)
         else:
             device = await scanner.find_device_by_name(self.ble_name)
         if not device:
@@ -116,12 +117,10 @@ class VehicleBluetooth(Commands):
     def get_device(self) -> BLEDevice:
         return self.device
 
-    async def connect(self, device: BLEDevice | None = None, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
+    async def connect(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device."""
-        if device:
-            self.device = device
-        if not self.device:
-            raise ValueError(f"Device {self.ble_name} not found or provided")
+        if not hasattr(self, 'device'):
+            raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
         self.client = await establish_connection(
             BleakClient,
             self.device,
@@ -189,7 +188,7 @@ class VehicleBluetooth(Commands):
         LOGGER.debug(f"Received response: {msg}")
         await self._queues[msg.from_destination.domain].put(msg)
 
-    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
+    async def _send(self, msg: RoutableMessage, requires: str, timeout: int = 2) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response."""
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
@@ -203,7 +202,7 @@ class VehicleBluetooth(Commands):
             await self.client.write_gatt_char(WRITE_UUID, payload, True)
 
             # Process the response
-            async with asyncio.timeout(2):
+            async with asyncio.timeout(timeout):
                 while True:
                     resp = await self._queues[domain].get()
                     LOGGER.debug(f"Received message {resp}")
@@ -213,7 +212,7 @@ class VehicleBluetooth(Commands):
                     if resp.HasField(requires):
                         return resp
 
-    async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY):
+    async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY, timeout: int = 60):
         """Pair the key."""
 
         request = UnsignedMessage(
@@ -236,7 +235,7 @@ class VehicleBluetooth(Commands):
             ),
             protobuf_message_as_bytes=request.SerializeToString(),
         )
-        resp = await self._send(msg, "protobuf_message_as_bytes")
+        resp = await self._send(msg, "protobuf_message_as_bytes", timeout)
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
         if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation):
             if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation < len(WHITELIST_OPERATION_STATUS)):

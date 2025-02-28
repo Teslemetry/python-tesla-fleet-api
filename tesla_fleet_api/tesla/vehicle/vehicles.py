@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from bleak.backends.device import BLEDevice
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
@@ -58,8 +60,12 @@ class VehiclesBluetooth(dict[str, Vehicle]):
     def __init__(self, parent: TeslaBluetooth):
         self._parent = parent
 
-    def create(self, vin: str) -> VehicleBluetooth:
+    def create(self, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: BLEDevice | None = None) -> VehicleBluetooth:
         """Creates a bluetooth vehicle that uses command protocol."""
-        vehicle = self.Bluetooth(self._parent, vin)
+        return self.createBluetooth(vin, key, device)
+
+    def createBluetooth(self, vin: str, key: ec.EllipticCurvePrivateKey | None = None, device: BLEDevice | None = None) -> VehicleBluetooth:
+        """Creates a bluetooth vehicle that uses command protocol."""
+        vehicle = self.Bluetooth(self._parent, vin, key, device)
         self[vin] = vehicle
         return vehicle

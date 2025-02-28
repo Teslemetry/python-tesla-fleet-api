@@ -875,9 +875,6 @@ SIGNED_MESSAGE_INFORMATION_FAULTS = [
 class WhitelistOperationStatus(TeslaFleetError):
     message = "Whitelist operation failed"
 
-    def __init__(self, message):
-        self.message = message
-
 class WhitelistOperationUndocumentedError(WhitelistOperationStatus):
     message = "Undocumented whitelist operation error"
     code = 1
