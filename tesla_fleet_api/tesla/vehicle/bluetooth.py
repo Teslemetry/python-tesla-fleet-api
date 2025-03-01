@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import asyncio
 from typing import TYPE_CHECKING
-from bleak.backends.service import BleakGATTServiceCollection
 from google.protobuf.message import DecodeError
 from bleak_retry_connector import establish_connection, MAX_CONNECT_ATTEMPTS
 from bleak import BleakClient, BleakScanner
@@ -98,8 +97,11 @@ class VehicleBluetooth(Commands):
         if device is not None:
             self.device = device
 
-    async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner = BleakScanner()) -> BLEDevice:
+    async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner | None = None) -> BLEDevice:
         """Find the Tesla BLE device."""
+
+        if scanner is None:
+            scanner = BleakScanner(service_uuids=[SERVICE_UUID])
 
         if address is not None:
             device = await scanner.find_device_by_address(address)
