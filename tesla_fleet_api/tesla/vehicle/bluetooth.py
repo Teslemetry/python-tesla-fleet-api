@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import asyncio
 from typing import TYPE_CHECKING
+from bleak.backends.service import BleakGATTServiceCollection
 from google.protobuf.message import DecodeError
 from bleak_retry_connector import establish_connection, MAX_CONNECT_ATTEMPTS
 from bleak import BleakClient, BleakScanner
@@ -126,7 +127,8 @@ class VehicleBluetooth(Commands):
             self.device,
             self.vin,
             max_attempts=max_attempts,
-            ble_device_callback=self.get_device
+            #ble_device_callback=self.get_device,
+            services=[SERVICE_UUID]
         )
         await self.client.start_notify(READ_UUID, self._on_notify)
 
@@ -211,6 +213,7 @@ class VehicleBluetooth(Commands):
 
                     if resp.HasField(requires):
                         return resp
+
 
     async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY, timeout: int = 60):
         """Pair the key."""
