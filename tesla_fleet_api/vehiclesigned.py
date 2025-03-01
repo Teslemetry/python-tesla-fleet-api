@@ -122,7 +122,7 @@ class Session:
     epoch: bytes
     delta: int
     hmac: bytes
-    publicKey: bytes
+    publicKey: bytes | None = None
     lock: Lock
 
     def __init__(self):
