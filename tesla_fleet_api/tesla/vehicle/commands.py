@@ -183,7 +183,7 @@ class Session:
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        if (not self.ready or self.publicKey != sessionInfo.publicKey):
+        if (not self.ready or getattr(self, "publicKey", "None") != sessionInfo.publicKey):
             self.publicKey = sessionInfo.publicKey
             self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
             self.hmac = hmac.new(self.sharedKey, "authenticated command".encode(), hashlib.sha256).digest()
