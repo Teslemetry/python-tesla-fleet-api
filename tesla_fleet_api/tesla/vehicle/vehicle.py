@@ -18,9 +18,11 @@ class Vehicle:
     """Base class describing a Tesla vehicle."""
 
     vin: str
+    parent: Tesla
 
     def __init__(self, parent: Tesla, vin: str):
         self.vin = vin
+        self.parent = parent
 
     @property
     def pre2021(self) -> bool:

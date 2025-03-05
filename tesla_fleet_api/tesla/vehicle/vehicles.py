@@ -1,12 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from bleak import BleakClient
 from bleak.backends.device import BLEDevice
+from bleak_retry_connector import establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
-from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.bluetooth import NAME_UUID, VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from tesla_fleet_api.const import LOGGER
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
@@ -69,3 +72,19 @@ class VehiclesBluetooth(dict[str, Vehicle]):
         vehicle = self.Bluetooth(self._parent, vin, key, device)
         self[vin] = vehicle
         return vehicle
+
+    async def query_device_name(self, device: BLEDevice, max_attempts=3) -> str:
+        """Queries the name of a bluetooth vehicle."""
+        async with await establish_connection(
+            BleakClient,
+            device,
+            device.name or "Unknown",
+            max_attempts=max_attempts
+        ) as client:
+            try:
+                # Standard GATT Device Name characteristic (0x2A00)
+                device_name = await client.read_gatt_char(NAME_UUID)
+                return device_name.decode('utf-8').replace("🔑 ","")
+            except Exception as e:
+                LOGGER.error(f"Failed to read device name: {e}")
+                return None

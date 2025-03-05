@@ -65,6 +65,8 @@ SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e"
 WRITE_UUID = "00000212-b2d1-43f0-9b88-960cebf8b91e"
 READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e"
 VERSION_UUID = "00000214-b2d1-43f0-9b88-960cebf8b91e"
+NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb"
+APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
@@ -216,6 +218,39 @@ class VehicleBluetooth(Commands):
                     if resp.HasField(requires):
                         return resp
 
+    async def query_name(self, strip_key=True):
+        """Read the device name via GATT characteristic if available"""
+        try:
+            # Standard GATT Device Name characteristic (0x2A00)
+            device_name = await self.client.read_gatt_char(NAME_UUID)
+            device_name = device_name.decode('utf-8')
+            if(strip_key):
+                device_name = device_name.replace("🔑 ","")
+            return device_name
+        except Exception as e:
+            LOGGER.error(f"Failed to read device name: {e}")
+            return None
+
+    async def query_appearance(self) -> bytearray:
+        """Read the device appearance via GATT characteristic if available"""
+        try:
+            # Standard GATT Appearance characteristic (0x2A01)
+            return await self.client.read_gatt_char(APPEARANCE_UUID)
+        except Exception as e:
+            LOGGER.error(f"Failed to read device appearance: {e}")
+            return None
+
+    async def query_version(self) -> int | None:
+        """Read the device version via GATT characteristic if available"""
+        try:
+            # Custom GATT Version characteristic (0x2A02)
+            device_version = await self.client.read_gatt_char(VERSION_UUID)
+            # Convert the bytes to an integer
+            if device_version and len(device_version) > 0:
+                return int.from_bytes(device_version, byteorder='big')
+        except Exception as e:
+            LOGGER.error(f"Failed to read device version: {e}")
+        return None
 
     async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY, timeout: int = 60):
         """Pair the key."""
