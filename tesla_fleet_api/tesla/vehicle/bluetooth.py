@@ -218,20 +218,20 @@ class VehicleBluetooth(Commands):
                     if resp.HasField(requires):
                         return resp
 
-    async def query_name(self, strip_key=True):
+    async def query_display_name(self, max_attempts=5) -> str | None:
         """Read the device name via GATT characteristic if available"""
-        try:
-            # Standard GATT Device Name characteristic (0x2A00)
-            device_name = await self.client.read_gatt_char(NAME_UUID)
-            device_name = device_name.decode('utf-8')
-            if(strip_key):
-                device_name = device_name.replace("🔑 ","")
-            return device_name
-        except Exception as e:
-            LOGGER.error(f"Failed to read device name: {e}")
-            return None
+        for i in range(max_attempts):
+            try:
+                # Standard GATT Device Name characteristic (0x2A00)
+                device_name = (await self.client.read_gatt_char(NAME_UUID)).decode('utf-8')
+                if device_name.startswith("🔑 "):
+                    return device_name.replace("🔑 ","")
+                await asyncio.sleep(1)
+                LOGGER.debug(f"Attempt {i+1} to query display name failed, {device_name}")
+            except Exception as e:
+                LOGGER.error(f"Failed to read device name: {e}")
 
-    async def query_appearance(self) -> bytearray:
+    async def query_appearance(self) -> bytearray | None:
         """Read the device appearance via GATT characteristic if available"""
         try:
             # Standard GATT Appearance characteristic (0x2A01)
