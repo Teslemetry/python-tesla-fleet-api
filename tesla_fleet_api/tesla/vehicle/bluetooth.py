@@ -79,8 +79,8 @@ class VehicleBluetooth(Commands):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     ble_name: str
-    device: BLEDevice
-    client: BleakClient
+    device: BLEDevice | None = None
+    client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue]
     _ekey: ec.EllipticCurvePublicKey
     _recv: bytearray = bytearray()
@@ -96,8 +96,8 @@ class VehicleBluetooth(Commands):
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
-        if device is not None:
-            self.device = device
+        self.device = device
+        self._connect_lock = asyncio.Lock()
 
     async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner | None = None) -> BLEDevice:
         """Find the Tesla BLE device."""
@@ -119,12 +119,12 @@ class VehicleBluetooth(Commands):
     def set_device(self, device: BLEDevice) -> None:
         self.device = device
 
-    def get_device(self) -> BLEDevice:
+    def get_device(self) -> BLEDevice | None:
         return self.device
 
     async def connect(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device."""
-        if not hasattr(self, 'device'):
+        if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
         self.client = await establish_connection(
             BleakClient,
@@ -138,7 +138,15 @@ class VehicleBluetooth(Commands):
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
+        if not self.client:
+            return False
         return await self.client.disconnect()
+
+    async def connect_if_needed(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
+        """Connect to the Tesla BLE device if not already connected."""
+        async with self._connect_lock:
+            if not self.client or not self.client.is_connected:
+                await self.connect(max_attempts=max_attempts)
 
     async def __aenter__(self) -> VehicleBluetooth:
         """Enter the async context."""
@@ -196,6 +204,7 @@ class VehicleBluetooth(Commands):
 
     async def _send(self, msg: RoutableMessage, requires: str, timeout: int = 2) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response."""
+
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
             LOGGER.debug(f"Sending message {msg}")
@@ -205,6 +214,9 @@ class VehicleBluetooth(Commands):
             # Empty the queue before sending the message
             while not self._queues[domain].empty():
                 await self._queues[domain].get()
+
+            await self.connect_if_needed()
+            assert self.client is not None
             await self.client.write_gatt_char(WRITE_UUID, payload, True)
 
             # Process the response
@@ -223,6 +235,8 @@ class VehicleBluetooth(Commands):
         for i in range(max_attempts):
             try:
                 # Standard GATT Device Name characteristic (0x2A00)
+                await self.connect_if_needed()
+                assert self.client
                 device_name = (await self.client.read_gatt_char(NAME_UUID)).decode('utf-8')
                 if device_name.startswith("🔑 "):
                     return device_name.replace("🔑 ","")
@@ -235,6 +249,8 @@ class VehicleBluetooth(Commands):
         """Read the device appearance via GATT characteristic if available"""
         try:
             # Standard GATT Appearance characteristic (0x2A01)
+            await self.connect_if_needed()
+            assert self.client
             return await self.client.read_gatt_char(APPEARANCE_UUID)
         except Exception as e:
             LOGGER.error(f"Failed to read device appearance: {e}")
@@ -244,6 +260,8 @@ class VehicleBluetooth(Commands):
         """Read the device version via GATT characteristic if available"""
         try:
             # Custom GATT Version characteristic (0x2A02)
+            await self.connect_if_needed()
+            assert self.client
             device_version = await self.client.read_gatt_char(VERSION_UUID)
             # Convert the bytes to an integer
             if device_version and len(device_version) > 0:
