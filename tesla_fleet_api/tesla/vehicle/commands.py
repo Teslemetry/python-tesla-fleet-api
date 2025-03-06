@@ -269,7 +269,6 @@ class Commands(Vehicle):
         if msg.signedMessageStatus.signed_message_fault > 0:
             raise MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
 
-    @abstractmethod
     async def _command(self, domain: Domain, command: bytes, attempt: int = 0) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
         session = self._sessions[domain]

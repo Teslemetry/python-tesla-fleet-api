@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import asyncio
-from typing import TYPE_CHECKING
+import struct
+from typing import TYPE_CHECKING, Callable, Any
 from google.protobuf.message import DecodeError
 from bleak_retry_connector import establish_connection, MAX_CONNECT_ATTEMPTS
 from bleak import BleakClient, BleakScanner
@@ -75,6 +76,70 @@ def prependLength(message: bytes) -> bytearray:
     """Prepend a 2-byte length to the payload."""
     return bytearray([len(message) >> 8, len(message) & 0xFF]) + message
 
+class ReassemblingBuffer:
+    """
+    Reassembles bytearray streams where the first two bytes indicate the length of the message.
+    Handles potential packet corruption by discarding *entire* packets and retrying.
+    Uses a callback to process parsed messages.
+    """
+
+    def __init__(self, callback: Callable[[RoutableMessage], None]):
+        """
+        Initializes the buffer.
+
+        Args:
+            message_type: The protobuf message type (e.g., RoutableMessage) to parse the assembled data.
+            callback: A function that will be called with each parsed message.
+        """
+        self.buffer = bytearray()
+        self.expected_length = None
+        self.packet_starts = []
+        self.callback = callback
+
+    def receive_data(self, data: bytearray):
+        """
+        Receives a chunk of bytearray data and attempts to assemble a complete message.
+
+        Args:
+            data: The received bytearray data.
+        """
+        self.packet_starts.append(len(self.buffer))
+        self.buffer.extend(data)
+
+        while True:
+            if self.expected_length is None and len(self.buffer) >= 2:
+                self.expected_length = struct.unpack(">H", self.buffer[:2])[0] + 2
+
+            LOGGER.info(f"Buffer length: {len(self.buffer)}, Packet starts: {self.packet_starts}, Expected length: {self.expected_length}")
+
+            if self.expected_length is not None and self.expected_length > 1024:
+                LOGGER.warning(f"Expected length too large: {self.expected_length}")
+                self.discard_packet()
+
+            elif self.expected_length is not None and len(self.buffer) >= self.expected_length:
+                try:
+                    message = RoutableMessage()
+                    message.ParseFromString(bytes(self.buffer[2:self.expected_length]))
+                    self.buffer = self.buffer[self.expected_length:]
+                    self.packet_starts = [x - self.expected_length for x in self.packet_starts if x >= self.expected_length]
+                    self.expected_length = None
+                    self.callback(message)  # Call the callback with the parsed message
+
+                except DecodeError:
+                    self.discard_packet()
+            else:
+                return
+
+    def discard_packet(self):
+        self.packet_starts.pop(0)
+        if len(self.packet_starts) > 0:
+            self.buffer = self.buffer[self.packet_starts[0]:]
+            self.packet_starts = [x - self.packet_starts[0] for x in self.packet_starts]
+        else:
+            self.buffer = bytearray()
+            self.packet_starts = []
+        self.expected_length = None
+
 class VehicleBluetooth(Commands):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
@@ -83,8 +148,7 @@ class VehicleBluetooth(Commands):
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue]
     _ekey: ec.EllipticCurvePublicKey
-    _recv: bytearray = bytearray()
-    _recv_len: int = 0
+    _buffer: ReassemblingBuffer
     _auth_method = "aes"
 
     def __init__(
@@ -98,6 +162,7 @@ class VehicleBluetooth(Commands):
         }
         self.device = device
         self._connect_lock = asyncio.Lock()
+        self._buffer = ReassemblingBuffer(self._on_message)
 
     async def find_vehicle(self, name: str | None = None, address: str | None = None, scanner: BleakScanner | None = None) -> BLEDevice:
         """Find the Tesla BLE device."""
@@ -146,6 +211,7 @@ class VehicleBluetooth(Commands):
         """Connect to the Tesla BLE device if not already connected."""
         async with self._connect_lock:
             if not self.client or not self.client.is_connected:
+                LOGGER.info(f"Reconnecting to {self.ble_name}")
                 await self.connect(max_attempts=max_attempts)
 
     async def __aenter__(self) -> VehicleBluetooth:
@@ -157,63 +223,36 @@ class VehicleBluetooth(Commands):
         """Exit the async context."""
         await self.disconnect()
 
-    async def _on_notify(self,sender: BleakGATTCharacteristic,data : bytearray) -> None:
+    def _on_notify(self,sender: BleakGATTCharacteristic, data: bytearray) -> None:
         """Receive data from the Tesla BLE device."""
-        if self._recv_len:
-            self._recv += data
-        else:
-            self._recv_len = int.from_bytes(data[:2], 'big')
-            if self._recv_len > 1024:
-                LOGGER.error("Parsed very large message length")
-                self._recv = bytearray()
-                self._recv_len = 0
-                return
-            self._recv = data[2:]
-        #while len(self._recv) > self._recv_len:
-        #
-        #    # Maybe this needs to trigger a reset
-        #    await self._on_message(bytes(self._recv[:self._recv_len]))
-        #    self._recv_len = int.from_bytes(self._recv[self._recv_len:self._recv_len+2], 'big')
-        #    self._recv = self._recv[self._recv_len+2:]
-        #    continue
-        if len(self._recv) >= self._recv_len:
-            if len(self._recv) > self._recv_len:
-                LOGGER.debug(f"Received more data than expected: {len(self._recv)} > {self._recv_len}")
-            try:
-                msg = RoutableMessage.FromString(bytes(self._recv[:self._recv_len]))
-                await self._on_message(msg)
-                self._recv = bytearray()
-                self._recv_len = 0
-            except DecodeError:
-                # Attempt parsing the whole payload
-                msg = RoutableMessage.FromString(bytes(self._recv))
-                LOGGER.warn(f"Parsed more data than length: {len(self._recv)} > {self._recv_len}")
-                await self._on_message(msg)
-                self._recv = bytearray()
-                self._recv_len = 0
+        if sender.uuid != READ_UUID:
+            LOGGER.error(f"Unexpected sender: {sender}")
+            return
+        self._buffer.receive_data(data)
 
-    async def _on_message(self, msg: RoutableMessage) -> None:
+    def _on_message(self, msg: RoutableMessage) -> None:
         """Receive messages from the Tesla BLE data."""
 
         if(msg.to_destination.routing_address != self._from_destination):
             # Ignore ephemeral key broadcasts
             return
 
-        LOGGER.debug(f"Received response: {msg}")
-        await self._queues[msg.from_destination.domain].put(msg)
+        LOGGER.info(f"Received response: {msg}")
+        self._queues[msg.from_destination.domain].put_nowait(msg)
 
-    async def _send(self, msg: RoutableMessage, requires: str, timeout: int = 2) -> RoutableMessage:
+    async def _send(self, msg: RoutableMessage, requires: str, timeout: int = 5) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response."""
 
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
-            LOGGER.debug(f"Sending message {msg}")
+            LOGGER.info(f"Sending message {msg}")
 
             payload = prependLength(msg.SerializeToString())
 
             # Empty the queue before sending the message
             while not self._queues[domain].empty():
-                await self._queues[domain].get()
+                msg = await self._queues[domain].get()
+                LOGGER.warning(f"Discarded message {msg}")
 
             await self.connect_if_needed()
             assert self.client is not None
@@ -221,6 +260,7 @@ class VehicleBluetooth(Commands):
 
             # Process the response
             async with asyncio.timeout(timeout):
+                LOGGER.info(f"Waiting for response with {requires}")
                 while True:
                     resp = await self._queues[domain].get()
                     LOGGER.debug(f"Received message {resp}")
@@ -229,6 +269,8 @@ class VehicleBluetooth(Commands):
 
                     if resp.HasField(requires):
                         return resp
+                    else:
+                        LOGGER.warning(f"Ignoring message since it does not contain the required field {requires}, {resp.HasField(requires)}")
 
     async def query_display_name(self, max_attempts=5) -> str | None:
         """Read the device name via GATT characteristic if available"""
@@ -269,6 +311,11 @@ class VehicleBluetooth(Commands):
         except Exception as e:
             LOGGER.error(f"Failed to read device version: {e}")
         return None
+
+    async def _command(self, domain: Domain, command: bytes, attempt: int = 0) -> dict[str, Any]:
+        """Serialize a message and send to the signed command endpoint."""
+        await self.connect_if_needed()
+        return await super()._command(domain, command, attempt)
 
     async def pair(self, role: Role = Role.ROLE_OWNER, form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY, timeout: int = 60):
         """Pair the key."""
