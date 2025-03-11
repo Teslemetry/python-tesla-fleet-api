@@ -1,10 +1,10 @@
-# Detailed Examples for Using Bluetooth for Vehicles
+# Bluetooth for Vehicles
 
-This document provides detailed examples for using the `TeslaBluetooth` class to interact with Tesla vehicles using Bluetooth.
+This document provides detailed examples for using Bluetooth for vehicles.
 
-## Example 1: Discovering Tesla Vehicles
+## Initialize TeslaBluetooth
 
-The following example demonstrates how to discover Tesla vehicles using Bluetooth:
+The `TeslaBluetooth` class provides methods to interact with Tesla vehicles using Bluetooth. Here's a basic example to initialize the `TeslaBluetooth` class and discover nearby Tesla vehicles:
 
 ```python
 import asyncio
@@ -21,72 +21,78 @@ async def main():
 asyncio.run(main())
 ```
 
-## Example 2: Querying Display Name
+## Create VehicleBluetooth Instance
 
-The following example demonstrates how to query the display name of a Tesla vehicle using Bluetooth:
+You can create a `VehicleBluetooth` instance using the `TeslaBluetooth` class. Here's a basic example to create a `VehicleBluetooth` instance and set the private key from a file:
 
 ```python
 import asyncio
-from bleak import BleakScanner
 from tesla_fleet_api import TeslaBluetooth
 
 async def main():
-    scanner = BleakScanner()
-    devices = await scanner.discover()
-    for device in devices:
-        if TeslaBluetooth().valid_name(device.name):
-            print(f"Found Tesla vehicle: {device.name}")
-            name = await TeslaBluetooth().query_display_name(device)
-            print(f"Display name: {name}")
+    tesla_bluetooth = TeslaBluetooth()
+    tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    vehicle = tesla_bluetooth.vehicles.create("<vin>")
+    vehicle.find_vehicle()
+    print(f"Created VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
 ```
 
-## Example 3: Connecting to a Tesla Vehicle
+## Pair Vehicle
 
-The following example demonstrates how to connect to a Tesla vehicle using Bluetooth:
+You can pair a `VehicleBluetooth` instance using the `pair` method. Here's a basic example to pair a `VehicleBluetooth` instance:
 
 ```python
 import asyncio
-from bleak import BleakScanner
 from tesla_fleet_api import TeslaBluetooth
 
 async def main():
-    scanner = BleakScanner()
-    devices = await scanner.discover()
-    for device in devices:
-        if TeslaBluetooth().valid_name(device.name):
-            print(f"Found Tesla vehicle: {device.name}")
-            async with TeslaBluetooth() as bluetooth:
-                await bluetooth.connect(device)
-                print("Connected to Tesla vehicle")
+    tesla_bluetooth = TeslaBluetooth()
+    device = await tesla_bluetooth.find_vehicle()
+    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    vehicle = tesla_bluetooth.vehicles.create("<vin>")
+    await vehicle.pair()
+    print(f"Paired with VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
 ```
 
-## Example 4: Querying Vehicle Data
+## Wake Up Vehicle
 
-The following example demonstrates how to query vehicle data from a Tesla vehicle using Bluetooth:
+You can wake up a `VehicleBluetooth` instance using the `wake_up` method. Here's a basic example to wake up a `VehicleBluetooth` instance:
 
 ```python
 import asyncio
-from bleak import BleakScanner
+from tesla_fleet_api import TeslaBluetooth
+
+async def main():
+    tesla_bluetooth = TeslaBluetooth()
+    device = await tesla_bluetooth.find_vehicle()
+    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    vehicle = tesla_bluetooth.vehicles.create("<vin>")
+    await vehicle.wake_up()
+    print(f"Woke up VehicleBluetooth instance for VIN: {vehicle.vin}")
+
+asyncio.run(main())
+```
+
+## Get Vehicle Data
+
+You can get data from a `VehicleBluetooth` instance using the `vehicle_data` method. Here's a basic example to get data from a `VehicleBluetooth` instance:
+
+```python
+import asyncio
 from tesla_fleet_api import TeslaBluetooth, BluetoothVehicleData
 
 async def main():
-    scanner = BleakScanner()
-    devices = await scanner.discover()
-    for device in devices:
-        if TeslaBluetooth().valid_name(device.name):
-            print(f"Found Tesla vehicle: {device.name}")
-            async with TeslaBluetooth() as bluetooth:
-                await bluetooth.connect(device)
-                data = await bluetooth.vehicle_data([
-                    BluetoothVehicleData.CHARGE_STATE,
-                    BluetoothVehicleData.CLIMATE_STATE,
-                    BluetoothVehicleData.DRIVE_STATE,
-                ])
-                print(f"Vehicle data: {data}")
+    tesla_bluetooth = TeslaBluetooth()
+    device = await tesla_bluetooth.find_vehicle()
+    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    vehicle = tesla_bluetooth.vehicles.create("<vin>")
+    data = await vehicle.vehicle_data([BluetoothVehicleData.CHARGE_STATE, BluetoothVehicleData.CLIMATE_STATE])
+    print(f"Vehicle data for VIN: {vehicle.vin}")
+    print(data)
 
 asyncio.run(main())
 ```
