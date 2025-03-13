@@ -117,17 +117,13 @@ if TYPE_CHECKING:
 class Session:
     """A connect to a domain"""
 
-    key: bytes
-    counter: int
-    epoch: bytes
-    delta: int
-    hmac: bytes
-    publicKey: bytes | None = None
-    lock: Lock
-
     def __init__(self):
+        self.counter: int = 0
+        self.epoch: bytes | None = None
+        self.delta: int = 0
+        self.hmac: bytes | None = None
+        self.publicKey: bytes | None = None
         self.lock = Lock()
-        self.counter = 0
 
     def update(self, sessionInfo: SessionInfo, privateKey: ec.EllipticCurvePrivateKey):
         """Update the session with new information"""
@@ -136,7 +132,7 @@ class Session:
         self.delta = int(time.time()) - sessionInfo.clock_time
         if (self.publicKey != sessionInfo.publicKey):
             self.publicKey = sessionInfo.publicKey
-            self.key = hashlib.sha1(
+            key = hashlib.sha1(
                 privateKey.exchange(
                     ec.ECDH(),
                     ec.EllipticCurvePublicKey.from_encoded_point(
@@ -145,11 +141,12 @@ class Session:
                 ),
             ).digest()[:16]
             self.hmac = hmac.new(
-                self.key, "authenticated command".encode(), hashlib.sha256
+                key, "authenticated command".encode(), hashlib.sha256
             ).digest()
 
     def get(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
+        assert self.ready, "Session is not ready"
         self.counter = self.counter+1
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
@@ -157,6 +154,9 @@ class Session:
             expires_at=int(time.time()) - self.delta + 10,
         )
 
+    @property
+    def ready(self) -> bool:
+        return self.epoch is not None and self.hmac is not None and self.delta > 0
 
 class VehicleSigned(VehicleSpecific):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
@@ -181,7 +181,10 @@ class VehicleSigned(VehicleSpecific):
             encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
         )
         self._from_destination = randbytes(16)
-        self._sessions = {}
+        self._sessions = {
+            Domain.DOMAIN_VEHICLE_SECURITY: Session(),
+            Domain.DOMAIN_INFOTAINMENT: Session(),
+        }
 
     async def _send(self, msg: RoutableMessage) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
@@ -206,11 +209,8 @@ class VehicleSigned(VehicleSpecific):
 
             return resp_msg
 
-    async def _handshake(self, domain: Domain) -> Session:
+    async def _handshake(self, domain: Domain) -> None:
         """Perform a handshake with the vehicle."""
-        if session := self._sessions.get(domain):
-            return session
-        self._sessions[domain] = Session()
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
         msg = RoutableMessage()
@@ -221,8 +221,6 @@ class VehicleSigned(VehicleSpecific):
 
         # Send handshake message
         await self._send(msg)
-
-        return self._sessions[domain]
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
@@ -238,7 +236,10 @@ class VehicleSigned(VehicleSpecific):
         """Send a signed message to the vehicle."""
         LOGGER.debug(f"Sending to domain {Domain.Name(domain)}")
 
-        session = await self._handshake(domain)
+        session = self._sessions[domain]
+        if not session.ready:
+            await self._handshake(domain)
+
         hmac_personalized = session.get()
 
         msg = RoutableMessage()
