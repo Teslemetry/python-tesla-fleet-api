@@ -158,24 +158,20 @@ CopActivationTemps = (
 class Session:
     """A connect to a domain"""
 
-    domain: Domain
-    parent: Commands
-    key: bytes
-    counter: int
-    epoch: bytes
-    delta: int
-    sharedKey: bytes
-    hmac: bytes
-    publicKey: bytes
-    lock: Lock
-    ready: bool
-
     def __init__(self, parent: Commands, domain: Domain):
-        self.parent = parent
-        self.domain = domain
+        self.parent: Commands = parent
+        self.domain: Domain = domain
+        self.counter: int = 0
+        self.epoch: bytes | None = None
+        self.delta: int = 0
+        self.sharedKey: bytes | None = None
+        self.hmac: bytes | None = None
+        self.publicKey: bytes | None = None
         self.lock = Lock()
-        self.counter = 0
-        self.ready = False
+
+    @property
+    def ready(self) -> bool:
+        return self.epoch is not None and self.hmac is not None and self.delta > 0
 
     def update(self, sessionInfo: SessionInfo):
         """Update the session with new information"""
@@ -187,7 +183,6 @@ class Session:
             self.publicKey = sessionInfo.publicKey
             self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
             self.hmac = hmac.new(self.sharedKey, "authenticated command".encode(), hashlib.sha256).digest()
-        self.ready = True
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
@@ -195,6 +190,7 @@ class Session:
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
             counter=self.counter,
+            # Expire command in 10 seconds
             expires_at=int(time.time()) - self.delta + 10,
         )
 
@@ -205,7 +201,8 @@ class Session:
             epoch=self.epoch,
             nonce=randbytes(12),
             counter=self.counter,
-            expires_at=int(time.time()) - self.delta + 10,
+            # Expire command in 30 seconds (BLE can be slow)
+            expires_at=int(time.time()) - self.delta + 30,
         )
 
 

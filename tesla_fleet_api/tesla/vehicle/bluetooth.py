@@ -110,7 +110,7 @@ class ReassemblingBuffer:
             if self.expected_length is None and len(self.buffer) >= 2:
                 self.expected_length = struct.unpack(">H", self.buffer[:2])[0] + 2
 
-            LOGGER.info(f"Buffer length: {len(self.buffer)}, Packet starts: {self.packet_starts}, Expected length: {self.expected_length}")
+            LOGGER.debug(f"Buffer length: {len(self.buffer)}, Packet starts: {self.packet_starts}, Expected length: {self.expected_length}")
 
             if self.expected_length is not None and self.expected_length > 1024:
                 LOGGER.warning(f"Expected length too large: {self.expected_length}")
@@ -270,7 +270,7 @@ class VehicleBluetooth(Commands):
                     if resp.HasField(requires):
                         return resp
                     else:
-                        LOGGER.warning(f"Ignoring message since it does not contain the required field {requires}, {resp.HasField(requires)}")
+                        LOGGER.debug(f"Ignoring message since it does not contain the required field {requires}, {resp.HasField(requires)}")
 
     async def query_display_name(self, max_attempts=5) -> str | None:
         """Read the device name via GATT characteristic if available"""
