@@ -115,8 +115,7 @@ class TeslaFleetApi(Tesla):
             json=json,
             params=params,
         ) as resp:
-            LOGGER.debug("Requested: %s", resp.url)
-            LOGGER.debug("Response Status: %s", resp.status)
+            LOGGER.debug("Status %s from %s", resp.status, resp.url)
             if "x-txid" in resp.headers:
                 LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
             if "RateLimit-Reset" in resp.headers:

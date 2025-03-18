@@ -3,7 +3,7 @@
 from enum import Enum
 import logging
 
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 LOGGER = logging.getLogger(__package__)
 SERVERS = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
@@ -47,10 +47,18 @@ class Seat(IntEnum):
     FRONT_LEFT = 0
     FRONT_RIGHT = 1
     REAR_LEFT = 2
+    REAT_LEFT_BACK = 3
     REAR_CENTER = 4
     REAR_RIGHT = 5
-    THIRD_LEFT = 6
-    THIRD_RIGHT = 7
+    REAR_RIGHT_BACK = 6
+    THIRD_LEFT = 7
+    THIRD_RIGHT = 8
+
+class AutoSeat(IntEnum):
+    """Auto Climate Seat positions"""
+
+    FRONT_LEFT = 1
+    FRONT_RIGHT = 2
 
 
 class Level(IntEnum):
