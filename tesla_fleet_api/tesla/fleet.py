@@ -6,8 +6,8 @@ import aiohttp
 
 from tesla_fleet_api.tesla.tesla import Tesla
 from tesla_fleet_api.exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
-from tesla_fleet_api.const import SERVERS, Method, LOGGER, VERSION
-
+from tesla_fleet_api.const import SERVERS, Method, LOGGER
+from tesla_fleet_api import __version__ as VERSION
 
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi(Tesla):
