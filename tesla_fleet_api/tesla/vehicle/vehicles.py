@@ -1,16 +1,12 @@
 from __future__ import annotations
-import asyncio
 from typing import TYPE_CHECKING
-from bleak import BleakClient
 from bleak.backends.device import BLEDevice
-from bleak_retry_connector import establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
-from tesla_fleet_api.tesla.vehicle.bluetooth import NAME_UUID, VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
-from tesla_fleet_api.const import LOGGER
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
