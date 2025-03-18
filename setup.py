@@ -1,12 +1,11 @@
 import setuptools
-from tesla_fleet_api import __version__ as VERSION
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="tesla_fleet_api",
-    version=VERSION,
+    version="1.0.15",
     author="Brett Adams",
     author_email="hello@teslemetry.com",
     description="Tesla Fleet API library for Python",
