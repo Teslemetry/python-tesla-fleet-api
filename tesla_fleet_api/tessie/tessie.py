@@ -11,6 +11,7 @@ from tesla_fleet_api.tessie.vehicles import TessieVehicles
 class Tessie(TeslaFleetApi):
 
     server="https://api.tessie.com"
+    Vehicles = TessieVehicles
 
     def __init__(
         self,
@@ -22,10 +23,10 @@ class Tessie(TeslaFleetApi):
         self.session = session
         self.access_token = access_token
 
-        self.charging = Charging(self)
-        self.energySites = EnergySites(self)
-        self.user = User(self)
-        self.vehicles = TessieVehicles(self)
+        self.charging = self.Charging(self)
+        self.energySites = self.EnergySites(self)
+        self.user = self.User(self)
+        self.vehicles = self.Vehicles(self)
 
     async def scopes(self) -> list[str]:
         """Get user scopes."""
@@ -39,7 +40,7 @@ class Tessie(TeslaFleetApi):
         """Find the server URL for the Tesla Fleet API."""
         raise NotImplementedError("Do not use this function for Tessie.")
 
-    async def vehicles(self, only_active: bool = False) -> Any:
+    async def list_vehicles(self, only_active: bool = False) -> Any:
         """Get vehicles."""
         return await self._request(
             Method.GET, "vehicles", params={"only_active": only_active}

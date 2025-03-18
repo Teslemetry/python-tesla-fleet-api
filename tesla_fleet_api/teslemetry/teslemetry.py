@@ -2,9 +2,6 @@ from typing import Any
 
 import aiohttp
 
-from tesla_fleet_api.tesla.charging import Charging
-from tesla_fleet_api.tesla.energysite import EnergySites
-from tesla_fleet_api.tesla.user import User
 from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
 from tesla_fleet_api.const import LOGGER, Method
 from tesla_fleet_api.tesla import TeslaFleetApi
@@ -12,6 +9,7 @@ from tesla_fleet_api.tesla import TeslaFleetApi
 class Teslemetry(TeslaFleetApi):
 
     server = "https://api.teslemetry.com"
+    Vehicles = TeslemetryVehicles
 
     def __init__(
         self,
@@ -23,10 +21,10 @@ class Teslemetry(TeslaFleetApi):
         self.session = session
         self.access_token = access_token
 
-        self.charging = Charging(self)
-        self.energySites = EnergySites(self)
-        self.user = User(self)
-        self.vehicles = TeslemetryVehicles(self)
+        self.charging = self.Charging(self)
+        self.energySites = self.EnergySites(self)
+        self.user = self.User(self)
+        self.vehicles = self.Vehicles(self)
 
     async def ping(self) -> dict[str, bool]:
         """Send a ping."""
