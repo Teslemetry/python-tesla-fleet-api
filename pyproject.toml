@@ -1,3 +1,36 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=77.0"]
+
+[project]
+name = "tesla_fleet_api"
+version = "1.0.16"
+license = "Apache-2.0"
+description = "Tesla Fleet API library for Python"
+readme = "README.md"
+authors = [{ name = "Brett Adams", email = "hello@teslemetry.com" }]
+requires-python = ">=3.10"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "aiohttp",
+  "aiofiles",
+  "aiolimiter",
+  "cryptography",
+  "protobuf",
+  "bleak",
+  "bleak-retry-connector",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
+
+[tool.setuptools.packages.find]
+include = ["tesla_fleet_api*"]
+
 [tool.ruff]
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
