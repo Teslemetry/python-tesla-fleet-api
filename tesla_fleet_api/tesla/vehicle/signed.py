@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
-class VehicleSigned(VehicleFleet, Commands):
+class VehicleSigned(Commands, VehicleFleet):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
 
