@@ -134,7 +134,6 @@ async def main():
 
         try:
             vehicle = VehicleSigned(api, "<vin>")
-            await vehicle.handshake()
             data = await vehicle.wake_up()
             print(data)
         except TeslaFleetError as e:
