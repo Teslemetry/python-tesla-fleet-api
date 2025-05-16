@@ -56,7 +56,7 @@ class Teslemetry(TeslaFleetApi):
         )
         if update_region and "region" in resp:
             self.region = resp["region"].lower()
-            self.server = f"https://{self.region}.teslemetry.com"
+            #self.server = f"https://{self.region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
         return resp
 
