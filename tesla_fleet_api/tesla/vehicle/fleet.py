@@ -475,13 +475,16 @@ class VehicleFleet(Vehicle):
         )
 
     async def set_valet_mode(
-        self, on: bool, password: str | int
+        self, on: bool, password: str | int | None = None
     ) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
+        json_data: dict[str,Any] = {"on": on}
+        if password is not None:
+            json_data["password"] = str(password)
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/set_valet_mode",
-            json={"on": on, "password": str(password)},
+            json=json_data,
         )
 
     async def set_vehicle_name(

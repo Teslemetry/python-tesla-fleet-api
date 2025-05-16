@@ -1174,14 +1174,16 @@ class Commands(Vehicle):
             )
         )
 
-    async def set_valet_mode(self, on: bool, password: str | int) -> dict[str, Any]:
+    async def set_valet_mode(self, on: bool, password: str | int | None = None) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
+        action = VehicleControlSetValetModeAction(on=on)
+        if password is not None:
+            action.password = str(password)
+
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    vehicleControlSetValetModeAction=VehicleControlSetValetModeAction(
-                        on=on, password=str(password)
-                    )
+                    vehicleControlSetValetModeAction=action
                 )
             )
         )
