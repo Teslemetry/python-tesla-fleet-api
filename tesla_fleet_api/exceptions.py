@@ -963,12 +963,29 @@ class WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode(W
     message = "Service key attempting to add service tech outside service mode"
     code = 22
 
-# No idea what 23 & 24 are
+class WhitelistOperationCouldNotStartLocalEntityAuth(WhitelistOperationStatus):
+    message = "Could not start local entity authentication"
+    code = 23
 
-class WhitelistOperationServiceAuthorizationRequestTimedOut(WhitelistOperationStatus):
-    # This is observed but not documented
+class WhitelistOperationLocalEntityAuthFailedUIDenied(WhitelistOperationStatus):
+    message = "Local entity authentication failed - UI denied"
+    code = 24
+
+class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForTap(WhitelistOperationStatus):
     message = "Authorization request timed out"
     code = 25
+
+class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForUIAck(WhitelistOperationStatus):
+    message = "Local entity authentication failed - timed out waiting for UI acknowledgement"
+    code = 26
+
+class WhitelistOperationLocalEntityAuthFailedValetMode(WhitelistOperationStatus):
+    message = "Local entity authentication failed - valet mode"
+    code = 27
+
+class WhitelistOperationLocalEntityAuthFailedCancelled(WhitelistOperationStatus):
+    message = "Local entity authentication failed - cancelled"
+    code = 28
 
 
 WHITELIST_OPERATION_STATUS = [
@@ -995,9 +1012,12 @@ WHITELIST_OPERATION_STATUS = [
     WhitelistOperationAttemptingToAddKeyWithServiceRole,
     WhitelistOperationNonServiceKeyAttemptingToAddServiceTech,
     WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode,
-    WhitelistOperationStatus,
-    WhitelistOperationStatus,
-    WhitelistOperationServiceAuthorizationRequestTimedOut
+    WhitelistOperationCouldNotStartLocalEntityAuth,
+    WhitelistOperationLocalEntityAuthFailedUIDenied,
+    WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForTap,
+    WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForUIAck,
+    WhitelistOperationLocalEntityAuthFailedValetMode,
+    WhitelistOperationLocalEntityAuthFailedCancelled
 ]
 
 
