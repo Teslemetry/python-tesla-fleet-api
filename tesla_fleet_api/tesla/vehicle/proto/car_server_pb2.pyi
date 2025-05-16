@@ -6,8 +6,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class OperationStatus_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
@@ -653,7 +652,7 @@ class NearbyChargingSites(_message.Message):
     superchargers: _containers.RepeatedCompositeFieldContainer[Superchargers]
     congestion_sync_time_utc_secs: int
 
-    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., superchargers: _Optional[_Iterable[_Union[Superchargers, _Mapping]]]=..., congestion_sync_time_utc_secs: _Optional[int]=...) -> None:
+    def __init__(self, timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., superchargers: _Optional[_Iterable[_Union[Superchargers, _Mapping]]]=..., congestion_sync_time_utc_secs: _Optional[int]=...) -> None:
         ...
 
 class Superchargers(_message.Message):
@@ -876,7 +875,7 @@ class Ping(_message.Message):
     local_timestamp: _timestamp_pb2.Timestamp
     last_remote_timestamp: _timestamp_pb2.Timestamp
 
-    def __init__(self, ping_id: _Optional[int]=..., local_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., last_remote_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
+    def __init__(self, ping_id: _Optional[int]=..., local_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., last_remote_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
         ...
 
 class ScheduledChargingAction(_message.Message):
@@ -1171,7 +1170,7 @@ class VehicleDataAck(_message.Message):
     suspension_state_timestamp: _timestamp_pb2.Timestamp
     decryption_error_field: _containers.RepeatedScalarFieldContainer[int]
 
-    def __init__(self, charge_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., climate_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., closures_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., drive_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., gui_settings_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., location_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., vehicle_config_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., vehicle_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., parked_accessory_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., charge_schedule_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., preconditioning_schedule_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., alert_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., suspension_state_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., decryption_error_field: _Optional[_Iterable[int]]=...) -> None:
+    def __init__(self, charge_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., climate_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., closures_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., drive_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., gui_settings_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., location_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., vehicle_config_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., vehicle_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., parked_accessory_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., charge_schedule_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., preconditioning_schedule_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., alert_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., suspension_state_timestamp: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=..., decryption_error_field: _Optional[_Iterable[int]]=...) -> None:
         ...
 
 class VitalsSubscription(_message.Message):
@@ -1201,7 +1200,7 @@ class PiiKeyRequest(_message.Message):
     subscriber_public_key: str
     pii_key_expiration: _timestamp_pb2.Timestamp
 
-    def __init__(self, subscriber_public_key: _Optional[str]=..., pii_key_expiration: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
+    def __init__(self, subscriber_public_key: _Optional[str]=..., pii_key_expiration: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
         ...
 
 class PseudonymSyncRequest(_message.Message):
