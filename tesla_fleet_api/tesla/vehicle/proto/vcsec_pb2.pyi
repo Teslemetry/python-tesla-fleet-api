@@ -1,10 +1,11 @@
-import keys_pb2 as _keys_pb2
 import errors_pb2 as _errors_pb2
+import keys_pb2 as _keys_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class SignatureType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
@@ -16,9 +17,22 @@ class KeyFormFactor(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     KEY_FORM_FACTOR_UNKNOWN: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_NFC_CARD: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_3_BUTTON_BLE_CAR_KEYFOB: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_BLE_DEVICE: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_NFC_DEVICE: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_BLE_AND_NFC_DEVICE: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_IOS_DEVICE: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_ANDROID_DEVICE: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_3_BUTTON_BLE_CAR_KEYFOB_P60: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_CLOUD_KEY: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_5_BUTTON_GEN2_CAR_KEYFOB_P60: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60_V2: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60_V3: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_NFC_CARD_P71: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_NFC_CARD_METAL_CARD: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_NFC_CARD_PLASTIC_CARD: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_APPLE_WATCH: _ClassVar[KeyFormFactor]
 
 class InformationRequestType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -30,6 +44,12 @@ class RKEAction_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     RKE_ACTION_UNLOCK: _ClassVar[RKEAction_E]
     RKE_ACTION_LOCK: _ClassVar[RKEAction_E]
+    RKE_ACTION_OPEN_TRUNK: _ClassVar[RKEAction_E]
+    RKE_ACTION_OPEN_FRUNK: _ClassVar[RKEAction_E]
+    RKE_ACTION_OPEN_CHARGE_PORT: _ClassVar[RKEAction_E]
+    RKE_ACTION_CLOSE_CHARGE_PORT: _ClassVar[RKEAction_E]
+    RKE_ACTION_CANCEL_EXTERNAL_AUTHENTICATE: _ClassVar[RKEAction_E]
+    RKE_ACTION_UNKNOWN: _ClassVar[RKEAction_E]
     RKE_ACTION_REMOTE_DRIVE: _ClassVar[RKEAction_E]
     RKE_ACTION_AUTO_SECURE_VEHICLE: _ClassVar[RKEAction_E]
     RKE_ACTION_WAKE_VEHICLE: _ClassVar[RKEAction_E]
@@ -96,6 +116,12 @@ class WhitelistOperation_information_E(int, metaclass=_enum_type_wrapper.EnumTyp
     WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITH_SERVICE_ROLE: _ClassVar[WhitelistOperation_information_E]
     WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH: _ClassVar[WhitelistOperation_information_E]
     WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH_OUTSIDE_SERVICE_MODE: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_COULD_NOT_START_LOCAL_ENTITY_AUTH: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_UI_DENIED: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_TAP: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_UI_ACK: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_VALET_MODE: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_CANCELLED: _ClassVar[WhitelistOperation_information_E]
 
 class ClosureState_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -129,14 +155,33 @@ SIGNATURE_TYPE_NONE: SignatureType
 SIGNATURE_TYPE_PRESENT_KEY: SignatureType
 KEY_FORM_FACTOR_UNKNOWN: KeyFormFactor
 KEY_FORM_FACTOR_NFC_CARD: KeyFormFactor
+KEY_FORM_FACTOR_3_BUTTON_BLE_CAR_KEYFOB: KeyFormFactor
+KEY_FORM_FACTOR_BLE_DEVICE: KeyFormFactor
+KEY_FORM_FACTOR_NFC_DEVICE: KeyFormFactor
+KEY_FORM_FACTOR_BLE_AND_NFC_DEVICE: KeyFormFactor
 KEY_FORM_FACTOR_IOS_DEVICE: KeyFormFactor
 KEY_FORM_FACTOR_ANDROID_DEVICE: KeyFormFactor
+KEY_FORM_FACTOR_3_BUTTON_BLE_CAR_KEYFOB_P60: KeyFormFactor
 KEY_FORM_FACTOR_CLOUD_KEY: KeyFormFactor
+KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60: KeyFormFactor
+KEY_FORM_FACTOR_5_BUTTON_GEN2_CAR_KEYFOB_P60: KeyFormFactor
+KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60_V2: KeyFormFactor
+KEY_FORM_FACTOR_3_BUTTON_GEN2_CAR_KEYFOB_P60_V3: KeyFormFactor
+KEY_FORM_FACTOR_NFC_CARD_P71: KeyFormFactor
+KEY_FORM_FACTOR_NFC_CARD_METAL_CARD: KeyFormFactor
+KEY_FORM_FACTOR_NFC_CARD_PLASTIC_CARD: KeyFormFactor
+KEY_FORM_FACTOR_APPLE_WATCH: KeyFormFactor
 INFORMATION_REQUEST_TYPE_GET_STATUS: InformationRequestType
 INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO: InformationRequestType
 INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO: InformationRequestType
 RKE_ACTION_UNLOCK: RKEAction_E
 RKE_ACTION_LOCK: RKEAction_E
+RKE_ACTION_OPEN_TRUNK: RKEAction_E
+RKE_ACTION_OPEN_FRUNK: RKEAction_E
+RKE_ACTION_OPEN_CHARGE_PORT: RKEAction_E
+RKE_ACTION_CLOSE_CHARGE_PORT: RKEAction_E
+RKE_ACTION_CANCEL_EXTERNAL_AUTHENTICATE: RKEAction_E
+RKE_ACTION_UNKNOWN: RKEAction_E
 RKE_ACTION_REMOTE_DRIVE: RKEAction_E
 RKE_ACTION_AUTO_SECURE_VEHICLE: RKEAction_E
 RKE_ACTION_WAKE_VEHICLE: RKEAction_E
@@ -191,6 +236,12 @@ WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITHOUT_ROLE: WhitelistOper
 WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITH_SERVICE_ROLE: WhitelistOperation_information_E
 WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH: WhitelistOperation_information_E
 WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH_OUTSIDE_SERVICE_MODE: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_COULD_NOT_START_LOCAL_ENTITY_AUTH: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_UI_DENIED: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_TAP: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_UI_ACK: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_VALET_MODE: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_CANCELLED: WhitelistOperation_information_E
 CLOSURESTATE_CLOSED: ClosureState_E
 CLOSURESTATE_OPEN: ClosureState_E
 CLOSURESTATE_AJAR: ClosureState_E

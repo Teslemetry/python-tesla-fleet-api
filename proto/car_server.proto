@@ -2,497 +2,893 @@ syntax = "proto3";
 
 package CarServer;
 
-option java_package = "com.tesla.generated.carserver.server";
-option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver";
-
-import "vehicle.proto";
-import "signatures.proto";
 import "common.proto";
 import "google/protobuf/timestamp.proto";
+import "signatures.proto";
+import "vehicle.proto";
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver";
+option java_package = "com.tesla.generated.carserver.server";
 
 message Action {
-    reserved 3 to 5;
-    oneof action_msg {
-        VehicleAction vehicleAction = 2;
-    }
+  reserved 3 to 5;
+  oneof action_msg {
+    VehicleAction vehicleAction = 2;
+  }
 }
 
 message VehicleAction {
-    reserved 11;
-    reserved 60;
-    reserved 76;
-    oneof vehicle_action_msg {
-        GetVehicleData getVehicleData = 1;
-        ChargingSetLimitAction chargingSetLimitAction = 5;
-        ChargingStartStopAction chargingStartStopAction = 6;
-        DrivingClearSpeedLimitPinAction drivingClearSpeedLimitPinAction = 7;
-        DrivingSetSpeedLimitAction drivingSetSpeedLimitAction = 8;
-        DrivingSpeedLimitAction drivingSpeedLimitAction = 9;
-        HvacAutoAction hvacAutoAction = 10;
-        HvacSetPreconditioningMaxAction hvacSetPreconditioningMaxAction = 12;
-        HvacSteeringWheelHeaterAction hvacSteeringWheelHeaterAction = 13;
-        HvacTemperatureAdjustmentAction hvacTemperatureAdjustmentAction = 14;
-        MediaPlayAction mediaPlayAction = 15;
-        MediaUpdateVolume mediaUpdateVolume = 16;
-        MediaNextFavorite mediaNextFavorite = 17;
-        MediaPreviousFavorite mediaPreviousFavorite = 18;
-        MediaNextTrack mediaNextTrack = 19;
-        MediaPreviousTrack mediaPreviousTrack = 20;
-        GetNearbyChargingSites getNearbyChargingSites = 23;
-        VehicleControlCancelSoftwareUpdateAction vehicleControlCancelSoftwareUpdateAction = 25;
-        VehicleControlFlashLightsAction vehicleControlFlashLightsAction = 26;
-        VehicleControlHonkHornAction vehicleControlHonkHornAction = 27;
-        VehicleControlResetValetPinAction vehicleControlResetValetPinAction = 28;
-        VehicleControlScheduleSoftwareUpdateAction vehicleControlScheduleSoftwareUpdateAction = 29;
-        VehicleControlSetSentryModeAction vehicleControlSetSentryModeAction = 30;
-        VehicleControlSetValetModeAction vehicleControlSetValetModeAction = 31;
-        VehicleControlSunroofOpenCloseAction vehicleControlSunroofOpenCloseAction = 32;
-        VehicleControlTriggerHomelinkAction vehicleControlTriggerHomelinkAction = 33;
-        VehicleControlWindowAction vehicleControlWindowAction = 34;
-        HvacBioweaponModeAction hvacBioweaponModeAction = 35;
-        HvacSeatHeaterActions hvacSeatHeaterActions = 36;
-        ScheduledChargingAction scheduledChargingAction = 41;
-        ScheduledDepartureAction scheduledDepartureAction = 42;
-        SetChargingAmpsAction setChargingAmpsAction = 43;
-        HvacClimateKeeperAction hvacClimateKeeperAction = 44;
-        Ping ping = 46;
-        AutoSeatClimateAction autoSeatClimateAction = 48;
-        HvacSeatCoolerActions hvacSeatCoolerActions = 49;
-        SetCabinOverheatProtectionAction setCabinOverheatProtectionAction = 50;
-        SetVehicleNameAction setVehicleNameAction = 54;
-        ChargePortDoorClose chargePortDoorClose = 61;
-        ChargePortDoorOpen chargePortDoorOpen = 62;
-        VehicleState.GuestMode guestModeAction = 65;
-        SetCopTempAction setCopTempAction = 66;
-        EraseUserDataAction eraseUserDataAction = 72;
-        VehicleControlSetPinToDriveAction vehicleControlSetPinToDriveAction = 77;
-        VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
-        ChargeSchedule addChargeScheduleAction = 97;
-        RemoveChargeScheduleAction removeChargeScheduleAction = 98;
-        PreconditionSchedule addPreconditionScheduleAction = 99;
-        RemovePreconditionScheduleAction removePreconditionScheduleAction = 100;
-        BatchRemovePreconditionSchedulesAction batchRemovePreconditionSchedulesAction = 107;
-        BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
-    }
+  reserved 11;
+  reserved 60;
+  reserved 76;
+  oneof vehicle_action_msg {
+    GetVehicleData getVehicleData = 1;
+    RemoteStartDrive remoteStartDrive = 2;
+    CreateStreamSession createStreamSession = 3;
+    StreamMessage streamMessage = 4;
+    ChargingSetLimitAction chargingSetLimitAction = 5;
+    ChargingStartStopAction chargingStartStopAction = 6;
+    DrivingClearSpeedLimitPinAction drivingClearSpeedLimitPinAction = 7;
+    DrivingSetSpeedLimitAction drivingSetSpeedLimitAction = 8;
+    DrivingSpeedLimitAction drivingSpeedLimitAction = 9;
+    HvacAutoAction hvacAutoAction = 10;
+    // Missing = 11;
+    HvacSetPreconditioningMaxAction hvacSetPreconditioningMaxAction = 12;
+    HvacSteeringWheelHeaterAction hvacSteeringWheelHeaterAction = 13;
+    HvacTemperatureAdjustmentAction hvacTemperatureAdjustmentAction = 14;
+    MediaPlayAction mediaPlayAction = 15;
+    MediaUpdateVolume mediaUpdateVolume = 16;
+    MediaNextFavorite mediaNextFavorite = 17;
+    MediaPreviousFavorite mediaPreviousFavorite = 18;
+    MediaNextTrack mediaNextTrack = 19;
+    MediaPreviousTrack mediaPreviousTrack = 20;
+    NavigationRequest navigationRequest = 21;
+    NavigationSuperchargerRequest navigationSuperchargerRequest = 22;
+    GetNearbyChargingSites getNearbyChargingSites = 23;
+    UiSetUpcomingCalendarEntries uiSetUpcomingCalendarEntries = 24;
+    VehicleControlCancelSoftwareUpdateAction vehicleControlCancelSoftwareUpdateAction = 25;
+    VehicleControlFlashLightsAction vehicleControlFlashLightsAction = 26;
+    VehicleControlHonkHornAction vehicleControlHonkHornAction = 27;
+    VehicleControlResetValetPinAction vehicleControlResetValetPinAction = 28;
+    VehicleControlScheduleSoftwareUpdateAction vehicleControlScheduleSoftwareUpdateAction = 29;
+    VehicleControlSetSentryModeAction vehicleControlSetSentryModeAction = 30;
+    VehicleControlSetValetModeAction vehicleControlSetValetModeAction = 31;
+    VehicleControlSunroofOpenCloseAction vehicleControlSunroofOpenCloseAction = 32;
+    VehicleControlTriggerHomelinkAction vehicleControlTriggerHomelinkAction = 33;
+    VehicleControlWindowAction vehicleControlWindowAction = 34;
+    HvacBioweaponModeAction hvacBioweaponModeAction = 35;
+    HvacSeatHeaterActions hvacSeatHeaterActions = 36;
+    VehicleDataSubscription vehicleDataSubscription = 37;
+    VehicleDataAck vehicleDataAck = 38;
+    VitalsSubscription vitalsSubscription = 39;
+    VitalsAck vitalsAck = 40;
+    ScheduledChargingAction scheduledChargingAction = 41;
+    ScheduledDepartureAction scheduledDepartureAction = 42;
+    SetChargingAmpsAction setChargingAmpsAction = 43;
+    HvacClimateKeeperAction hvacClimateKeeperAction = 44;
+    HvacRecirculationAction hvacRecirculationAction = 45;
+    Ping ping = 46;
+    DashcamSaveClipAction dashcamSaveClipAction = 47;
+    AutoSeatClimateAction autoSeatClimateAction = 48;
+    HvacSeatCoolerActions hvacSeatCoolerActions = 49;
+    SetCabinOverheatProtectionAction setCabinOverheatProtectionAction = 50;
+    PiiKeyRequest piiKeyRequest = 51;
+    PseudonymSyncRequest pseudonymSyncRequest = 52;
+    NavigationGpsRequest navigationGpsRequest = 53;
+    SetVehicleNameAction setVehicleNameAction = 54;
+    SetRateTariffRequest setRateTariffRequest = 55;
+    GetRateTariffRequest getRateTariffRequest = 56;
+    VideoRequestAction videoRequestAction = 57;
+    TakeDrivenoteAction takeDrivenoteAction = 58;
+    ChargePortDoorClose chargePortDoorClose = 61;
+    ChargePortDoorOpen chargePortDoorOpen = 62;
+    BluetoothClassicPairingRequest bluetoothClassicPairingRequest = 63;
+    BoomboxAction boomboxAction = 64;
+    VehicleState.GuestMode guestModeAction = 65;
+    SetCopTempAction setCopTempAction = 66;
+    AddManagedChargingSiteRequest addManagedChargingSiteRequest = 67;
+    RemoveManagedChargingSiteRequest removeManagedChargingSiteRequest = 68;
+    NavigationRouteAction navigationRouteAction = 69;
+    AutoStwHeatAction autoStwHeatAction = 70;
+    StwHeatLevelAction stwHeatLevelAction = 71;
+    EraseUserDataAction eraseUserDataAction = 72;
+    GetManagedChargingSitesRequest getManagedChargingSitesRequest = 73;
+    UpdateChargeOnSolarFeatureRequest updateChargeOnSolarFeatureRequest = 74;
+    GetChargeOnSolarFeatureRequest getChargeOnSolarFeatureRequest = 75;
+    VehicleControlSetPinToDriveAction vehicleControlSetPinToDriveAction = 77;
+    VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
+    DrivingClearSpeedLimitPinAdminAction drivingClearSpeedLimitPinAdminAction = 79;
+    SetOutletsOnOffAction setOutletsOnOffAction = 80;
+    SetOutletTimerAction setOutletTimerAction = 81;
+    SetOutletSocLimitAction setOutletSocLimitAction = 82;
+    SetPowerFeedOnOffAction setPowerFeedOnOffAction = 83;
+    SetPowerFeedTimerAction setPowerFeedTimerAction = 84;
+    SetPowerFeedSocLimitAction setPowerFeedSocLimitAction = 85;
+    SetTrailerLightTestStartStopAction setTrailerLightTestStartStopAction = 86;
+    SetTruckBedLightAutoStateAction setTruckBedLightAutoStateAction = 87;
+    SetTruckBedLightBrightnessAction setTruckBedLightBrightnessAction = 88;
+    VehicleControlResetPinToDriveAdminAction vehicleControlResetPinToDriveAdminAction = 89;
+    NavigationWaypointsRequest navigationWaypointsRequest = 90;
+    SetPowershareFeatureAction setPowershareFeatureAction = 91;
+    SetPowershareDischargeLimitAction setPowershareDischargeLimitAction = 92;
+    SetPowershareRequestAction setPowershareRequestAction = 93;
+    SetTentModeRequestAction setTentModeRequestAction = 94;
+    SetZoneLightRequestAction setFrontZoneLightRequestAction = 95;
+    SetZoneLightRequestAction setRearZoneLightRequestAction = 96;
+    ChargeSchedule addChargeScheduleAction = 97;
+    RemoveChargeScheduleAction removeChargeScheduleAction = 98;
+    PreconditionSchedule addPreconditionScheduleAction = 99;
+    RemovePreconditionScheduleAction removePreconditionScheduleAction = 100;
+    SetLightbarBrightnessAction setLightbarBrightnessAction = 101;
+    SetLightbarMiddleAction setLightbarMiddleAction = 102;
+    SetLightbarDitchAction setLightbarDitchAction = 103;
+    GetMessagesAction getMessagesAction = 104;
+    TeslaAuthResponseAction teslaAuthResponseAction = 105;
+    NavigationGpsDestinationRequest navigationGpsDestinationRequest = 106;
+    BatchRemovePreconditionSchedulesAction batchRemovePreconditionSchedulesAction = 107;
+    BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
+    ParentalControlsClearPinAction parentalControlsClearPinAction = 109;
+    ParentalControlsClearPinAdminAction parentalControlsClearPinAdminAction = 110;
+    ParentalControlsAction parentalControlsAction = 111;
+    ParentalControlsEnableSettingsAction parentalControlsEnableSettingsAction = 112;
+    ParentalControlsSetSpeedLimitAction parentalControlsSetSpeedLimitAction = 113;
+    CancelSohTestAction cancelSohTestAction = 114;
+    // Missing = 115;
+    StopLightShowAction stopLightShowAction = 116;
+    StartLightShowAction startLightShowAction = 117;
+    SetSuspensionLevelAction setSuspensionLevelAction = 118;
+  }
 }
 
 message GetVehicleData {
-    GetChargeState getChargeState = 2;
-    GetClimateState getClimateState = 3;
-    GetDriveState getDriveState = 4;
-    reserved 5, 6;
-    GetLocationState getLocationState = 7;
-    GetClosuresState getClosuresState = 8;
-    GetChargeScheduleState getChargeScheduleState = 10;
-    GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
-    reserved 12, 13;
-    GetTirePressureState getTirePressureState = 14;
-    GetMediaState getMediaState = 15;
-    GetMediaDetailState getMediaDetailState = 16;
-    GetSoftwareUpdateState getSoftwareUpdateState = 17;
-    GetParentalControlsState getParentalControlsState = 19;
+  GetChargeState getChargeState = 2;
+  GetClimateState getClimateState = 3;
+  GetDriveState getDriveState = 4;
+  reserved 5, 6;
+  GetLocationState getLocationState = 7;
+  GetClosuresState getClosuresState = 8;
+  GetChargeScheduleState getChargeScheduleState = 10;
+  GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
+  reserved 12, 13;
+  GetTirePressureState getTirePressureState = 14;
+  GetMediaState getMediaState = 15;
+  GetMediaDetailState getMediaDetailState = 16;
+  GetSoftwareUpdateState getSoftwareUpdateState = 17;
+  GetParentalControlsState getParentalControlsState = 19;
 }
 
-message GetTirePressureState {
-}
+message GetTirePressureState {}
 
-message GetMediaState {
-}
+message GetMediaState {}
 
-message GetMediaDetailState {
-}
+message GetMediaDetailState {}
 
-message GetSoftwareUpdateState {
-}
+message GetSoftwareUpdateState {}
 
-message GetChargeState {
-}
+message GetChargeState {}
 
-message GetClimateState {
-}
+message GetClimateState {}
 
-message GetDriveState {
-}
+message GetDriveState {}
 
-message GetLocationState {
-}
+message GetLocationState {}
 
-message GetClosuresState {
-}
+message GetClosuresState {}
 
-message GetChargeScheduleState {
-}
+message GetChargeScheduleState {}
 
-message GetPreconditioningScheduleState {
-}
+message GetPreconditioningScheduleState {}
 
-message GetParentalControlsState {
-}
+message GetParentalControlsState {}
 
 message EraseUserDataAction {
-    string reason = 1;
+  string reason = 1;
 }
 
 message Response {
-    ActionStatus actionStatus = 1;
-    oneof response_msg {
-        VehicleData vehicleData = 2;
-        Signatures.SessionInfo getSessionInfoResponse = 3;
-        NearbyChargingSites getNearbyChargingSites = 5;
-        Ping ping = 9;
-    }
+  ActionStatus actionStatus = 1;
+  oneof response_msg {
+    VehicleData vehicleData = 2;
+    Signatures.SessionInfo getSessionInfoResponse = 3;
+    NearbyChargingSites getNearbyChargingSites = 5;
+    Ping ping = 9;
+  }
 }
 
 message ActionStatus {
-    OperationStatus_E result = 1;
-    ResultReason result_reason = 2;
+  OperationStatus_E result = 1;
+  ResultReason result_reason = 2;
 }
 
-enum OperationStatus_E
-{
-    OPERATIONSTATUS_OK = 0;
-    OPERATIONSTATUS_ERROR = 1;
+enum OperationStatus_E {
+  OPERATIONSTATUS_OK = 0;
+  OPERATIONSTATUS_ERROR = 1;
 }
 
 message ResultReason {
-    oneof reason {
-        string plain_text = 1;
-    }
+  oneof reason {
+    string plain_text = 1;
+  }
 }
 
 message EncryptedData {
-    int32 field_number = 1;
-    bytes ciphertext = 2;
+  int32 field_number = 1;
+  bytes ciphertext = 2;
 
-    bytes tag = 3;
+  bytes tag = 3;
 }
 
 message ChargingSetLimitAction {
-    int32 percent = 1;
+  int32 percent = 1;
 }
 
 message ChargingStartStopAction {
-    oneof charging_action {
-        Void unknown = 1;
-        Void start = 2;
-        Void start_standard = 3;
-        Void start_max_range = 4;
-        Void stop = 5;
-    }
+  oneof charging_action {
+    Void unknown = 1;
+    Void start = 2;
+    Void start_standard = 3;
+    Void start_max_range = 4;
+    Void stop = 5;
+  }
 }
 
 message DrivingClearSpeedLimitPinAction {
-    string pin = 1;
+  string pin = 1;
 }
 
 message DrivingSetSpeedLimitAction {
-    double limit_mph = 1;
+  double limit_mph = 1;
 }
 
 message DrivingSpeedLimitAction {
-    bool activate = 1;
-    string pin = 2;
+  bool activate = 1;
+  string pin = 2;
 }
 
 message HvacAutoAction {
-    bool power_on = 1;
-    bool manual_override = 2;
+  bool power_on = 1;
+  bool manual_override = 2;
 }
 
 message HvacSeatHeaterActions {
-    message HvacSeatHeaterAction {
-        oneof seat_heater_level {
-            Void SEAT_HEATER_UNKNOWN = 1;
-            Void SEAT_HEATER_OFF = 2;
-            Void SEAT_HEATER_LOW = 3;
-            Void SEAT_HEATER_MED = 4;
-            Void SEAT_HEATER_HIGH = 5;
-        }
-        oneof seat_position {
-            Void CAR_SEAT_UNKNOWN = 6;
-            Void CAR_SEAT_FRONT_LEFT = 7;
-            Void CAR_SEAT_FRONT_RIGHT = 8;
-            Void CAR_SEAT_REAR_LEFT = 9;
-            Void CAR_SEAT_REAR_LEFT_BACK = 10;
-            Void CAR_SEAT_REAR_CENTER = 11;
-            Void CAR_SEAT_REAR_RIGHT = 12;
-            Void CAR_SEAT_REAR_RIGHT_BACK = 13;
-            Void CAR_SEAT_THIRD_ROW_LEFT = 14;
-            Void CAR_SEAT_THIRD_ROW_RIGHT = 15;
-        }
+  message HvacSeatHeaterAction {
+    oneof seat_heater_level {
+      Void SEAT_HEATER_UNKNOWN = 1;
+      Void SEAT_HEATER_OFF = 2;
+      Void SEAT_HEATER_LOW = 3;
+      Void SEAT_HEATER_MED = 4;
+      Void SEAT_HEATER_HIGH = 5;
     }
+    oneof seat_position {
+      Void CAR_SEAT_UNKNOWN = 6;
+      Void CAR_SEAT_FRONT_LEFT = 7;
+      Void CAR_SEAT_FRONT_RIGHT = 8;
+      Void CAR_SEAT_REAR_LEFT = 9;
+      Void CAR_SEAT_REAR_LEFT_BACK = 10;
+      Void CAR_SEAT_REAR_CENTER = 11;
+      Void CAR_SEAT_REAR_RIGHT = 12;
+      Void CAR_SEAT_REAR_RIGHT_BACK = 13;
+      Void CAR_SEAT_THIRD_ROW_LEFT = 14;
+      Void CAR_SEAT_THIRD_ROW_RIGHT = 15;
+    }
+  }
 
-    repeated HvacSeatHeaterAction hvacSeatHeaterAction = 1;
+  repeated HvacSeatHeaterAction hvacSeatHeaterAction = 1;
 }
 
 message HvacSeatCoolerActions {
-    enum HvacSeatCoolerLevel_E {
-        HvacSeatCoolerLevel_Unknown = 0;
-        HvacSeatCoolerLevel_Off = 1;
-        HvacSeatCoolerLevel_Low = 2;
-        HvacSeatCoolerLevel_Med = 3;
-        HvacSeatCoolerLevel_High = 4;
-    }
-    enum HvacSeatCoolerPosition_E {
-        HvacSeatCoolerPosition_Unknown = 0;
-        HvacSeatCoolerPosition_FrontLeft = 1;
-        HvacSeatCoolerPosition_FrontRight = 2;
-    }
-    message HvacSeatCoolerAction {
-        HvacSeatCoolerLevel_E seat_cooler_level = 1;
-        HvacSeatCoolerPosition_E seat_position = 2;
-    }
-    repeated HvacSeatCoolerAction hvacSeatCoolerAction = 1;
+  enum HvacSeatCoolerLevel_E {
+    HvacSeatCoolerLevel_Unknown = 0;
+    HvacSeatCoolerLevel_Off = 1;
+    HvacSeatCoolerLevel_Low = 2;
+    HvacSeatCoolerLevel_Med = 3;
+    HvacSeatCoolerLevel_High = 4;
+  }
+  enum HvacSeatCoolerPosition_E {
+    HvacSeatCoolerPosition_Unknown = 0;
+    HvacSeatCoolerPosition_FrontLeft = 1;
+    HvacSeatCoolerPosition_FrontRight = 2;
+  }
+  message HvacSeatCoolerAction {
+    HvacSeatCoolerLevel_E seat_cooler_level = 1;
+    HvacSeatCoolerPosition_E seat_position = 2;
+  }
+  repeated HvacSeatCoolerAction hvacSeatCoolerAction = 1;
 }
 
 message HvacSetPreconditioningMaxAction {
-    bool on = 1;
-    bool manual_override = 2;
-    enum ManualOverrideMode_E {
-        DogMode = 0;
-        Soc = 1;
-        Doors = 2;
-    }
-    repeated ManualOverrideMode_E manual_override_mode = 3;
+  bool on = 1;
+  bool manual_override = 2;
+  enum ManualOverrideMode_E {
+    DogMode = 0;
+    Soc = 1;
+    Doors = 2;
+  }
+  repeated ManualOverrideMode_E manual_override_mode = 3;
 }
 
 message HvacSteeringWheelHeaterAction {
-    bool power_on = 1;
+  bool power_on = 1;
 }
 
 message HvacTemperatureAdjustmentAction {
-    message Temperature {
-        oneof type {
-            Void TEMP_UNKNOWN = 1;
-            Void TEMP_MIN = 2;
-            Void TEMP_MAX = 3;
-        }
+  message Temperature {
+    oneof type {
+      Void TEMP_UNKNOWN = 1;
+      Void TEMP_MIN = 2;
+      Void TEMP_MAX = 3;
     }
-    message HvacTemperatureZone {
-        oneof type {
-            Void TEMP_ZONE_UNKNOWN = 1;
-            Void TEMP_ZONE_FRONT_LEFT = 2;
-            Void TEMP_ZONE_FRONT_RIGHT = 3;
-            Void TEMP_ZONE_REAR = 4;
-        }
+  }
+  message HvacTemperatureZone {
+    oneof type {
+      Void TEMP_ZONE_UNKNOWN = 1;
+      Void TEMP_ZONE_FRONT_LEFT = 2;
+      Void TEMP_ZONE_FRONT_RIGHT = 3;
+      Void TEMP_ZONE_REAR = 4;
     }
-    float delta_celsius = 1;
-    sint32 delta_percent = 2;
-    float absolute_celsius = 3;
-    Temperature level = 5;
-    repeated HvacTemperatureZone hvac_temperature_zone = 4;
-    float driver_temp_celsius = 6;
-    float passenger_temp_celsius = 7;
+  }
+  float delta_celsius = 1;
+  sint32 delta_percent = 2;
+  float absolute_celsius = 3;
+  Temperature level = 5;
+  repeated HvacTemperatureZone hvac_temperature_zone = 4;
+  float driver_temp_celsius = 6;
+  float passenger_temp_celsius = 7;
 }
 
 message GetNearbyChargingSites {
-    bool include_meta_data = 1;
-    int32 radius = 2;
-    int32 count = 3;
+  bool include_meta_data = 1;
+  int32 radius = 2;
+  int32 count = 3;
 }
 
 message NearbyChargingSites {
-    google.protobuf.Timestamp timestamp = 1;
-    repeated Superchargers superchargers = 3;
-    int64 congestion_sync_time_utc_secs = 4;
+  google.protobuf.Timestamp timestamp = 1;
+  repeated Superchargers superchargers = 3;
+  int64 congestion_sync_time_utc_secs = 4;
 }
 
 message Superchargers {
-    int64 id = 1;
-    string amenities = 2;
-    int32 available_stalls = 3;
-    string billing_info = 4;
-    string billing_time = 5;
-    string city = 6;
-    string country = 7;
-    float distance_miles = 8;
-    string district = 9;
-    LatLong location = 10;
-    string name = 11;
-    string postal_code = 12;
-    bool site_closed = 13;
-    string state = 14;
-    string street_address = 15;
-    int32 total_stalls = 16;
-    bool within_range = 17;
-    int32 max_power_kw = 18;
-    int32 out_of_order_stalls_number = 19;
-    string out_of_order_stalls_names = 20;
+  int64 id = 1;
+  string amenities = 2;
+  int32 available_stalls = 3;
+  string billing_info = 4;
+  string billing_time = 5;
+  string city = 6;
+  string country = 7;
+  float distance_miles = 8;
+  string district = 9;
+  LatLong location = 10;
+  string name = 11;
+  string postal_code = 12;
+  bool site_closed = 13;
+  string state = 14;
+  string street_address = 15;
+  int32 total_stalls = 16;
+  bool within_range = 17;
+  int32 max_power_kw = 18;
+  int32 out_of_order_stalls_number = 19;
+  string out_of_order_stalls_names = 20;
 }
 
-message MediaPlayAction {
+message MediaPlayAction {}
+
+message MediaUpdateVolume {
+  reserved 2;
+  oneof media_volume {
+    sint32 volume_delta = 1;
+    float volume_absolute_float = 3;
+  }
 }
 
-message MediaUpdateVolume{
-    reserved 2;
-    oneof media_volume {
-        sint32 volume_delta = 1;
-        float volume_absolute_float = 3;
-    }
-}
+message MediaNextFavorite {}
 
-message MediaNextFavorite {
-}
+message MediaPreviousFavorite {}
 
-message MediaPreviousFavorite{
-}
+message MediaNextTrack {}
 
-message MediaNextTrack {
-}
+message MediaPreviousTrack {}
 
-message MediaPreviousTrack{
-}
+message VehicleControlCancelSoftwareUpdateAction {}
 
-message VehicleControlCancelSoftwareUpdateAction {
-}
+message VehicleControlFlashLightsAction {}
 
-message VehicleControlFlashLightsAction {
-}
+message VehicleControlHonkHornAction {}
 
-message VehicleControlHonkHornAction {
-}
-
-message VehicleControlResetValetPinAction {
-}
+message VehicleControlResetValetPinAction {}
 
 message VehicleControlScheduleSoftwareUpdateAction {
-    int32 offset_sec = 1;
+  int32 offset_sec = 1;
 }
 
 message VehicleControlSetSentryModeAction {
-    bool on = 1;
+  bool on = 1;
 }
 
 message VehicleControlSetValetModeAction {
-    bool on = 1;
-    string password = 2;
+  bool on = 1;
+  string password = 2;
 }
 
 message VehicleControlSunroofOpenCloseAction {
-    oneof sunroof_level {
-        int32 absolute_level = 1;
-        sint32 delta_level = 2;
-    }
+  oneof sunroof_level {
+    int32 absolute_level = 1;
+    sint32 delta_level = 2;
+  }
 
-    oneof action {
-        Void vent = 3;
-        Void close = 4;
-        Void open = 5;
-    }
+  oneof action {
+    Void vent = 3;
+    Void close = 4;
+    Void open = 5;
+  }
 }
 
 message VehicleControlTriggerHomelinkAction {
-    LatLong location = 1;
-    string token = 2;
+  LatLong location = 1;
+  string token = 2;
 }
 
 message VehicleControlWindowAction {
-    reserved 1; // Location not required for vehicles that support this protocol.
-    oneof action {
-        Void unknown = 2;
-        Void vent = 3;
-        Void close = 4;
-    }
+  reserved 1; // Location not required for vehicles that support this protocol.
+  oneof action {
+    Void unknown = 2;
+    Void vent = 3;
+    Void close = 4;
+  }
 }
 
 message HvacBioweaponModeAction {
-    bool on = 1;
-    bool manual_override = 2;
+  bool on = 1;
+  bool manual_override = 2;
 }
 
 message AutoSeatClimateAction {
-    enum AutoSeatPosition_E {
-        AutoSeatPosition_Unknown = 0;
-        AutoSeatPosition_FrontLeft = 1;
-        AutoSeatPosition_FrontRight = 2;
-    }
-    message CarSeat {
-        bool on = 1;
-        AutoSeatPosition_E seat_position = 2;
-    }
-    repeated CarSeat carseat = 1;
+  enum AutoSeatPosition_E {
+    AutoSeatPosition_Unknown = 0;
+    AutoSeatPosition_FrontLeft = 1;
+    AutoSeatPosition_FrontRight = 2;
+  }
+  message CarSeat {
+    bool on = 1;
+    AutoSeatPosition_E seat_position = 2;
+  }
+  repeated CarSeat carseat = 1;
 }
 
 message Ping {
-    int32 ping_id = 1;
-    google.protobuf.Timestamp local_timestamp = 2;
-    google.protobuf.Timestamp last_remote_timestamp = 3;
+  int32 ping_id = 1;
+  google.protobuf.Timestamp local_timestamp = 2;
+  google.protobuf.Timestamp last_remote_timestamp = 3;
 }
 
 message ScheduledChargingAction {
-    bool                        enabled                 = 1;
-    int32                       charging_time           = 2;
+  bool enabled = 1;
+  int32 charging_time = 2;
 }
 
 message ScheduledDepartureAction {
-    bool                        enabled                 = 1;
-    int32                       departure_time          = 2;
-    PreconditioningTimes        preconditioning_times   = 3;
-    OffPeakChargingTimes        off_peak_charging_times = 4;
-    int32                       off_peak_hours_end_time = 5;
+  bool enabled = 1;
+  int32 departure_time = 2;
+  PreconditioningTimes preconditioning_times = 3;
+  OffPeakChargingTimes off_peak_charging_times = 4;
+  int32 off_peak_hours_end_time = 5;
 }
 
 message HvacClimateKeeperAction {
-    enum ClimateKeeperAction_E
-    {
-        ClimateKeeperAction_Off = 0;
-        ClimateKeeperAction_On = 1;
-        ClimateKeeperAction_Dog = 2;
-        ClimateKeeperAction_Camp = 3;
-    }
+  enum ClimateKeeperAction_E {
+    ClimateKeeperAction_Off = 0;
+    ClimateKeeperAction_On = 1;
+    ClimateKeeperAction_Dog = 2;
+    ClimateKeeperAction_Camp = 3;
+  }
 
-    ClimateKeeperAction_E ClimateKeeperAction = 1;
-    bool manual_override = 2;
+  ClimateKeeperAction_E ClimateKeeperAction = 1;
+  bool manual_override = 2;
 }
 
+message HvacRecirculationAction {
+  bool on = 1;
+}
 
 message SetChargingAmpsAction {
-    int32 charging_amps = 1;
+  int32 charging_amps = 1;
 }
 
 message RemoveChargeScheduleAction {
-    uint64                      id                      = 1; // datetime in epoch time
+  uint64 id = 1; // datetime in epoch time
 }
 
 message BatchRemoveChargeSchedulesAction {
-    bool                        home                    = 1;
-    bool                        work                    = 2;
-    bool                        other                   = 3; // Delete non-home and non-work charge schedules
+  bool home = 1;
+  bool work = 2;
+  bool other = 3; // Delete non-home and non-work charge schedules
 }
 
 message BatchRemovePreconditionSchedulesAction {
-    bool home = 1;
-    bool work = 2;
-    bool other = 3; // Delete non-home and non-work precondition schedules
+  bool home = 1;
+  bool work = 2;
+  bool other = 3; // Delete non-home and non-work precondition schedules
 }
 
 message RemovePreconditionScheduleAction {
-    uint64 id = 1; // datetime in epoch time
+  uint64 id = 1; // datetime in epoch time
 }
 
 message SetCabinOverheatProtectionAction {
-    bool on = 1;
-    bool fan_only = 2;
+  bool on = 1;
+  bool fan_only = 2;
 }
 
 message SetVehicleNameAction {
-    string vehicleName = 1;
+  string vehicleName = 1;
 }
 
-message ChargePortDoorClose {
-}
+message ChargePortDoorClose {}
 
-message ChargePortDoorOpen {
+message ChargePortDoorOpen {}
+
+message BoomboxAction {
+  uint32 sound = 1;
 }
 
 message SetCopTempAction {
-    ClimateState.CopActivationTemp copActivationTemp = 1;
+  ClimateState.CopActivationTemp copActivationTemp = 1;
 }
 
 message VehicleControlSetPinToDriveAction {
-    bool on = 1;
-    string password = 2;
+  bool on = 1;
+  string password = 2;
 }
 
-message VehicleControlResetPinToDriveAction {
+message VehicleControlResetPinToDriveAction {}
+
+// These are new reverse engineered messages
+
+message RemoteStartDrive {}
+
+message CreateStreamSession {
+  string session_id = 1;
+}
+
+message StreamMessage {
+  string session_id = 1;
+  bytes data = 2;
+}
+
+message NavigationRequest {
+  string destination = 1;
+  int32 order = 2;
+}
+
+message NavigationSuperchargerRequest {
+  int32 order = 1;
+}
+
+message UiSetUpcomingCalendarEntries {
+  string calendar_data = 1;
+}
+
+message VehicleDataSubscription {
+  // Privacy/security request for handling PII (Personally Identifiable Information)
+  message PiiKeyRequest {
+    string subscriber_public_key = 1;
+  }
+
+  // Security-related field for handling PII data
+  PiiKeyRequest pii_key_request = 13;
+
+  // Subscription configuration parameters
+  int32 subscription_duration_s = 3; // Duration of subscription in seconds
+  int32 subscription_ping_s = 12; // Ping interval in seconds
+
+  // Maximum update rates for different state types (in milliseconds)
+  int32 gui_settings_max_update_rate_ms = 4;
+  int32 charge_state_max_update_rate_ms = 5;
+  int32 climate_state_max_update_rate_ms = 6;
+  int32 drive_state_max_update_rate_ms = 7;
+  int32 vehicle_state_max_update_rate_ms = 8;
+  int32 vehicle_config_max_update_rate_ms = 9;
+  int32 location_state_max_update_rate_ms = 10;
+  int32 closures_state_max_update_rate_ms = 11;
+  int32 parked_accessory_state_max_update_rate_ms = 14;
+  int32 charge_schedule_state_max_update_rate_ms = 15;
+  int32 preconditioning_schedule_state_max_update_rate_ms = 16;
+  int32 alert_state_max_update_rate_ms = 17;
+  int32 suspension_state_max_update_rate_ms = 18;
+}
+
+message VehicleDataAck {
+  // Timestamps for different vehicle state types to acknowledge receipt
+  google.protobuf.Timestamp charge_state_timestamp = 2;
+  google.protobuf.Timestamp climate_state_timestamp = 3;
+  google.protobuf.Timestamp closures_state_timestamp = 4;
+  google.protobuf.Timestamp drive_state_timestamp = 5;
+  google.protobuf.Timestamp gui_settings_timestamp = 6;
+  google.protobuf.Timestamp location_state_timestamp = 7;
+  google.protobuf.Timestamp vehicle_config_timestamp = 8;
+  google.protobuf.Timestamp vehicle_state_timestamp = 9;
+  google.protobuf.Timestamp parked_accessory_state_timestamp = 11;
+  google.protobuf.Timestamp charge_schedule_state_timestamp = 12;
+  google.protobuf.Timestamp preconditioning_schedule_state_timestamp = 13;
+  google.protobuf.Timestamp alert_state_timestamp = 14;
+  google.protobuf.Timestamp suspension_state_timestamp = 15;
+
+  // Field to report decryption errors encountered during processing
+  repeated int32 decryption_error_field = 10 [packed = true];
+}
+
+message VitalsSubscription {
+  int32 session_id = 1;
+}
+
+message VitalsAck {}
+
+message DashcamSaveClipAction {}
+
+message PiiKeyRequest {
+  string subscriber_public_key = 2;
+  google.protobuf.Timestamp pii_key_expiration = 4;
+}
+
+message PseudonymSyncRequest {
+  bytes last_known_pseudonym_hashed = 1;
+}
+
+message NavigationGpsRequest {
+  enum RemoteNavTripOrder {
+    REMOTE_NAV_TRIP_ORDER_UNKNOWN = 0;
+    REMOTE_NAV_TRIP_ORDER_REPLACE = 1;
+    REMOTE_NAV_TRIP_ORDER_PREPEND = 2;
+    REMOTE_NAV_TRIP_ORDER_APPEND = 3;
+  }
+  double lat = 1;
+  double lon = 2;
+  RemoteNavTripOrder order = 3;
+}
+
+message SetRateTariffRequest {}
+
+message GetRateTariffRequest {}
+
+message VideoRequestAction {
+  string url = 1;
+}
+
+message TakeDrivenoteAction {
+  string note = 1;
+}
+
+message BluetoothClassicPairingRequest {
+  string utf8_name = 1;
+  bytes mac_address = 2;
+}
+
+message AddManagedChargingSiteRequest {
+  //ManagedChargingSite site = 1;
+}
+
+message RemoveManagedChargingSiteRequest {
+  string public_key = 1;
+}
+
+message NavigationRouteAction {}
+
+message AutoStwHeatAction {
+  bool on = 1;
+}
+
+message StwHeatLevelAction {
+  StwHeatLevel stw_heat_level = 1;
+}
+
+message GetManagedChargingSitesRequest {}
+
+message UpdateChargeOnSolarFeatureRequest {
+  ChargeOnSolarFeature charge_on_solar = 1; // Field with JSON name "chargeOnSolar"
+}
+
+message GetChargeOnSolarFeatureRequest {}
+
+message ChargeOnSolarFeature {
+  bool enabled = 1;
+  float lower_charge_limit = 2; // Field with JSON name "lowerChargeLimit"
+  float upper_charge_limit = 3; // Field with JSON name "upperChargeLimit"
+}
+
+message DrivingClearSpeedLimitPinAdminAction {
+  // This is an empty message with no fields
+}
+
+message SetOutletsOnOffAction {
+  enum OutletRequest {
+    OUTLET_REQUEST_UNKNOWN = 0;
+    OUTLET_REQUEST_OFF = 1;
+    OUTLET_REQUEST_CABIN_AND_BED = 2;
+    OUTLET_REQUEST_CABIN = 3;
+  }
+
+  OutletRequest outlet_request = 1; // Field with JSON name "outletRequest"
+}
+
+message SetOutletTimerAction {
+  int32 num_minutes = 1; // Field with JSON name "numMinutes"
+}
+
+message SetOutletSocLimitAction {
+  int32 percent = 1;
+}
+
+message SetPowerFeedOnOffAction {
+  enum PowerFeedRequest {
+    POWER_FEED_REQUEST_UNKNOWN = 0;
+    POWER_FEED_REQUEST_OFF = 1;
+    POWER_FEED_REQUEST_FEED_1 = 2;
+    POWER_FEED_REQUEST_FEED_2 = 3;
+    POWER_FEED_REQUEST_FEED_1_AND_FEED_2 = 4;
+  }
+
+  PowerFeedRequest power_feed_request = 1; // Field with JSON name "powerFeedRequest"
+}
+
+message SetPowerFeedTimerAction {
+  int32 num_minutes = 1; // Field with JSON name "numMinutes"
+}
+
+message SetPowerFeedSocLimitAction {
+  int32 percent = 1;
+}
+
+message SetTrailerLightTestStartStopAction {
+  bool start_stop = 1;
+}
+
+message SetTruckBedLightAutoStateAction {
+  bool power_state = 1;
+}
+
+message SetTruckBedLightBrightnessAction {
+  uint32 brightness = 1;
+}
+
+message VehicleControlResetPinToDriveAdminAction {}
+
+message NavigationWaypointsRequest {
+  string waypoints = 1;
+  TripPlanOptions trip_plan_options = 2;
+
+  message TripPlanOptions {
+    int32 destination_start_soe = 1;
+    int32 destination_arrival_soe = 2;
+  }
+}
+
+message SetPowershareFeatureAction {
+  enum PowershareFeatureRequest {
+    POWERSHARE_FEATURE_REQUEST_UNKNOWN = 0;
+    POWERSHARE_FEATURE_REQUEST_OFF = 1;
+    POWERSHARE_FEATURE_REQUEST_ON = 2;
+  }
+
+  PowershareFeatureRequest powershare_feature_request = 1;
+}
+
+message SetPowershareDischargeLimitAction {
+  int32 powershare_discharge_limit = 1;
+}
+
+message SetPowershareRequestAction {
+  enum PowershareRequest {
+    POWERSHARE_REQUEST_UNKNOWN = 0;
+    POWERSHARE_REQUEST_OFF = 1;
+    POWERSHARE_REQUEST_ON = 2;
+  }
+
+  PowershareRequest powershare_request = 1;
+}
+
+message SetTentModeRequestAction {
+  bool on = 1;
+}
+
+message SetZoneLightRequestAction {
+  enum ZoneLightRequest {
+    ZONE_LIGHT_REQUEST_OFF = 0;
+    ZONE_LIGHT_REQUEST_LOW = 1;
+    ZONE_LIGHT_REQUEST_MED = 2;
+    ZONE_LIGHT_REQUEST_HIGH = 3;
+  }
+
+  ZoneLightRequest zone_light_request = 1;
+}
+
+message SetLightbarBrightnessAction {
+  uint32 brightness_request = 1;
+}
+
+message SetLightbarMiddleAction {
+  bool middle_light_request = 1;
+}
+
+message SetLightbarDitchAction {
+  bool ditch_lights_request = 1;
+}
+
+message GetMessagesAction {}
+
+message TeslaAuthResponseAction {
+  string client_id = 1;
+  string scope = 2;
+  string access_token = 3;
+  string refresh_token = 4;
+  int64 expiry_timestamp = 5;
+  string error = 6;
+  string scoped_token = 7;
+}
+
+message NavigationGpsDestinationRequest {
+  double lat = 1;
+  double lon = 2;
+  string destination = 3;
+
+  enum RemoteNavTripOrder {
+    REMOTE_NAV_TRIP_ORDER_UNKNOWN = 0;
+    REMOTE_NAV_TRIP_ORDER_REPLACE = 1;
+    REMOTE_NAV_TRIP_ORDER_PREPEND = 2;
+    REMOTE_NAV_TRIP_ORDER_APPEND = 3;
+  }
+
+  RemoteNavTripOrder order = 4;
+}
+
+message ParentalControlsClearPinAction {
+  string pin = 1;
+}
+
+message ParentalControlsClearPinAdminAction {}
+
+message ParentalControlsAction {
+  bool activate = 1;
+  string pin = 2;
+}
+
+message ParentalControlsEnableSettingsAction {
+  enum ParentalControlsSetting {
+    PARENTAL_CONTROLS_SETTING_UNKNOWN = 0; // Not sure about this
+    PARENTAL_CONTROLS_SETTING_SPEED_LIMIT = 1;
+    PARENTAL_CONTROLS_SETTING_ACCELERATION = 2;
+    PARENTAL_CONTROLS_SETTING_SAFETY_FEATURES = 3;
+    PARENTAL_CONTROLS_SETTING_CURFEW = 4;
+  }
+
+  ParentalControlsSetting setting = 1;
+  bool enable = 2;
+}
+
+message ParentalControlsSetSpeedLimitAction {
+  double limit_mph = 1;
+}
+
+message CancelSohTestAction {}
+
+message StopLightShowAction {}
+
+message StartLightShowAction {
+  int32 show_index = 1;
+  int64 start_time = 2;
+  float volume = 3;
+  bool dance_moves = 4;
+}
+
+message SetSuspensionLevelAction {
+  enum SuspensionLevel {
+    SUSPENSION_LEVEL_INVALID = 0;
+    SUSPENSION_LEVEL_ENTRY = 1;
+    SUSPENSION_LEVEL_LOW = 2;
+    SUSPENSION_LEVEL_MEDIUM = 3;
+    SUSPENSION_LEVEL_HIGH = 4;
+    SUSPENSION_LEVEL_VERY_HIGH = 5;
+    SUSPENSION_LEVEL_EXTRACT = 6;
+  }
+
+  SuspensionLevel suspension_level = 1;
 }
