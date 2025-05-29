@@ -216,7 +216,7 @@ class VehicleFleet(Vehicle):
         )
 
     async def navigation_sc_request(
-        self, id: int, order: int = 0 | None = None
+        self, id: int, order: int | None = None
     ) -> dict[str, Any]:
         """Send a navigation request to a Tesla supercharger (and if applicable begin preconditioning)."""
         return await self._request(
