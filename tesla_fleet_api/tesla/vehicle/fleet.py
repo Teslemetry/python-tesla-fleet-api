@@ -216,13 +216,13 @@ class VehicleFleet(Vehicle):
         )
 
     async def navigation_sc_request(
-        self, id: int, order: int | None = None
+        self, id: int, order: int = 0 | None = None
     ) -> dict[str, Any]:
-        """Sends a location to the in-vehicle navigation system."""
+        """Send a navigation request to a Tesla supercharger (and if applicable begin preconditioning)."""
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/navigation_sc_request",
-            json={"type": type, "id": id, "order": order},
+            json={"id": id, "order": order},
         )
 
     async def remote_auto_seat_climate_request(
