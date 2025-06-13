@@ -1,12 +1,12 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import Any, Awaitable
+from typing import Any, Awaitable, Callable
 import aiohttp
 
 from tesla_fleet_api.tesla.tesla import Tesla
 from tesla_fleet_api.exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
-from tesla_fleet_api.const import SERVERS, Method, LOGGER
+from tesla_fleet_api.const import SERVERS, Method, LOGGER, Scope
 from tesla_fleet_api import __version__ as VERSION
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -18,7 +18,7 @@ class TeslaFleetApi(Tesla):
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
-    refresh_hook: Awaitable | None = None
+    refresh_hook: Callable[[], Awaitable[str | None]] | None = None
 
     def __init__(
         self,
@@ -31,7 +31,7 @@ class TeslaFleetApi(Tesla):
         partner_scope: bool = True,
         user_scope: bool = True,
         vehicle_scope: bool = True,
-        refresh_hook: Awaitable | None = None,
+        refresh_hook: Callable[[], Awaitable[str | None]] | None = None,
     ):
         """Initialize the Tesla Fleet API."""
 
@@ -149,3 +149,46 @@ class TeslaFleetApi(Tesla):
             Method.GET,
             "api/1/products",
         )
+
+    async def partner_login(
+        self,
+        client_id: str,
+        client_secret: str,
+        scopes: list[Scope] = [Scope.VEHICLE_DEVICE_DATA],
+    ) -> dict[str, Any]:
+        """Generate a partner token using client credentials authentication.
+
+        Args:
+            client_id: Partner application client ID
+            client_secret: Partner application client secret
+            scopes: Optional list of scopes to request
+
+        Returns:
+            Dictionary containing access token and token metadata
+        """
+
+        # Throw if there is no server set
+        if not self.server:
+            raise ValueError("Server was not set at init. Call find_server() first.")
+
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "audience": self.server,
+            "scope": " ".join(scopes),
+        }
+
+        async with self.session.post(
+            "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data=data,
+        ) as resp:
+            if resp.ok:
+                token_data = await resp.json()
+                # Set the access token for subsequent API calls
+                self.access_token = token_data["access_token"]
+                return token_data
+            else:
+                error_data = await resp.json()
+                raise ValueError(f"Partner login failed: {error_data}")
