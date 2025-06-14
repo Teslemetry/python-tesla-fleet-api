@@ -62,3 +62,23 @@ class Tesla:
     def has_private_key(self) -> bool:
         """Check if the private key has been set."""
         return self.private_key is not None
+
+    @property
+    def public_pem(self) -> str:
+        """Get the public key in PEM format."""
+        if self.private_key is None:
+            raise ValueError("Private key is not set")
+        return self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode('utf-8')
+
+    @property
+    def public_uncompressed_point(self) -> str:
+        """Get the public key in uncompressed point format."""
+        if self.private_key is None:
+            raise ValueError("Private key is not set")
+        return self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.X962,
+            format=serialization.PublicFormat.UncompressedPoint,
+        ).hex()
