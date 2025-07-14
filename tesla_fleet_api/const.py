@@ -167,6 +167,25 @@ class TeslaEnergyPeriod(StrEnum):
     YEAR = "year"
     LIFETIME = "lifetime"
 
+class ClosureState(StrEnum):
+    """Closure state options"""
+
+    NONE = "none"
+    MOVE = "move"
+    STOP = "stop"
+    OPEN = "open"
+    CLOSE = "close"
+
+
+class SeatHeaterLevel(StrEnum):
+    """Seat heater level options"""
+
+    OFF = "off"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class BluetoothVehicleData(StrEnum):
     CHARGE_STATE = "GetChargeState"
     CLIMATE_STATE = "GetClimateState"
