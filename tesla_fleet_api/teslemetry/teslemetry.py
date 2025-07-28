@@ -8,18 +8,20 @@ from tesla_fleet_api.tesla import TeslaFleetApi
 
 class Teslemetry(TeslaFleetApi):
 
-    server = "https://api.teslemetry.com"
+
     Vehicles = TeslemetryVehicles
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
         access_token: str,
+        server: str = "https://api.teslemetry.com"
     ):
         """Initialize the Teslemetry API."""
 
         self.session = session
         self.access_token = access_token
+        self.server = server
 
         self.charging = self.Charging(self)
         self.energySites = self.EnergySites(self)
@@ -56,7 +58,7 @@ class Teslemetry(TeslaFleetApi):
         )
         if update_region and "region" in resp:
             self.region = resp["region"].lower()
-            #self.server = f"https://{self.region}.teslemetry.com"
+            self.server = f"https://{self.region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
         return resp
 
