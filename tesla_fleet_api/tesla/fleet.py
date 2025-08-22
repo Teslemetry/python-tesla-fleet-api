@@ -1,7 +1,7 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Literal
 import aiohttp
 
 from tesla_fleet_api.tesla.tesla import Tesla
@@ -14,7 +14,6 @@ class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
 
     access_token: str | None = None
-    region: str | None = None
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
@@ -24,7 +23,7 @@ class TeslaFleetApi(Tesla):
         self,
         session: aiohttp.ClientSession,
         access_token: str | None = None,
-        region: str | None = None,
+        region: Literal["na", "eu", "cn"] | None = None,
         server: str | None = None,
         charging_scope: bool = True,
         energy_scope: bool = True,
@@ -41,10 +40,11 @@ class TeslaFleetApi(Tesla):
 
         if server is not None:
             self.server = server
-        elif region is not None:
-            if region not in SERVERS:
-                raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
+        elif region in SERVERS:
+            self.region = region
             self.server = SERVERS.get(region)
+        else:
+            raise ValueError(f"Region must be one of {', '.join(SERVERS.keys())}")
 
         LOGGER.debug("Using server %s", self.server)
 

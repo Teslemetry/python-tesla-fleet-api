@@ -1,4 +1,5 @@
-from typing import Any
+from pickle import INT
+from typing import Any, Literal
 import aiohttp
 import time
 
@@ -17,14 +18,13 @@ class TeslaFleetOAuth(TeslaFleetApi):
     def __init__(
         self,
         session: aiohttp.ClientSession,
+        region: Literal["na", "eu", "cn"],
         client_id: str,
         client_secret: str | None = None,
         redirect_uri: str | None = None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         expires: int = 0,
-        region: str | None = None,
-        server: str | None = None,
     ):
         self.client_id = client_id
         self._client_secret = client_secret
@@ -37,14 +37,18 @@ class TeslaFleetOAuth(TeslaFleetApi):
             session,
             access_token="",
             region=region,
-            server=server,
         )
 
     def get_login_url(self, scopes: list[Scope], state: str = "login") -> str:
         """Get the login URL."""
         if self.redirect_uri is None:
             raise ValueError("Redirect URI is missing")
-        return f"https://auth.tesla.com/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={'+'.join(scopes)}&state={state}"
+        if self.region == "cn":
+            domain = "auth.tesla.cn"
+        else:
+            domain = "auth.tesla.com"
+
+        return f"https://{domain}/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={'+'.join(scopes)}&state={state}"
 
     async def get_refresh_token(self, code: str) -> None:
         """Get the refresh token."""
@@ -56,7 +60,6 @@ class TeslaFleetOAuth(TeslaFleetApi):
             raise ValueError("Redirect URI is missing")
 
         if self.server is None:
-            self.region = code.split("_")[0].lower()
             self.server = SERVERS.get(self.region)
 
         async with self.session.post(
