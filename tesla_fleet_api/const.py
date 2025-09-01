@@ -132,6 +132,9 @@ class Scope(StrEnum):
     """Fleet API Scope"""
 
     OPENID = "openid"
+    EMAIL = "email"
+    PROFILE = "profile"
+    METADATA = "metadata"
     OFFLINE_ACCESS = "offline_access"
     USER_DATA = "user_data"
     VEHICLE_DEVICE_DATA = "vehicle_device_data"

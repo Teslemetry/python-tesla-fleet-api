@@ -74,7 +74,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         ) as resp:
             if resp.ok:
                 data = await resp.json()
-                self.refresh_token = data["refresh_token"]
+                self.refresh_token = data.get("refresh_token")
                 self.access_token = data["access_token"]
                 self.expires = int(time.time()) + data["expires_in"]
                 region = code.split("_")[0].lower()
