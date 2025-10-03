@@ -37,6 +37,8 @@ from tesla_fleet_api.const import (
 # Protocol
 from tesla_fleet_api.tesla.vehicle.proto.errors_pb2 import GenericError_E
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+    AutoStwHeatAction,
+    BoomboxAction,
     Response,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
@@ -104,8 +106,16 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     MediaUpdateVolume,
     MediaPreviousTrack,
     MediaPreviousFavorite,
+    NavigationGpsRequest,
+    NavigationRequest,
+    NavigationSuperchargerRequest,
+    NavigationWaypointsRequest,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import VehicleData, VehicleState, ClimateState
+from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
+    VehicleData,
+    VehicleState,
+    ClimateState,
+)
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
@@ -155,6 +165,7 @@ CopActivationTemps = (
     ClimateState.CopActivationTemp.CopActivationTempHigh,
 )
 
+
 class Session:
     """A connect to a domain"""
 
@@ -179,10 +190,15 @@ class Session:
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        if (not self.ready or getattr(self, "publicKey", "None") != sessionInfo.publicKey):
+        if (
+            not self.ready
+            or getattr(self, "publicKey", "None") != sessionInfo.publicKey
+        ):
             self.publicKey = sessionInfo.publicKey
             self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
-            self.hmac = hmac.new(self.sharedKey, "authenticated command".encode(), hashlib.sha256).digest()
+            self.hmac = hmac.new(
+                self.sharedKey, "authenticated command".encode(), hashlib.sha256
+            ).digest()
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
@@ -217,17 +233,23 @@ class Commands(Vehicle):
     _auth_method: str
 
     def __init__(
-        self, parent: Tesla, vin: str, private_key: ec.EllipticCurvePrivateKey | None = None, public_key: bytes | None = None
+        self,
+        parent: Tesla,
+        vin: str,
+        private_key: ec.EllipticCurvePrivateKey | None = None,
+        public_key: bytes | None = None,
     ):
         super().__init__(parent, vin)
 
         self._from_destination = randbytes(16)
         self._sessions = {
-            Domain.DOMAIN_VEHICLE_SECURITY: Session(self, Domain.DOMAIN_VEHICLE_SECURITY),
+            Domain.DOMAIN_VEHICLE_SECURITY: Session(
+                self, Domain.DOMAIN_VEHICLE_SECURITY
+            ),
             Domain.DOMAIN_INFOTAINMENT: Session(self, Domain.DOMAIN_INFOTAINMENT),
         }
 
-        if(self._require_keys):
+        if self._require_keys:
             if private_key:
                 self.private_key = private_key
             elif parent.private_key:
@@ -237,18 +259,14 @@ class Commands(Vehicle):
 
             self._public_key = public_key or self.private_key.public_key().public_bytes(
                 encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
-        )
-
+            )
 
     def shared_key(self, vehicleKey: bytes) -> bytes:
         exchange = self.private_key.exchange(
             ec.ECDH(),
-            ec.EllipticCurvePublicKey.from_encoded_point(
-                ec.SECP256R1(), vehicleKey
-            ),
+            ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), vehicleKey),
         )
         return hashlib.sha1(exchange).digest()[:16]
-
 
     @abstractmethod
     async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
@@ -257,16 +275,21 @@ class Commands(Vehicle):
 
     def validate_msg(self, msg: RoutableMessage) -> None:
         """Validate the message."""
-        if(msg.session_info):
+        if msg.session_info:
             info = SessionInfo.FromString(msg.session_info)
-            if(info.status == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST):
+            if (
+                info.status
+                == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST
+            ):
                 raise NotOnWhitelistFault
             self._sessions[msg.from_destination.domain].update(info)
 
         if msg.signedMessageStatus.signed_message_fault > 0:
             raise MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
 
-    async def _command(self, domain: Domain, command: bytes, attempt: int = 0) -> dict[str, Any]:
+    async def _command(
+        self, domain: Domain, command: bytes, attempt: int = 0
+    ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
         session = self._sessions[domain]
         if not session.ready:
@@ -282,7 +305,7 @@ class Commands(Vehicle):
         try:
             resp = await self._send(msg, "protobuf_message_as_bytes")
         except (
-            #TeslaFleetMessageFaultInvalidSignature,
+            # TeslaFleetMessageFaultInvalidSignature,
             TeslaFleetMessageFaultIncorrectEpoch,
             TeslaFleetMessageFaultInvalidTokenOrCounter,
         ) as e:
@@ -292,7 +315,10 @@ class Commands(Vehicle):
                 raise e
             return await self._command(domain, command, attempt)
 
-        if resp.signedMessageStatus.operation_status == OperationStatus_E.OPERATIONSTATUS_WAIT:
+        if (
+            resp.signedMessageStatus.operation_status
+            == OperationStatus_E.OPERATIONSTATUS_WAIT
+        ):
             attempt += 1
             if attempt > 3:
                 # We tried 3 times, give up, raise the error
@@ -302,48 +328,65 @@ class Commands(Vehicle):
             return await self._command(domain, command, attempt)
 
         if resp.HasField("protobuf_message_as_bytes"):
-            #decrypt
-            if(resp.signature_data.HasField("AES_GCM_Response_data")):
-                if(msg.signature_data.HasField("AES_GCM_Personalized_data")):
-                    request_hash = bytes([SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED]) + msg.signature_data.AES_GCM_Personalized_data.tag
-                elif(msg.signature_data.HasField("HMAC_Personalized_data")):
-                    request_hash = bytes([SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED]) + msg.signature_data.HMAC_Personalized_data.tag
-                    if(session.domain == Domain.DOMAIN_VEHICLE_SECURITY):
+            # decrypt
+            if resp.signature_data.HasField("AES_GCM_Response_data"):
+                if msg.signature_data.HasField("AES_GCM_Personalized_data"):
+                    request_hash = (
+                        bytes([SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED])
+                        + msg.signature_data.AES_GCM_Personalized_data.tag
+                    )
+                elif msg.signature_data.HasField("HMAC_Personalized_data"):
+                    request_hash = (
+                        bytes([SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED])
+                        + msg.signature_data.HMAC_Personalized_data.tag
+                    )
+                    if session.domain == Domain.DOMAIN_VEHICLE_SECURITY:
                         request_hash = request_hash[:17]
                 else:
                     raise ValueError("Invalid request signature data")
 
-                metadata = bytes([
-                    Tag.TAG_SIGNATURE_TYPE,
-                    1,
-                    SignatureType.SIGNATURE_TYPE_AES_GCM_RESPONSE,
-                    Tag.TAG_DOMAIN,
-                    1,
-                    resp.from_destination.domain,
-                    Tag.TAG_PERSONALIZATION,
-                    17,
-                    *self.vin.encode(),
-                    Tag.TAG_COUNTER,
-                    4,
-                    *struct.pack(">I", resp.signature_data.AES_GCM_Response_data.counter),
-                    Tag.TAG_FLAGS,
-                    4,
-                    *struct.pack(">I", resp.flags),
-                    Tag.TAG_REQUEST_HASH,
-                    17,
-                    *request_hash,
-                    Tag.TAG_FAULT,
-                    4,
-                    *struct.pack(">I", resp.signedMessageStatus.signed_message_fault),
-                    Tag.TAG_END,
-                ])
+                metadata = bytes(
+                    [
+                        Tag.TAG_SIGNATURE_TYPE,
+                        1,
+                        SignatureType.SIGNATURE_TYPE_AES_GCM_RESPONSE,
+                        Tag.TAG_DOMAIN,
+                        1,
+                        resp.from_destination.domain,
+                        Tag.TAG_PERSONALIZATION,
+                        17,
+                        *self.vin.encode(),
+                        Tag.TAG_COUNTER,
+                        4,
+                        *struct.pack(
+                            ">I", resp.signature_data.AES_GCM_Response_data.counter
+                        ),
+                        Tag.TAG_FLAGS,
+                        4,
+                        *struct.pack(">I", resp.flags),
+                        Tag.TAG_REQUEST_HASH,
+                        17,
+                        *request_hash,
+                        Tag.TAG_FAULT,
+                        4,
+                        *struct.pack(
+                            ">I", resp.signedMessageStatus.signed_message_fault
+                        ),
+                        Tag.TAG_END,
+                    ]
+                )
 
                 aad = Hash(SHA256())
                 aad.update(metadata)
                 aesgcm = AESGCM(session.sharedKey)
-                resp.protobuf_message_as_bytes = aesgcm.decrypt(resp.signature_data.AES_GCM_Response_data.nonce, resp.protobuf_message_as_bytes + resp.signature_data.AES_GCM_Response_data.tag, aad.finalize())
+                resp.protobuf_message_as_bytes = aesgcm.decrypt(
+                    resp.signature_data.AES_GCM_Response_data.nonce,
+                    resp.protobuf_message_as_bytes
+                    + resp.signature_data.AES_GCM_Response_data.tag,
+                    aad.finalize(),
+                )
 
-            if(resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY):
+            if resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
                 try:
                     vcsec = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
                 except Exception as e:
@@ -351,87 +394,108 @@ class Commands(Vehicle):
                     raise e
                 LOGGER.debug("VCSEC Response: %s", vcsec)
                 if vcsec.HasField("nominalError"):
-                    LOGGER.error("Command failed with reason: %s", vcsec.nominalError.genericError)
+                    LOGGER.error(
+                        "Command failed with reason: %s",
+                        vcsec.nominalError.genericError,
+                    )
                     return {
                         "response": {
                             "result": False,
-                            "reason": GenericError_E.Name(vcsec.nominalError.genericError)
+                            "reason": GenericError_E.Name(
+                                vcsec.nominalError.genericError
+                            ),
                         }
                     }
                 elif vcsec.HasField("vehicleStatus"):
-                    return {
-                        "response": vcsec.vehicleStatus
-                    }
-                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_OK:
+                    return {"response": vcsec.vehicleStatus}
+                elif (
+                    vcsec.commandStatus.operationStatus
+                    == OperationStatus_E.OPERATIONSTATUS_OK
+                ):
                     return {"response": {"result": True, "reason": ""}}
-                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_WAIT:
+                elif (
+                    vcsec.commandStatus.operationStatus
+                    == OperationStatus_E.OPERATIONSTATUS_WAIT
+                ):
                     attempt += 1
                     if attempt > 3:
                         # We tried 3 times, give up, raise the error
-                        return {"response": {"result": False, "reason": "Too many retries"}}
+                        return {
+                            "response": {"result": False, "reason": "Too many retries"}
+                        }
                     async with session.lock:
                         await sleep(2)
                     return await self._command(domain, command, attempt)
-                elif vcsec.commandStatus.operationStatus == OperationStatus_E.OPERATIONSTATUS_ERROR:
-                    if(resp.HasField("signedMessageStatus")):
-                        raise SIGNED_MESSAGE_INFORMATION_FAULTS[vcsec.commandStatus.signedMessageStatus.signedMessageInformation]
+                elif (
+                    vcsec.commandStatus.operationStatus
+                    == OperationStatus_E.OPERATIONSTATUS_ERROR
+                ):
+                    if resp.HasField("signedMessageStatus"):
+                        raise SIGNED_MESSAGE_INFORMATION_FAULTS[
+                            vcsec.commandStatus.signedMessageStatus.signedMessageInformation
+                        ]
 
-            elif(resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT):
+            elif resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
                 try:
                     response = Response.FromString(resp.protobuf_message_as_bytes)
                 except Exception as e:
-                    LOGGER.error("Failed to parse Infotainment Response: %s %s", e, resp)
+                    LOGGER.error(
+                        "Failed to parse Infotainment Response: %s %s", e, resp
+                    )
                     raise e
                 LOGGER.debug("Infotainment Response: %s", response)
-                if (response.HasField("ping")):
+                if response.HasField("ping"):
                     return {
                         "response": {
                             "result": True,
-                            "reason": response.ping.local_timestamp
+                            "reason": response.ping.local_timestamp,
                         }
                     }
                 if response.HasField("vehicleData"):
-                    return {
-                        "response": response.vehicleData
-                    }
+                    return {"response": response.vehicleData}
                 if response.HasField("actionStatus"):
                     return {
                         "response": {
-                            "result": response.actionStatus.result == OperationStatus_E.OPERATIONSTATUS_OK,
-                            "reason": response.actionStatus.result_reason.plain_text or ""
-                            }
+                            "result": response.actionStatus.result
+                            == OperationStatus_E.OPERATIONSTATUS_OK,
+                            "reason": response.actionStatus.result_reason.plain_text
+                            or "",
                         }
-
+                    }
 
         return {"response": {"result": True, "reason": ""}}
 
-    async def _commandHmac(self, session: Session, command: bytes, attempt: int = 1) -> RoutableMessage:
+    async def _commandHmac(
+        self, session: Session, command: bytes, attempt: int = 1
+    ) -> RoutableMessage:
         """Create a signed message."""
         LOGGER.debug(f"Sending HMAC to domain {Domain.Name(session.domain)}")
 
         hmac_personalized = session.hmac_personalized()
 
-        metadata = bytes([
-            Tag.TAG_SIGNATURE_TYPE,
-            1,
-            SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED,
-            Tag.TAG_DOMAIN,
-            1,
-            session.domain,
-            Tag.TAG_PERSONALIZATION,
-            17,
-            *self.vin.encode(),
-            Tag.TAG_EPOCH,
-            len(hmac_personalized.epoch),
-            *hmac_personalized.epoch,
-            Tag.TAG_EXPIRES_AT,
-            4,
-            *struct.pack(">I", hmac_personalized.expires_at),
-            Tag.TAG_COUNTER,
-            4,
-            *struct.pack(">I", hmac_personalized.counter),
-            Tag.TAG_END,
-        ])
+        metadata = bytes(
+            [
+                Tag.TAG_SIGNATURE_TYPE,
+                1,
+                SignatureType.SIGNATURE_TYPE_HMAC_PERSONALIZED,
+                Tag.TAG_DOMAIN,
+                1,
+                session.domain,
+                Tag.TAG_PERSONALIZATION,
+                17,
+                *self.vin.encode(),
+                Tag.TAG_EPOCH,
+                len(hmac_personalized.epoch),
+                *hmac_personalized.epoch,
+                Tag.TAG_EXPIRES_AT,
+                4,
+                *struct.pack(">I", hmac_personalized.expires_at),
+                Tag.TAG_COUNTER,
+                4,
+                *struct.pack(">I", hmac_personalized.counter),
+                Tag.TAG_END,
+            ]
+        )
 
         hmac_personalized.tag = hmac.new(
             session.hmac, metadata + command, hashlib.sha256
@@ -441,50 +505,50 @@ class Commands(Vehicle):
             to_destination=Destination(
                 domain=session.domain,
             ),
-            from_destination=Destination(
-                routing_address=self._from_destination
-            ),
+            from_destination=Destination(routing_address=self._from_destination),
             protobuf_message_as_bytes=command,
             uuid=randbytes(16),
             signature_data=SignatureData(
-                signer_identity=KeyIdentity(
-                    public_key=self._public_key
-                ),
+                signer_identity=KeyIdentity(public_key=self._public_key),
                 HMAC_Personalized_data=hmac_personalized,
-            )
+            ),
         )
 
-    async def _commandAes(self, session: Session, command: bytes, attempt: int = 1) -> RoutableMessage:
+    async def _commandAes(
+        self, session: Session, command: bytes, attempt: int = 1
+    ) -> RoutableMessage:
         """Create an encrypted message."""
         LOGGER.debug(f"Sending AES to domain {Domain.Name(session.domain)}")
 
         aes_personalized = session.aes_gcm_personalized()
         flags = 1 << Flags.FLAG_ENCRYPT_RESPONSE
 
-        metadata = bytes([
-            Tag.TAG_SIGNATURE_TYPE,
-            1,
-            SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
-            Tag.TAG_DOMAIN,
-            1,
-            session.domain,
-            Tag.TAG_PERSONALIZATION,
-            17,
-            *self.vin.encode(),
-            Tag.TAG_EPOCH,
-            len(aes_personalized.epoch),
-            *aes_personalized.epoch,
-            Tag.TAG_EXPIRES_AT,
-            4,
-            *struct.pack(">I", aes_personalized.expires_at),
-            Tag.TAG_COUNTER,
-            4,
-            *struct.pack(">I", aes_personalized.counter),
-            Tag.TAG_FLAGS,
-            4,
-            *struct.pack(">I", flags),
-            Tag.TAG_END,
-        ])
+        metadata = bytes(
+            [
+                Tag.TAG_SIGNATURE_TYPE,
+                1,
+                SignatureType.SIGNATURE_TYPE_AES_GCM_PERSONALIZED,
+                Tag.TAG_DOMAIN,
+                1,
+                session.domain,
+                Tag.TAG_PERSONALIZATION,
+                17,
+                *self.vin.encode(),
+                Tag.TAG_EPOCH,
+                len(aes_personalized.epoch),
+                *aes_personalized.epoch,
+                Tag.TAG_EXPIRES_AT,
+                4,
+                *struct.pack(">I", aes_personalized.expires_at),
+                Tag.TAG_COUNTER,
+                4,
+                *struct.pack(">I", aes_personalized.counter),
+                Tag.TAG_FLAGS,
+                4,
+                *struct.pack(">I", flags),
+                Tag.TAG_END,
+            ]
+        )
 
         aad = Hash(SHA256())
         aad.update(metadata)
@@ -498,37 +562,40 @@ class Commands(Vehicle):
             to_destination=Destination(
                 domain=session.domain,
             ),
-            from_destination=Destination(
-                routing_address=self._from_destination
-            ),
+            from_destination=Destination(routing_address=self._from_destination),
             protobuf_message_as_bytes=ct[:-16],
             uuid=randbytes(16),
             signature_data=SignatureData(
-                signer_identity=KeyIdentity(
-                    public_key=self._public_key
-                ),
+                signer_identity=KeyIdentity(public_key=self._public_key),
                 AES_GCM_Personalized_data=aes_personalized,
             ),
             flags=flags,
         )
 
-
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
-        return await self._command(Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
+        return await self._command(
+            Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+        )
 
     async def _getVehicleSecurity(self, command: UnsignedMessage) -> VehicleStatus:
         """Sign and send a message to Infotainment computer."""
-        reply = await self._command(Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString())
+        reply = await self._command(
+            Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+        )
         return reply["response"]
 
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
-        return await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
+        return await self._command(
+            Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+        )
 
     async def _getInfotainment(self, command: Action) -> VehicleData:
         """Sign and send a message to Infotainment computer."""
-        reply = await self._command(Domain.DOMAIN_INFOTAINMENT, command.SerializeToString())
+        reply = await self._command(
+            Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+        )
         return reply["response"]
 
     async def handshakeVehicleSecurity(self) -> None:
@@ -547,13 +614,9 @@ class Commands(Vehicle):
             to_destination=Destination(
                 domain=domain,
             ),
-            from_destination=Destination(
-                routing_address=self._from_destination
-            ),
-            session_info_request=SessionInfoRequest(
-                public_key=self._public_key
-            ),
-            uuid=randbytes(16)
+            from_destination=Destination(routing_address=self._from_destination),
+            session_info_request=SessionInfoRequest(public_key=self._public_key),
+            uuid=randbytes(16),
         )
 
         await self._send(msg, "session_info")
@@ -562,11 +625,7 @@ class Commands(Vehicle):
     async def ping(self) -> dict[str, Any]:
         """Ping the vehicle."""
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    ping=Ping(ping_id=0)
-                )
-            )
+            Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
         )
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
@@ -810,10 +869,55 @@ class Commands(Vehicle):
             )
         )
 
-    # navigation_gps_request doesnt require signing
-    # navigation_request doesnt require signing
-    # navigation_sc_request doesnt require signing
-    #
+    async def navigation_gps_request(
+        self, lat: float, lon: float, order: int
+    ) -> dict[str, Any]:
+        """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationGpsRequest=NavigationGpsRequest(
+                        lat=lat,
+                        lon=lon,
+                        order=NavigationGpsRequest.RemoteNavTripOrder(order),
+                    )
+                )
+            )
+        )
+
+    async def navigation_request(self, value: str) -> dict[str, Any]:
+        """Sends a location to the in-vehicle navigation system."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationRequest=NavigationRequest(destination=value)
+                )
+            )
+        )
+
+    async def navigation_sc_request(self, order: int) -> dict[str, Any]:
+        """Start navigation to a supercharger."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationSuperchargerRequest=NavigationSuperchargerRequest(
+                        order=order
+                    )
+                )
+            )
+        )
+
+    async def navigation_waypoints_request(self, waypoints: str) -> dict[str, Any]:
+        """Sends a list of waypoints to the vehicle's navigation system."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationWaypointsRequest=NavigationWaypointsRequest(
+                        waypoints=waypoints
+                    )
+                )
+            )
+        )
 
     async def remote_auto_seat_climate_request(
         self, auto_seat_position: int, auto_climate_on: bool
@@ -827,7 +931,10 @@ class Commands(Vehicle):
                     autoSeatClimateAction=AutoSeatClimateAction(
                         carseat=[
                             AutoSeatClimateAction.CarSeat(
-                                on=auto_climate_on, seat_position=AutoSeatClimatePositions[auto_seat_position]
+                                on=auto_climate_on,
+                                seat_position=AutoSeatClimatePositions[
+                                    auto_seat_position
+                                ],
                             )
                         ]
                     )
@@ -835,11 +942,34 @@ class Commands(Vehicle):
             )
         )
 
-    # remote_auto_steering_wheel_heat_climate_request has no protobuf
+    async def remote_auto_steering_wheel_heat_climate_request(
+        self, on: bool
+    ) -> dict[str, Any]:
+        """Sets automatic steering wheel heating on/off."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    autoStwHeatAction=AutoStwHeatAction(
+                        on=on,
+                    )
+                )
+            )
+        )
 
-    # remote_boombox not implemented
-    #
-
+    async def remote_boombox(
+        self,
+        sound: int = 0,
+    ) -> dict[str, Any]:
+        """Plays a sound through the vehicle external speaker."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    boomboxAction=BoomboxAction(
+                        sound=sound,
+                    )
+                )
+            )
+        )
 
     async def remote_seat_cooler_request(
         self, seat_position: int, seat_cooler_level: int
@@ -859,7 +989,9 @@ class Commands(Vehicle):
                     hvacSeatCoolerActions=HvacSeatCoolerActions(
                         hvacSeatCoolerAction=[
                             HvacSeatCoolerActions.HvacSeatCoolerAction(
-                                seat_cooler_level=HvacSeatCoolerLevels[seat_cooler_level],
+                                seat_cooler_level=HvacSeatCoolerLevels[
+                                    seat_cooler_level
+                                ],
                                 seat_position=HvacSeatCoolerPositions[seat_position],
                             )
                         ]
@@ -1050,7 +1182,9 @@ class Commands(Vehicle):
             Action(
                 vehicleAction=VehicleAction(
                     hvacClimateKeeperAction=HvacClimateKeeperAction(
-                        ClimateKeeperAction=HvacClimateKeeperActions[climate_keeper_mode],
+                        ClimateKeeperAction=HvacClimateKeeperActions[
+                            climate_keeper_mode
+                        ],
                         # manual_override
                     )
                 )
@@ -1066,7 +1200,9 @@ class Commands(Vehicle):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    setCopTempAction=SetCopTempAction(copActivationTemp=CopActivationTemps[cop_temp])
+                    setCopTempAction=SetCopTempAction(
+                        copActivationTemp=CopActivationTemps[cop_temp]
+                    )
                 )
             )
         )
@@ -1174,18 +1310,16 @@ class Commands(Vehicle):
             )
         )
 
-    async def set_valet_mode(self, on: bool, password: str | int | None = None) -> dict[str, Any]:
+    async def set_valet_mode(
+        self, on: bool, password: str | int | None = None
+    ) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
         action = VehicleControlSetValetModeAction(on=on)
         if password is not None:
             action.password = str(password)
 
         return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    vehicleControlSetValetModeAction=action
-                )
-            )
+            Action(vehicleAction=VehicleAction(vehicleControlSetValetModeAction=action))
         )
 
     async def set_vehicle_name(self, vehicle_name: str) -> dict[str, Any]:
@@ -1263,9 +1397,7 @@ class Commands(Vehicle):
 
         return await self._sendInfotainment(
             Action(
-                vehicleAction=VehicleAction(
-                    vehicleControlSunroofOpenCloseAction=action
-                )
+                vehicleAction=VehicleAction(vehicleControlSunroofOpenCloseAction=action)
             )
         )
 
