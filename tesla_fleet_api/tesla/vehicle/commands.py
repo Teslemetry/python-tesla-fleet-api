@@ -1,12 +1,13 @@
 from __future__ import annotations
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import struct
 from random import randbytes
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Literal
 import time
 import hmac
 import hashlib
+from typing_extensions import ClassVar
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
 from cryptography.hazmat.primitives.hashes import Hash, SHA256
@@ -179,7 +180,7 @@ class Session:
         self.sharedKey: bytes | None = None
         self.hmac: bytes | None = None
         self.publicKey: bytes | None = None
-        self.lock = Lock()
+        self.lock: Lock = Lock()
 
     @property
     def ready(self) -> bool:
@@ -223,15 +224,14 @@ class Session:
         )
 
 
-class Commands(Vehicle):
+class Commands(ABC, Vehicle):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     private_key: ec.EllipticCurvePrivateKey
     _public_key: bytes
     _from_destination: bytes
     _sessions: dict[int, Session]
-    _require_keys = True
-    _auth_method: str
+    _auth_method: ClassVar[Literal["hmac", "aes"]]
 
     def __init__(
         self,
@@ -250,17 +250,16 @@ class Commands(Vehicle):
             Domain.DOMAIN_INFOTAINMENT: Session(self, Domain.DOMAIN_INFOTAINMENT),
         }
 
-        if self._require_keys:
-            if private_key:
-                self.private_key = private_key
-            elif parent.private_key:
-                self.private_key = parent.private_key
-            else:
-                raise ValueError("No private key.")
+        if private_key:
+            self.private_key = private_key
+        elif parent.private_key:
+            self.private_key = parent.private_key
+        else:
+            raise ValueError("No private key.")
 
-            self._public_key = public_key or self.private_key.public_key().public_bytes(
-                encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
-            )
+        self._public_key = public_key or self.private_key.public_key().public_bytes(
+            encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
+        )
 
     def shared_key(self, vehicleKey: bytes) -> bytes:
         exchange = self.private_key.exchange(
