@@ -17,7 +17,7 @@ from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
     NotOnWhitelistFault,
-    #TeslaFleetMessageFaultInvalidSignature,
+    # TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
 )
@@ -39,6 +39,7 @@ from tesla_fleet_api.tesla.vehicle.proto.errors_pb2 import GenericError_E
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     AutoStwHeatAction,
     BoomboxAction,
+    DrivingClearSpeedLimitPinAdminAction,
     Response,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
@@ -1356,7 +1357,15 @@ class Commands(Vehicle):
             )
         )
 
-    # speed_limit_clear_pin_admin doesnt require signing
+    async def speed_limit_clear_pin_admin(self) -> dict[str, Any]:
+        """Deactivates Speed Limit Mode and resets the associated PIN."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    drivingClearSpeedLimitPinAdminAction=DrivingClearSpeedLimitPinAdminAction()
+                )
+            )
+        )
 
     async def speed_limit_deactivate(self, pin: str | int) -> dict[str, Any]:
         """Deactivates Speed Limit Mode."""
