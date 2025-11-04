@@ -3,11 +3,10 @@ from abc import ABC, abstractmethod
 
 import struct
 from random import randbytes
-from typing import Any, TYPE_CHECKING, Literal
+from typing import Any, TYPE_CHECKING, ClassVar, Literal
 import time
 import hmac
 import hashlib
-from typing_extensions import ClassVar
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import PublicFormat, Encoding
 from cryptography.hazmat.primitives.hashes import Hash, SHA256
