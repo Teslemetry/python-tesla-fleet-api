@@ -1,21 +1,22 @@
 from typing import Any
 
 import aiohttp
+from typing_extensions import Awaitable, Callable
 
-from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
 from tesla_fleet_api.const import LOGGER, Method
 from tesla_fleet_api.tesla import TeslaFleetApi
+from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
+
 
 class Teslemetry(TeslaFleetApi):
-
-
     Vehicles = TeslemetryVehicles
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
         access_token: str,
-        server: str = "https://api.teslemetry.com"
+        server: str = "https://api.teslemetry.com",
+        refresh_hook: Callable[[], Awaitable[str | None]] | None = None,
     ):
         """Initialize the Teslemetry API."""
 
@@ -27,6 +28,8 @@ class Teslemetry(TeslaFleetApi):
         self.energySites = self.EnergySites(self)
         self.user = self.User(self)
         self.vehicles = self.Vehicles(self)
+
+        self.refresh_hook = refresh_hook
 
     async def ping(self) -> dict[str, bool]:
         """Send a ping."""
