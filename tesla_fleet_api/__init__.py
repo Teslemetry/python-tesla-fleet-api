@@ -1,7 +1,7 @@
 """Tesla Fleet API"""
 
 __author__ = "hello@teslemetry.com"
-__version__ = "1.2.6"
+__version__ = "1.2.7"
 
 from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
