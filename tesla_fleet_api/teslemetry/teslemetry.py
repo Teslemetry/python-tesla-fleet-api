@@ -14,11 +14,16 @@ class Teslemetry(TeslaFleetApi):
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        access_token: str,
+        access_token: str = "",
         server: str = "https://api.teslemetry.com",
         refresh_hook: Callable[[], Awaitable[str | None]] | None = None,
     ):
         """Initialize the Teslemetry API."""
+
+        if not access_token and not refresh_hook:
+            raise ValueError(
+                "access_token or refresh_hook are required to authenticate"
+            )
 
         self.session = session
         self.access_token = access_token
