@@ -2,27 +2,33 @@
 
 from json import dumps
 from typing import Any, Awaitable, Callable, Literal
+
 import aiohttp
 
-from tesla_fleet_api.tesla.tesla import Tesla
-from tesla_fleet_api.exceptions import raise_for_status, InvalidRegion, LibraryError, ResponseError
-from tesla_fleet_api.const import SERVERS, Method, LOGGER, Scope
 from tesla_fleet_api import __version__ as VERSION
+from tesla_fleet_api.const import LOGGER, SERVERS, Method, Scope
+from tesla_fleet_api.exceptions import (
+    InvalidRegion,
+    LibraryError,
+    ResponseError,
+    raise_for_status,
+)
+from tesla_fleet_api.tesla.tesla import Tesla
+
 
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
 
-    access_token: str | None = None
+    access_token: str | Callable[[], Awaitable[str | None]]
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
-    refresh_hook: Callable[[], Awaitable[str | None]] | None = None
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        access_token: str | None = None,
+        access_token: str | Callable[[], Awaitable[str | None]],
         region: Literal["na", "eu", "cn"] | None = None,
         server: str | None = None,
         charging_scope: bool = True,
@@ -30,13 +36,12 @@ class TeslaFleetApi(Tesla):
         partner_scope: bool = True,
         user_scope: bool = True,
         vehicle_scope: bool = True,
-        refresh_hook: Callable[[], Awaitable[str | None]] | None = None,
     ):
         """Initialize the Tesla Fleet API."""
 
         self.session = session
         self.access_token = access_token
-        self.refresh_hook = refresh_hook
+        self.headers = {}
 
         if server is not None:
             self.server = server
@@ -89,13 +94,13 @@ class TeslaFleetApi(Tesla):
         if method == Method.GET:
             json = None
 
-        # Call a pre-request hook if provided
-        if self.refresh_hook is not None:
-            if access_token := await self.refresh_hook():
-                self.access_token = access_token
+        if callable(self.access_token):
+            access_token = await self.access_token()
+        else:
+            access_token = self.access_token
 
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {access_token}",
             "X-Library": f"python tesla_fleet_api {VERSION}",
         }
 
