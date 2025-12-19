@@ -1,7 +1,8 @@
+from collections.abc import Awaitable, Callable
+from time import time
 from typing import Any
 
 import aiohttp
-from typing_extensions import Awaitable, Callable
 
 from tesla_fleet_api.const import LOGGER, Method
 from tesla_fleet_api.tesla import TeslaFleetApi
@@ -104,3 +105,19 @@ class Teslemetry(TeslaFleetApi):
             Method.GET,
             f"api/refresh/{vin}",
         )
+
+    async def migrate_to_oauth(
+        self, client_id: str, access_token: str, name: str | None = None
+    ) -> dict[str, Any]:
+        """Migrate from access token to OAuth."""
+        migrate_data = {
+            "grant_type": "migrate",
+            "client_id": client_id,
+            "access_token": access_token.strip(),
+            "name": name,
+        }
+
+        new_token = await self._request(Method.POST, "oauth/token", json=migrate_data)
+        new_token["expires_in"] = int(new_token["expires_in"])
+        new_token["expires_at"] = time() + new_token["expires_in"]
+        return {"token": new_token}
