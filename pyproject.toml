@@ -31,6 +31,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["tesla_fleet_api*"]
 
+[tool.setuptools.package-data]
+tesla_fleet_api = ["py.typed"]
+
 [tool.ruff]
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
