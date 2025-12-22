@@ -1,7 +1,7 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Awaitable, Callable, Literal, TYPE_CHECKING
 
 import aiohttp
 
@@ -10,25 +10,38 @@ from tesla_fleet_api.const import LOGGER, SERVERS, Method, Scope
 from tesla_fleet_api.exceptions import (
     InvalidRegion,
     LibraryError,
+    MissingToken,
     ResponseError,
     raise_for_status,
 )
 from tesla_fleet_api.tesla.tesla import Tesla
+
+if TYPE_CHECKING:
+    from tesla_fleet_api.tesla.charging import Charging
+    from tesla_fleet_api.tesla.energysite import EnergySites
+    from tesla_fleet_api.tesla.partner import Partner
+    from tesla_fleet_api.tesla.user import User
+    from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
 
-    access_token: str | Callable[[], Awaitable[str | None]]
+    access_token: str | Callable[[], Awaitable[str | None]] | None
     server: str | None = None
     session: aiohttp.ClientSession
     headers: dict[str, str]
+    charging: "Charging"
+    energySites: "EnergySites"
+    user: "User"
+    partner: "Partner"
+    vehicles: "Vehicles"
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        access_token: str | Callable[[], Awaitable[str | None]],
+        access_token: str | Callable[[], Awaitable[str | None]] | None,
         region: Literal["na", "eu", "cn"] | None = None,
         server: str | None = None,
         charging_scope: bool = True,
@@ -82,8 +95,13 @@ class TeslaFleetApi(Tesla):
     async def _access_token(self) -> str:
         """Get the access token for the Tesla Fleet API."""
         if callable(self.access_token):
-            return await self.access_token()
-        return self.access_token
+            token = await self.access_token()
+        else:
+            token = self.access_token
+
+        if token is None:
+            raise MissingToken
+        return token
 
     async def _request(
         self,

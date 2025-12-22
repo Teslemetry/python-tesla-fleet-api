@@ -3,10 +3,12 @@
 import asyncio
 import hashlib
 import re
+from typing import Any
 from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 from google.protobuf.json_format import MessageToJson, MessageToDict
+from google.protobuf.message import Message
 
 from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.tesla.tesla import Tesla
@@ -33,7 +35,7 @@ class TeslaBluetooth(Tesla):
         """Get the name of a vehicle."""
         return "S" + hashlib.sha1(vin.encode('utf-8')).hexdigest()[:16] + "C"
 
-    async def query_display_name(self, device: BLEDevice, max_attempts=5) -> str | None:
+    async def query_display_name(self, device: BLEDevice, max_attempts: int = 5) -> str | None:
         """Queries the name of a bluetooth vehicle."""
         client = await establish_connection(
             BleakClient,
@@ -60,10 +62,10 @@ class TeslaBluetooth(Tesla):
 
 # Helpers
 
-def toJson(message) -> str:
+def toJson(message: Message) -> str:
     """Convert a protobuf message to JSON."""
     return MessageToJson(message, preserving_proto_field_name=True)
 
-def toDict(message) -> dict:
+def toDict(message: Message) -> dict[str, Any]:
     """Convert a protobuf message to a dictionary."""
     return MessageToDict(message, preserving_proto_field_name=True)

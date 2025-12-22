@@ -1,0 +1,7 @@
+aiohttp
+aiofiles
+aiolimiter
+cryptography
+protobuf
+bleak
+bleak-retry-connector

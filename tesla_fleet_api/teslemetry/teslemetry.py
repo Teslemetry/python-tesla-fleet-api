@@ -51,7 +51,7 @@ class Teslemetry(TeslaFleetApi):
         )
         return resp
 
-    async def metadata(self, update_region=True) -> dict[str, Any]:
+    async def metadata(self, update_region: bool = True) -> dict[str, Any]:
         """Get user metadata including scopes."""
         resp = await self._request(
             Method.GET,

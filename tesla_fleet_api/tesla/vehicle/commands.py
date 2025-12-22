@@ -191,10 +191,7 @@ class Session:
         self.counter = sessionInfo.counter
         self.epoch = sessionInfo.epoch
         self.delta = int(time.time()) - sessionInfo.clock_time
-        if (
-            not self.ready
-            or getattr(self, "publicKey", "None") != sessionInfo.publicKey
-        ):
+        if not self.ready or self.publicKey != sessionInfo.publicKey:
             self.publicKey = sessionInfo.publicKey
             self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
             self.hmac = hmac.new(
@@ -284,7 +281,9 @@ class Commands(ABC, Vehicle):
             self._sessions[msg.from_destination.domain].update(info)
 
         if msg.signedMessageStatus.signed_message_fault > 0:
-            raise MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
+            exception = MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
+            if exception:
+                raise exception
 
     async def _command(
         self, domain: Domain, command: bytes, attempt: int = 0
@@ -377,6 +376,8 @@ class Commands(ABC, Vehicle):
 
                 aad = Hash(SHA256())
                 aad.update(metadata)
+                if session.sharedKey is None:
+                    raise ValueError("Session shared key is missing")
                 aesgcm = AESGCM(session.sharedKey)
                 resp.protobuf_message_as_bytes = aesgcm.decrypt(
                     resp.signature_data.AES_GCM_Response_data.nonce,
@@ -430,9 +431,11 @@ class Commands(ABC, Vehicle):
                     == OperationStatus_E.OPERATIONSTATUS_ERROR
                 ):
                     if resp.HasField("signedMessageStatus"):
-                        raise SIGNED_MESSAGE_INFORMATION_FAULTS[
+                        exception = SIGNED_MESSAGE_INFORMATION_FAULTS[
                             vcsec.commandStatus.signedMessageStatus.signedMessageInformation
                         ]
+                        if exception:
+                            raise exception
 
             elif resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
                 try:
@@ -496,6 +499,9 @@ class Commands(ABC, Vehicle):
             ]
         )
 
+        if session.hmac is None:
+            raise ValueError("Session HMAC is missing")
+
         hmac_personalized.tag = hmac.new(
             session.hmac, metadata + command, hashlib.sha256
         ).digest()
@@ -551,7 +557,8 @@ class Commands(ABC, Vehicle):
 
         aad = Hash(SHA256())
         aad.update(metadata)
-
+        if session.sharedKey is None:
+            raise ValueError("Session shared key is missing")
         aesgcm = AESGCM(session.sharedKey)
         ct = aesgcm.encrypt(aes_personalized.nonce, command, aad.finalize())
 
@@ -1053,7 +1060,7 @@ class Commands(ABC, Vehicle):
             case _:
                 raise ValueError(f"Invalid seat heater level: {seat_heater_level}")
 
-        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction(**heater_action_dict)
+        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction(**heater_action_dict) # pyright: ignore[reportUnknownArgumentType]
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1401,6 +1408,8 @@ class Commands(ABC, Vehicle):
                 action = VehicleControlSunroofOpenCloseAction(open=Void())
             case "close":
                 action = VehicleControlSunroofOpenCloseAction(close=Void())
+            case _:
+                raise ValueError(f"Invalid sunroof state: {state}")
 
         return await self._sendInfotainment(
             Action(

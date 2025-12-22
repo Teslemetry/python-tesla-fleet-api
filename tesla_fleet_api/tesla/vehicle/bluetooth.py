@@ -91,9 +91,9 @@ class ReassemblingBuffer:
             message_type: The protobuf message type (e.g., RoutableMessage) to parse the assembled data.
             callback: A function that will be called with each parsed message.
         """
-        self.buffer = bytearray()
-        self.expected_length = None
-        self.packet_starts = []
+        self.buffer: bytearray = bytearray()
+        self.expected_length: int | None = None
+        self.packet_starts: list[int] = []
         self.callback = callback
 
     def receive_data(self, data: bytearray):
@@ -146,7 +146,7 @@ class VehicleBluetooth(Commands):
     ble_name: str
     device: BLEDevice | None = None
     client: BleakClient | None = None
-    _queues: dict[Domain, asyncio.Queue]
+    _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -205,7 +205,8 @@ class VehicleBluetooth(Commands):
         """Disconnect from the Tesla BLE device."""
         if not self.client:
             return False
-        return await self.client.disconnect()
+        await self.client.disconnect()
+        return True
 
     async def connect_if_needed(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device if not already connected."""
@@ -219,7 +220,7 @@ class VehicleBluetooth(Commands):
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> None:
         """Exit the async context."""
         await self.disconnect()
 
@@ -272,7 +273,7 @@ class VehicleBluetooth(Commands):
                     else:
                         LOGGER.debug(f"Ignoring message since it does not contain the required field {requires}, {resp.HasField(requires)}")
 
-    async def query_display_name(self, max_attempts=5) -> str | None:
+    async def query_display_name(self, max_attempts: int = 5) -> str | None:
         """Read the device name via GATT characteristic if available"""
         for i in range(max_attempts):
             try:
@@ -344,7 +345,9 @@ class VehicleBluetooth(Commands):
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
         if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation):
             if(respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation < len(WHITELIST_OPERATION_STATUS)):
-                raise WHITELIST_OPERATION_STATUS[respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation]
+                exception = WHITELIST_OPERATION_STATUS[respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation]
+                if exception:
+                    raise exception
             else:
                 raise WhitelistOperationStatus(f"Unknown whitelist operation failure: {respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation}")
         return

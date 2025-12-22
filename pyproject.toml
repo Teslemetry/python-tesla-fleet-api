@@ -38,4 +38,6 @@ tesla_fleet_api = ["py.typed"]
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
 [tool.pyright]
+include = ["tesla_fleet_api"]
+typeCheckingMode = "strict"
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]

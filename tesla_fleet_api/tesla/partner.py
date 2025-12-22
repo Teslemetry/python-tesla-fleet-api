@@ -1,12 +1,15 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from tesla_fleet_api.const import Method
+
+if TYPE_CHECKING:
+    from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
 class Partner:
     """Class describing the Tesla Fleet API partner endpoints"""
 
-    def __init__(self, parent):
-        self._request = parent._request
+    def __init__(self, parent: "TeslaFleetApi"):
+        self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
     async def public_key(self, domain: str | None = None) -> dict[str, Any]:
         """Returns the public key associated with a domain. It can be used to ensure the registration was successful."""

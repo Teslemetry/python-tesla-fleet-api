@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
@@ -19,14 +20,14 @@ class TessieVehicles(Vehicles):
         self[vin] = vehicle
         return vehicle
 
-    def createFleet(self, vin: str):
+    def createFleet(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use Fleet API directly")
 
-    def createSigned(self, vin: str):
+    def createSigned(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use Fleet API directly")
 
-    def createBluetooth(self, vin: str):
+    def createBluetooth(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use local Bluetooth")

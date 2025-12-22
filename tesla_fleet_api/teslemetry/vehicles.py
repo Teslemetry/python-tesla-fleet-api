@@ -88,7 +88,7 @@ class TeslemetryVehicle(VehicleFleet):
                 rear_passenger_door=ClosureState.CLOSE
             )
         """
-        data = {}
+        data: dict[str, Any] = {}
         if front_driver_door != ClosureState.NONE:
             data["frontDriverDoor"] = front_driver_door.value
         if front_passenger_door != ClosureState.NONE:
@@ -152,7 +152,7 @@ class TeslemetryVehicle(VehicleFleet):
                 rear_right=SeatHeaterLevel.OFF
             )
         """
-        data = {}
+        data: dict[str, Any] = {}
         if front_left is not None:
             data["frontLeft"] = front_left.value
         if front_right is not None:
@@ -191,7 +191,7 @@ class TeslemetryVehicle(VehicleFleet):
             lower_charge_limit: Lower charge limit (0 - upper_charge_limit)
             upper_charge_limit: Upper charge limit (lower_charge_limit - 100)
         """
-        data = {}
+        data: dict[str, Any] = {}
         if enabled is not None:
             data["enabled"] = enabled
         if lower_charge_limit is not None:
@@ -272,14 +272,14 @@ class TeslemetryVehicles(Vehicles):
         self[vin] = vehicle
         return vehicle
 
-    def createFleet(self, vin: str):
+    def createFleet(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Teslemetry cannot use Fleet API directly")
 
-    def createSigned(self, vin: str):
+    def createSigned(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Teslemetry cannot use Fleet API directly")
 
-    def createBluetooth(self, vin: str):
+    def createBluetooth(self, vin: str) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Teslemetry cannot use local Bluetooth")

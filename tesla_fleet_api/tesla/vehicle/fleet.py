@@ -27,7 +27,7 @@ class VehicleFleet(Vehicle):
 
     def __init__(self, parent: TeslaFleetApi, vin: str):
         super().__init__(parent, vin)
-        self._request = parent._request
+        self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
     async def actuate_trunk(
         self, which_trunk: Trunk | str

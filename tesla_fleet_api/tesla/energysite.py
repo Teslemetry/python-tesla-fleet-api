@@ -15,7 +15,7 @@ class EnergySite:
         parent: TeslaFleetApi,
         energy_site_id: int
     ):
-        self._request = parent._request
+        self._request = parent._request  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
 
     async def backup(

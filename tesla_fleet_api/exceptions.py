@@ -1,4 +1,5 @@
 import aiohttp
+from typing import Any
 from tesla_fleet_api.const import LOGGER
 
 
@@ -7,10 +8,10 @@ class TeslaFleetError(BaseException):
 
     message: str = "An unknown error has occurred."
     status: int | None = None
-    data: dict | str | None = None
+    data: dict[str, Any] | str | None = None
     key: str | None = None
 
-    def __init__(self, data: dict | str | None = None, status: int | None = None):
+    def __init__(self, data: dict[str, Any] | str | None = None, status: int | None = None):
         LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status
@@ -1028,11 +1029,11 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     if resp.status < 400:
         return
 
-    data = None
+    data: dict[str, Any] | None = None
     error = None
     if resp.content_type == "application/json":
         data = await resp.json()
-        error = data.get("error")
+        error = data.get("error") if data else None
 
     if resp.status == 400:
         if error:

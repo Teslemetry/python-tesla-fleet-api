@@ -1,9 +1,6 @@
 import aiohttp
 from typing import Any
 
-from tesla_fleet_api.tesla.charging import Charging
-from tesla_fleet_api.tesla.energysite import EnergySites
-from tesla_fleet_api.tesla.user import User
 from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.const import Method
 from tesla_fleet_api.tessie.vehicles import TessieVehicles
