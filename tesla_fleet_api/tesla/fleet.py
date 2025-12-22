@@ -79,6 +79,12 @@ class TeslaFleetApi(Tesla):
                 continue
         raise LibraryError("Could not find a valid Tesla API server.")
 
+    async def _access_token(self) -> str:
+        """Get the access token for the Tesla Fleet API."""
+        if callable(self.access_token):
+            return await self.access_token()
+        return self.access_token
+
     async def _request(
         self,
         method: Method,
@@ -94,10 +100,7 @@ class TeslaFleetApi(Tesla):
         if method == Method.GET:
             json = None
 
-        if callable(self.access_token):
-            access_token = await self.access_token()
-        else:
-            access_token = self.access_token
+        access_token = await self._access_token()
 
         headers = {
             "Authorization": f"Bearer {access_token}",

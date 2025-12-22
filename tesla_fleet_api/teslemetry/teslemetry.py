@@ -107,9 +107,10 @@ class Teslemetry(TeslaFleetApi):
         )
 
     async def migrate_to_oauth(
-        self, client_id: str, access_token: str, name: str | None = None
+        self, client_id: str = "homeassistant", name: str | None = None
     ) -> dict[str, Any]:
         """Migrate from access token to OAuth."""
+        access_token = await self._access_token()
         migrate_data = {
             "grant_type": "migrate",
             "client_id": client_id,
@@ -120,4 +121,4 @@ class Teslemetry(TeslaFleetApi):
         new_token = await self._request(Method.POST, "oauth/token", json=migrate_data)
         new_token["expires_in"] = int(new_token["expires_in"])
         new_token["expires_at"] = time() + new_token["expires_in"]
-        return {"token": new_token}
+        return new_token
