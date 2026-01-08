@@ -122,3 +122,75 @@ class Teslemetry(TeslaFleetApi):
         new_token["expires_in"] = int(new_token["expires_in"])
         new_token["expires_at"] = time() + new_token["expires_in"]
         return new_token
+
+    async def fields(self) -> dict[str, Any]:
+        """Get streaming field parameters and metadata."""
+        return await self._request(
+            Method.GET,
+            "fields.json",
+        )
+
+    async def vehicle_config(self, vin: str) -> dict[str, Any]:
+        """Get the saved vehicle configuration.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.GET,
+            f"api/vehicle_config/{vin}",
+        )
+
+    async def streaming_config(self, vin: str) -> dict[str, Any]:
+        """Get the streaming configuration for a specific vehicle.
+
+        Returns certificate, hostname, port, and configurable telemetry fields.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.GET,
+            f"api/config/{vin}",
+        )
+
+    async def stop_streaming(self, vin: str) -> dict[str, Any]:
+        """Stop streaming data from a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.DELETE,
+            f"api/config/{vin}",
+        )
+
+    async def modify_streaming_config(
+        self, vin: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Modify the streaming configuration for a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+            fields: Fields to stream with their configuration
+        """
+        return await self._request(
+            Method.PATCH,
+            f"api/config/{vin}",
+            json={"fields": fields},
+        )
+
+    async def create_streaming_config(
+        self, vin: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create/update the streaming configuration for a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+            fields: Fields to stream with their configuration
+        """
+        return await self._request(
+            Method.POST,
+            f"api/config/{vin}",
+            json={"fields": fields},
+        )
