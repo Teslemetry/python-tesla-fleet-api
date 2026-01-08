@@ -159,3 +159,61 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Get Streaming Fields
+
+The `fields` method retrieves streaming field parameters and metadata.
+
+```python
+async def main():
+    async with aiohttp.ClientSession() as session:
+        teslemetry = Teslemetry(
+            session=session,
+            access_token="<access_token>",
+        )
+
+        response = await teslemetry.fields()
+        print(response)
+
+asyncio.run(main())
+```
+
+## Get Vehicle Configuration
+
+The `vehicle_config` method retrieves the saved vehicle configuration for a specific vehicle.
+
+```python
+async def main():
+    async with aiohttp.ClientSession() as session:
+        teslemetry = Teslemetry(
+            session=session,
+            access_token="<access_token>",
+        )
+
+        vin = "<vin>"
+
+        response = await teslemetry.vehicle_config(vin)
+        print(response)
+
+asyncio.run(main())
+```
+
+## Get Streaming Configuration
+
+The `streaming_config` method retrieves the streaming configuration for a specific vehicle, including certificate, hostname, port, and configurable telemetry fields.
+
+```python
+async def main():
+    async with aiohttp.ClientSession() as session:
+        teslemetry = Teslemetry(
+            session=session,
+            access_token="<access_token>",
+        )
+
+        vin = "<vin>"
+
+        response = await teslemetry.streaming_config(vin)
+        print(response)
+
+asyncio.run(main())
+```

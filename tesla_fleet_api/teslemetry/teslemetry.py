@@ -122,3 +122,34 @@ class Teslemetry(TeslaFleetApi):
         new_token["expires_in"] = int(new_token["expires_in"])
         new_token["expires_at"] = time() + new_token["expires_in"]
         return new_token
+
+    async def fields(self) -> dict[str, Any]:
+        """Get streaming field parameters and metadata."""
+        return await self._request(
+            Method.GET,
+            "fields.json",
+        )
+
+    async def vehicle_config(self, vin: str) -> dict[str, Any]:
+        """Get the saved vehicle configuration.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.GET,
+            f"api/vehicle_config/{vin}",
+        )
+
+    async def streaming_config(self, vin: str) -> dict[str, Any]:
+        """Get the streaming configuration for a specific vehicle.
+
+        Returns certificate, hostname, port, and configurable telemetry fields.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.GET,
+            f"api/config/{vin}",
+        )
