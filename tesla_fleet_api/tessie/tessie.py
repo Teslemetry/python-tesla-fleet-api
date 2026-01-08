@@ -238,27 +238,3 @@ class Tessie(TeslaFleetApi):
     async def last_idle_state(self, vin: str) -> Any:
         """Get latest idle period data."""
         return await self._request(Method.GET, f"{vin}/last_idle_state")
-
-    async def tire_pressure(self, vin: str) -> Any:
-        """Get current tire pressure readings."""
-        return await self._request(Method.GET, f"{vin}/tire_pressure")
-
-    async def vehicle_status(self, vin: str) -> Any:
-        """Get vehicle operational status."""
-        return await self._request(Method.GET, f"{vin}/status")
-
-    async def plate(self, vin: str) -> Any:
-        """Get license plate information."""
-        return await self._request(Method.GET, f"{vin}/plate")
-
-    async def update_plate(
-        self,
-        vin: str,
-        plate: str,
-        state: str | None = None,
-    ) -> Any:
-        """Update license plate information."""
-        params: dict[str, str] = {"plate": plate}
-        if state:
-            params["state"] = state
-        return await self._request(Method.POST, f"{vin}/plate", params=params)

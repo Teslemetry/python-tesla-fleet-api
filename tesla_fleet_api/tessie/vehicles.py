@@ -694,6 +694,30 @@ class TessieVehicle(VehicleFleet):
             params={"cost": cost, "currency": currency},
         )
 
+    # Vehicle Information
+    async def tire_pressure(self) -> dict[str, Any]:
+        """Get current tire pressure readings."""
+        return await self._request(Method.GET, f"{self.vin}/tire_pressure")
+
+    async def vehicle_status(self) -> dict[str, Any]:
+        """Get vehicle operational status."""
+        return await self._request(Method.GET, f"{self.vin}/status")
+
+    async def plate(self) -> dict[str, Any]:
+        """Get license plate information."""
+        return await self._request(Method.GET, f"{self.vin}/plate")
+
+    async def update_plate(
+        self,
+        plate: str,
+        state: str | None = None,
+    ) -> dict[str, Any]:
+        """Update license plate information."""
+        params: dict[str, str] = {"plate": plate}
+        if state:
+            params["state"] = state
+        return await self._request(Method.POST, f"{self.vin}/plate", params=params)
+
 class TessieVehicles(Vehicles):
     """Class containing and creating vehicles."""
 
