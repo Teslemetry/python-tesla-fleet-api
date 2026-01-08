@@ -194,14 +194,3 @@ class Teslemetry(TeslaFleetApi):
             f"api/config/{vin}",
             json={"fields": fields},
         )
-
-    async def vehicle_image(self, vin: str) -> dict[str, Any]:
-        """Get redirect URL to Tesla Design Studio image of the vehicle.
-
-        Args:
-            vin: Vehicle identification number
-        """
-        return await self._request(
-            Method.GET,
-            f"api/image/{vin}",
-        )

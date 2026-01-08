@@ -300,26 +300,6 @@ async def main():
 asyncio.run(main())
 ```
 
-## Get Vehicle Image
-
-The `vehicle_image` method gets the redirect URL to the Tesla Design Studio image of the vehicle.
-
-```python
-async def main():
-    async with aiohttp.ClientSession() as session:
-        teslemetry = Teslemetry(
-            session=session,
-            access_token="<access_token>",
-        )
-
-        vin = "<vin>"
-
-        response = await teslemetry.vehicle_image(vin)
-        print(response)
-
-asyncio.run(main())
-```
-
 ## Vehicle Custom Commands
 
 ### Clear PIN to Drive
