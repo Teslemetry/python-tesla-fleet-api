@@ -153,3 +153,55 @@ class Teslemetry(TeslaFleetApi):
             Method.GET,
             f"api/config/{vin}",
         )
+
+    async def stop_streaming(self, vin: str) -> dict[str, Any]:
+        """Stop streaming data from a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.DELETE,
+            f"api/config/{vin}",
+        )
+
+    async def modify_streaming_config(
+        self, vin: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Modify the streaming configuration for a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+            fields: Fields to stream with their configuration
+        """
+        return await self._request(
+            Method.PATCH,
+            f"api/config/{vin}",
+            json={"fields": fields},
+        )
+
+    async def create_streaming_config(
+        self, vin: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create/update the streaming configuration for a specific vehicle.
+
+        Args:
+            vin: Vehicle identification number
+            fields: Fields to stream with their configuration
+        """
+        return await self._request(
+            Method.POST,
+            f"api/config/{vin}",
+            json={"fields": fields},
+        )
+
+    async def vehicle_image(self, vin: str) -> dict[str, Any]:
+        """Get redirect URL to Tesla Design Studio image of the vehicle.
+
+        Args:
+            vin: Vehicle identification number
+        """
+        return await self._request(
+            Method.GET,
+            f"api/image/{vin}",
+        )

@@ -260,6 +260,25 @@ class TeslemetryVehicle(VehicleFleet):
             json=data,
         )
 
+    async def clear_pin_to_drive(self, pin: str) -> dict[str, Any]:
+        """Deactivates PIN to Drive.
+
+        Args:
+            pin: 4-digit PIN to clear
+        """
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/clear_pin_to_drive",
+            json={"pin": pin},
+        )
+
+    async def remove_key(self) -> dict[str, Any]:
+        """Remove all impermanent keys from the vehicle."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/remove_key",
+        )
+
 
 class TeslemetryVehicles(Vehicles):
     """Class containing and creating vehicles."""
