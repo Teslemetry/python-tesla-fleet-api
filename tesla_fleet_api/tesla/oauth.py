@@ -1,9 +1,10 @@
-from typing import Any, Literal
-import aiohttp
 import time
+from typing import Any, Literal
 
+import aiohttp
+
+from tesla_fleet_api.const import SERVERS, Method, Scope
 from tesla_fleet_api.tesla import TeslaFleetApi
-from tesla_fleet_api.const import Scope, SERVERS, Method
 
 
 class TeslaFleetOAuth(TeslaFleetApi):
@@ -13,6 +14,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
     refresh_token: str | None
     redirect_uri: str | None
     _client_secret: str | None
+    _access_token: str | None
 
     def __init__(
         self,
@@ -28,7 +30,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         self.client_id = client_id
         self._client_secret = client_secret
         self.redirect_uri = redirect_uri
-        self.access_token = access_token
+        self._access_token = access_token
         self.refresh_token = refresh_token
         self.expires = expires
 
@@ -75,14 +77,22 @@ class TeslaFleetOAuth(TeslaFleetApi):
             if resp.ok:
                 data = await resp.json()
                 self.refresh_token = data.get("refresh_token")
-                self.access_token = data["access_token"]
+                self._access_token = data["access_token"]
                 self.expires = int(time.time()) + data["expires_in"]
                 region = code.split("_")[0].lower()
                 self.server = SERVERS.get(region)
 
+    async def access_token(self) -> str:
+        """Get the access token."""
+        if self.expires < time.time():
+            await self.refresh_access_token()
+        if self._access_token:
+            return self._access_token
+        raise ValueError("Access token is missing")
+
     async def check_access_token(self) -> dict[str, Any] | None:
         """Get the access token."""
-        if self.access_token and self.expires > time.time():
+        if self._access_token and self.expires > time.time():
             return None
         return await self.refresh_access_token()
 
@@ -100,7 +110,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         ) as resp:
             data = await resp.json()
             if resp.ok:
-                self.access_token = data["access_token"]
+                self._access_token = data["access_token"]
                 self.refresh_token = data["refresh_token"]
                 self.expires = int(time.time()) + data["expires_in"]
                 return {"refresh_token": self.refresh_token, "expires": self.expires}

@@ -21,7 +21,7 @@ class Teslemetry(TeslaFleetApi):
         """Initialize the Teslemetry API."""
 
         self.session = session
-        self.access_token = access_token
+        self._access_token = access_token
         self.server = server
 
         self.charging = self.Charging(self)
@@ -110,7 +110,7 @@ class Teslemetry(TeslaFleetApi):
         self, client_id: str = "homeassistant", name: str | None = None
     ) -> dict[str, Any]:
         """Migrate from access token to OAuth."""
-        access_token = await self._access_token()
+        access_token = await self.access_token()
         migrate_data = {
             "grant_type": "migrate",
             "client_id": client_id,

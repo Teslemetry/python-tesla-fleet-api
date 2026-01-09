@@ -1,7 +1,7 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import Any, Awaitable, Callable, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
 
 import aiohttp
 
@@ -28,10 +28,9 @@ if TYPE_CHECKING:
 class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
 
-    access_token: str | Callable[[], Awaitable[str | None]] | None
+    _access_token: str | Callable[[], Awaitable[str | None]] | None
     server: str | None = None
     session: aiohttp.ClientSession
-    headers: dict[str, str]
     charging: "Charging"
     energySites: "EnergySites"
     user: "User"
@@ -40,8 +39,8 @@ class TeslaFleetApi(Tesla):
 
     def __init__(
         self,
-        session: aiohttp.ClientSession,
-        access_token: str | Callable[[], Awaitable[str | None]] | None,
+        session: aiohttp.ClientSession | None,
+        access_token: str | Callable[[], Awaitable[str | None]] | None = None,
         region: Literal["na", "eu", "cn"] | None = None,
         server: str | None = None,
         charging_scope: bool = True,
@@ -52,9 +51,8 @@ class TeslaFleetApi(Tesla):
     ):
         """Initialize the Tesla Fleet API."""
 
-        self.session = session
-        self.access_token = access_token
-        self.headers = {}
+        self.session = session or aiohttp.ClientSession()
+        self._access_token = access_token
 
         if server is not None:
             self.server = server
@@ -92,12 +90,12 @@ class TeslaFleetApi(Tesla):
                 continue
         raise LibraryError("Could not find a valid Tesla API server.")
 
-    async def _access_token(self) -> str:
+    async def access_token(self) -> str:
         """Get the access token for the Tesla Fleet API."""
-        if callable(self.access_token):
-            token = await self.access_token()
+        if callable(self._access_token):
+            token = await self._access_token()
         else:
-            token = self.access_token
+            token = self._access_token
 
         if token is None:
             raise MissingToken
@@ -118,7 +116,7 @@ class TeslaFleetApi(Tesla):
         if method == Method.GET:
             json = None
 
-        access_token = await self._access_token()
+        access_token = await self.access_token()
 
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -213,7 +211,7 @@ class TeslaFleetApi(Tesla):
             if resp.ok:
                 token_data = await resp.json()
                 # Set the access token for subsequent API calls
-                self.access_token = token_data["access_token"]
+                self._access_token = token_data["access_token"]
                 return token_data
             else:
                 error_data = await resp.json()

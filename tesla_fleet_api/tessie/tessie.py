@@ -1,13 +1,14 @@
-import aiohttp
 from typing import Any
 
-from tesla_fleet_api.tesla import TeslaFleetApi
+import aiohttp
+
 from tesla_fleet_api.const import Method
+from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.tessie.vehicles import TessieVehicles
 
-class Tessie(TeslaFleetApi):
 
-    server="https://api.tessie.com"
+class Tessie(TeslaFleetApi):
+    server = "https://api.tessie.com"
     Vehicles = TessieVehicles
 
     def __init__(
@@ -18,7 +19,7 @@ class Tessie(TeslaFleetApi):
         """Initialize the Tessie API."""
 
         self.session = session
-        self.access_token = access_token
+        self._access_token = access_token
 
         self.charging = self.Charging(self)
         self.energySites = self.EnergySites(self)
