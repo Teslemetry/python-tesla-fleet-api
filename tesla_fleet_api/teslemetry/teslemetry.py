@@ -10,6 +10,7 @@ from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
 
 
 class Teslemetry(TeslaFleetApi):
+    vehicles: TeslemetryVehicles
     Vehicles = TeslemetryVehicles
 
     def __init__(
@@ -27,7 +28,7 @@ class Teslemetry(TeslaFleetApi):
         self.charging = self.Charging(self)
         self.energySites = self.EnergySites(self)
         self.user = self.User(self)
-        self.vehicles = self.Vehicles(self)
+        self.vehicles = self.Vehicles(self)  # pyright: ignore
 
     async def ping(self) -> dict[str, bool]:
         """Send a ping."""

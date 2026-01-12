@@ -9,6 +9,7 @@ from tesla_fleet_api.tessie.vehicles import TessieVehicles
 
 class Tessie(TeslaFleetApi):
     server = "https://api.tessie.com"
+    vehicles: TessieVehicles
     Vehicles = TessieVehicles
 
     def __init__(
@@ -24,7 +25,7 @@ class Tessie(TeslaFleetApi):
         self.charging = self.Charging(self)
         self.energySites = self.EnergySites(self)
         self.user = self.User(self)
-        self.vehicles = self.Vehicles(self)
+        self.vehicles = self.Vehicles(self)  # pyright: ignore
 
     async def scopes(self) -> list[str]:
         """Get user scopes."""

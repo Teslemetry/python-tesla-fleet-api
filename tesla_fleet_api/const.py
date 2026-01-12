@@ -1,7 +1,7 @@
 """Tesla Fleet API constants."""
 
-from enum import Enum
 import logging
+from enum import Enum
 
 LOGGER = logging.getLogger(__package__)
 SERVERS = {
@@ -31,6 +31,7 @@ class Method(StrEnum):
     GET = "GET"
     POST = "POST"
     DELETE = "DELETE"
+    PATCH = "PATCH"
 
 
 class Trunk(StrEnum):
@@ -52,6 +53,7 @@ class Seat(IntEnum):
     REAR_RIGHT_BACK = 6
     THIRD_LEFT = 7
     THIRD_RIGHT = 8
+
 
 class AutoSeat(IntEnum):
     """Auto Climate Seat positions"""
@@ -100,7 +102,6 @@ class VehicleDataEndpoint(StrEnum):
     VEHICLE_CONFIG = "vehicle_config"
     VEHICLE_STATE = "vehicle_state"
     VEHICLE_DATA_COMBO = "vehicle_data_combo"
-
 
 
 class SunRoofCommand(StrEnum):
@@ -169,6 +170,7 @@ class TeslaEnergyPeriod(StrEnum):
     MONTH = "month"
     YEAR = "year"
     LIFETIME = "lifetime"
+
 
 class ClosureState(StrEnum):
     """Closure state options"""
