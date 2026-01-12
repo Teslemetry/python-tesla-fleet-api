@@ -1,12 +1,12 @@
 """Tesla Fleet API for Python."""
 
 from json import dumps
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import aiohttp
 
 from tesla_fleet_api import __version__ as VERSION
-from tesla_fleet_api.const import LOGGER, SERVERS, Method, Scope
+from tesla_fleet_api.const import LOGGER, SERVERS, Method, Region, Scope
 from tesla_fleet_api.exceptions import (
     InvalidRegion,
     LibraryError,
@@ -41,7 +41,7 @@ class TeslaFleetApi(Tesla):
         self,
         session: aiohttp.ClientSession | None,
         access_token: str | Callable[[], Awaitable[str | None]] | None = None,
-        region: Literal["na", "eu", "cn"] | None = None,
+        region: Region | None = None,
         server: str | None = None,
         charging_scope: bool = True,
         energy_scope: bool = True,

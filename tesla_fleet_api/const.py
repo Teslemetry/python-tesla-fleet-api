@@ -2,13 +2,22 @@
 
 import logging
 from enum import Enum
+from typing import Literal, TypeGuard
 
 LOGGER = logging.getLogger(__package__)
-SERVERS = {
+
+Region = Literal["na", "eu", "cn"]
+
+SERVERS: dict[Region, str] = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
     "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
     "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
 }
+
+
+def is_valid_region(value: str) -> TypeGuard[Region]:
+    """Check if a string is a valid region and narrow its type."""
+    return value in SERVERS
 
 
 class IntEnum(int, Enum):

@@ -3,6 +3,7 @@
 __author__ = "hello@teslemetry.com"
 __version__ = "1.4.1"
 
+from tesla_fleet_api.const import Region, is_valid_region
 from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
@@ -10,9 +11,11 @@ from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 from tesla_fleet_api.tessie.tessie import Tessie
 
 __all__ = [
+    "Region",
     "TeslaFleetApi",
     "TeslaBluetooth",
     "TeslaFleetOAuth",
     "Teslemetry",
     "Tessie",
+    "is_valid_region",
 ]
