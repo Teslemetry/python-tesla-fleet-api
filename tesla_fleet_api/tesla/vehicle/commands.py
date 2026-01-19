@@ -127,6 +127,7 @@ from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     HMAC_Personalized_Signature_Data,
 )
 from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
+    LatLong,
     Void,
     PreconditioningTimes,
     OffPeakChargingTimes,
@@ -1426,16 +1427,14 @@ class Commands(ABC, Vehicle):
         lon: float | None = None,
     ) -> dict[str, Any]:
         """Turns on HomeLink (used to open and close garage doors)."""
-        action = VehicleControlTriggerHomelinkAction()
-        if lat is not None and lon is not None:
-            action.location.latitude = lat
-            action.location.longitude = lon
-        if token is not None:
-            action.token = token
-
         return await self._sendInfotainment(
             Action(
-                vehicleAction=VehicleAction(vehicleControlTriggerHomelinkAction=action)
+                vehicleAction=VehicleAction(
+                    vehicleControlTriggerHomelinkAction=VehicleControlTriggerHomelinkAction(
+                        location=LatLong(latitude=lat, longitude=lon) if lat is not None and lon is not None else None,
+                        token=token,
+                    )
+                )
             )
         )
 
