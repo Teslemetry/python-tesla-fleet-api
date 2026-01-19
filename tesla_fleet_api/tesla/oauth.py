@@ -1,9 +1,9 @@
 import time
-from typing import Any, Literal
+from typing import Any
 
 import aiohttp
 
-from tesla_fleet_api.const import SERVERS, Method, Scope
+from tesla_fleet_api.const import SERVERS, Method, Region, Scope, is_valid_region
 from tesla_fleet_api.tesla import TeslaFleetApi
 
 
@@ -19,7 +19,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        region: Literal["na", "eu", "cn"],
+        region: Region,
         client_id: str,
         client_secret: str | None = None,
         redirect_uri: str | None = None,
@@ -27,6 +27,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         refresh_token: str | None = None,
         expires: int = 0,
     ):
+        if not is_valid_region(region):
+            raise ValueError("Invalid region")
+
         self.client_id = client_id
         self._client_secret = client_secret
         self.redirect_uri = redirect_uri
