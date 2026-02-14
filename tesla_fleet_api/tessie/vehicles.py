@@ -610,6 +610,46 @@ class TessieVehicle(VehicleFleet):
             params={"wait_for_completion": wait_for_completion},
         )
 
+    async def enable_keep_accessory_power_mode(
+        self, wait_for_completion: bool = True
+    ) -> dict[str, Any]:
+        """Enable Keep Accessory Power Mode."""
+        return await self._request(
+            Method.POST,
+            f"{self.vin}/command/enable_keep_accessory_power_mode",
+            params={"wait_for_completion": wait_for_completion},
+        )
+
+    async def disable_keep_accessory_power_mode(
+        self, wait_for_completion: bool = True
+    ) -> dict[str, Any]:
+        """Disable Keep Accessory Power Mode."""
+        return await self._request(
+            Method.POST,
+            f"{self.vin}/command/disable_keep_accessory_power_mode",
+            params={"wait_for_completion": wait_for_completion},
+        )
+
+    async def enable_low_power_mode(
+        self, wait_for_completion: bool = True
+    ) -> dict[str, Any]:
+        """Enable Low Power Mode."""
+        return await self._request(
+            Method.POST,
+            f"{self.vin}/command/enable_low_power_mode",
+            params={"wait_for_completion": wait_for_completion},
+        )
+
+    async def disable_low_power_mode(
+        self, wait_for_completion: bool = True
+    ) -> dict[str, Any]:
+        """Disable Low Power Mode."""
+        return await self._request(
+            Method.POST,
+            f"{self.vin}/command/disable_low_power_mode",
+            params={"wait_for_completion": wait_for_completion},
+        )
+
     # Driver Management
     async def drivers(self) -> dict[str, Any]:
         """List additional authorized drivers."""
