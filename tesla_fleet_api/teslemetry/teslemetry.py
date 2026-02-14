@@ -4,7 +4,7 @@ from typing import Any
 
 import aiohttp
 
-from tesla_fleet_api.const import LOGGER, Method
+from tesla_fleet_api.const import LOGGER, Method, is_valid_region
 from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
 
@@ -59,8 +59,10 @@ class Teslemetry(TeslaFleetApi):
             "api/metadata",
         )
         if update_region and "region" in resp:
-            self.region = resp["region"].lower()
-            self.server = f"https://{self.region}.teslemetry.com"
+            region = resp["region"].lower()
+            if is_valid_region(region):
+                self.region = region
+            self.server = f"https://{region}.teslemetry.com"
             LOGGER.debug("Using server %s", self.server)
         return resp
 

@@ -29,6 +29,7 @@ class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
 
     _access_token: str | Callable[[], Awaitable[str | None]] | None
+    region: Region | None = None
     server: str | None = None
     session: aiohttp.ClientSession
     charging: "Charging"

@@ -63,7 +63,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         if self.redirect_uri is None:
             raise ValueError("Redirect URI is missing")
 
-        if self.server is None:
+        if self.server is None and self.region is not None:
             self.server = SERVERS.get(self.region)
 
         async with self.session.post(
@@ -83,7 +83,8 @@ class TeslaFleetOAuth(TeslaFleetApi):
                 self._access_token = data["access_token"]
                 self.expires = int(time.time()) + data["expires_in"]
                 region = code.split("_")[0].lower()
-                self.server = SERVERS.get(region)
+                if is_valid_region(region):
+                    self.server = SERVERS.get(region)
 
     async def access_token(self) -> str:
         """Get the access token."""
