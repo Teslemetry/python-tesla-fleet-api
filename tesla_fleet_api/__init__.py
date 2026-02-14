@@ -1,7 +1,7 @@
 """Tesla Fleet API"""
 
 __author__ = "hello@teslemetry.com"
-__version__ = "1.4.1"
+__version__ = "1.4.3"
 
 from tesla_fleet_api.const import Region, is_valid_region
 from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
