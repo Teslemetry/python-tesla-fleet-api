@@ -21,6 +21,8 @@ class EnergySite:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
 
+    # Energy device gRPC commands based on research from
+    # https://github.com/jasonacox/pypowerwall (MIT licensed)
     async def _command(
         self,
         category: str,
