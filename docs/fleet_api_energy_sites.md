@@ -337,3 +337,57 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Device Commands
+
+Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
+
+### Available Commands
+
+| Method | Category | Description |
+|--------|----------|-------------|
+| `get_system_info()` | Common | Firmware version, device type, part number, serial number, DIN |
+| `get_networking_status()` | Common | WiFi, Ethernet, and cellular connectivity status |
+| `wifi_scan()` | Common | Scan for available WiFi networks |
+| `get_device_cert()` | Common | Device certificate (subject, issuer, validity) |
+| `list_authorized_clients()` | Authorization | Paired keys with roles, state, and verification |
+| `get_signed_commands_public_key()` | Authorization | Gateway's public key for signed commands |
+| `get_backup_events()` | TEG | Backup event history (may timeout on some firmware) |
+| `schedule_backup_event()` | TEG | Schedule a manual backup event |
+| `cancel_backup_event()` | TEG | Cancel a scheduled backup event |
+
+### Example
+
+```python
+import asyncio
+import aiohttp
+from tesla_fleet_api import TeslaFleetApi
+from tesla_fleet_api.exceptions import TeslaFleetError
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        api = TeslaFleetApi(
+            access_token="<access_token>",
+            session=session,
+            region="na",
+        )
+
+        try:
+            energy_site = api.energySites.create(12345)
+
+            # Get gateway system information
+            system_info = await energy_site.get_system_info()
+            print(system_info)
+
+            # Get networking status
+            networking = await energy_site.get_networking_status()
+            print(networking)
+
+            # List authorized clients (paired keys)
+            clients = await energy_site.list_authorized_clients()
+            print(clients)
+        except TeslaFleetError as e:
+            print(e)
+
+asyncio.run(main())
+```
