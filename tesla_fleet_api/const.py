@@ -181,6 +181,15 @@ class TeslaEnergyPeriod(StrEnum):
     LIFETIME = "lifetime"
 
 
+class EnergyDeviceIdentifierType(IntEnum):
+    """Identifier type for energy device gRPC commands."""
+
+    GATEWAY_DIN = 1
+    SITE_UUID = 2
+    SOLAR_INVERTER_DIN = 3
+    WALL_CONNECTOR_DIN = 4
+
+
 class ClosureState(StrEnum):
     """Closure state options"""
 

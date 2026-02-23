@@ -1,26 +1,87 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
-from tesla_fleet_api.const import Method, EnergyOperationMode, EnergyExportMode, TeslaEnergyPeriod
+from tesla_fleet_api.const import (
+    Method,
+    EnergyOperationMode,
+    EnergyExportMode,
+    TeslaEnergyPeriod,
+    EnergyDeviceIdentifierType,
+)
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
+
 
 class EnergySite:
     """Class describing the Tesla Fleet API partner endpoints"""
 
     energy_site_id: int
 
-    def __init__(
-        self,
-        parent: TeslaFleetApi,
-        energy_site_id: int
-    ):
+    def __init__(self, parent: TeslaFleetApi, energy_site_id: int):
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
 
-    async def backup(
-        self, backup_reserve_percent: int
+    async def _command(
+        self,
+        category: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+        identifier_type: EnergyDeviceIdentifierType
+        | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
     ) -> dict[str, Any]:
+        """Send a gRPC command to the energy device gateway."""
+        message: dict[str, Any] = {category: {command: params or {}}}
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/command",
+            json={
+                "command_type": "grpc_command",
+                "command_properties": {
+                    "message": message,
+                    "identifier_type": int(identifier_type),
+                },
+            },
+        )
+
+    async def get_system_info(self) -> dict[str, Any]:
+        """Get energy device system information including firmware version, device type, part number, serial number, and DIN."""
+        return await self._command("common", "get_system_info_request")
+
+    async def get_networking_status(self) -> dict[str, Any]:
+        """Get energy device networking status including WiFi, Ethernet, and cellular connectivity."""
+        return await self._command("common", "get_networking_status_request")
+
+    async def wifi_scan(self) -> dict[str, Any]:
+        """Scan for available WiFi networks from the energy gateway."""
+        return await self._command("common", "wifi_scan_request")
+
+    async def get_device_cert(self) -> dict[str, Any]:
+        """Get the energy device certificate including subject, issuer, and validity."""
+        return await self._command("common", "device_cert_request")
+
+    async def list_authorized_clients(self) -> dict[str, Any]:
+        """List authorized clients (paired keys) on the energy gateway including their roles and state."""
+        return await self._command("authorization", "list_authorized_clients_request")
+
+    async def get_signed_commands_public_key(self) -> dict[str, Any]:
+        """Get the energy gateway's public key for signed commands."""
+        return await self._command(
+            "authorization", "get_signed_commands_public_key_request"
+        )
+
+    async def get_backup_events(self) -> dict[str, Any]:
+        """Get backup events from the energy gateway. May timeout on some firmware versions."""
+        return await self._command("teg", "get_backup_events_request")
+
+    async def schedule_backup_event(self) -> dict[str, Any]:
+        """Schedule a manual backup event on the energy gateway."""
+        return await self._command("teg", "schedule_manual_backup_event_request")
+
+    async def cancel_backup_event(self) -> dict[str, Any]:
+        """Cancel a scheduled manual backup event on the energy gateway."""
+        return await self._command("teg", "cancel_manual_backup_event_request")
+
+    async def backup(self, backup_reserve_percent: int) -> dict[str, Any]:
         """Adjust the site's backup reserve."""
         return await self._request(
             Method.POST,
@@ -145,15 +206,14 @@ class EnergySite:
             json={"enabled": enabled},
         )
 
-    async def time_of_use_settings(
-        self, settings: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def time_of_use_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         """Update the time of use settings for the energy site."""
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/time_of_use_settings",
             json={"tou_settings": {"tariff_content_v2": settings}},
         )
+
 
 class EnergySites(dict[int, EnergySite]):
     """Class describing the Tesla Fleet API partner endpoints"""
