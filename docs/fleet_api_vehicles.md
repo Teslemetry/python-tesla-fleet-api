@@ -2,9 +2,9 @@
 
 This document provides detailed examples for using the Fleet API for vehicles.
 
-## List Vehicles
+## List Products
 
-The `TeslaFleetApi` class provides methods to interact with the Fleet API for vehicles. Here's a basic example to list all vehicles:
+The `TeslaFleetApi` class provides methods to interact with the Fleet API for vehicles. Here's a basic example to list all products (vehicles and energy sites):
 
 ```python
 import asyncio
@@ -21,7 +21,7 @@ async def main():
         )
 
         try:
-            data = await api.vehicles.list()
+            data = await api.products()
             print(data)
         except TeslaFleetError as e:
             print(e)
@@ -29,9 +29,9 @@ async def main():
 asyncio.run(main())
 ```
 
-## Get Vehicle Data
+## Create a Vehicle
 
-You can get detailed data for a specific vehicle using its VIN:
+You can create a `VehicleFleet` instance for a specific vehicle using its VIN:
 
 ```python
 import asyncio
@@ -48,8 +48,9 @@ async def main():
         )
 
         try:
-            vehicle_data = await api.vehicles.get("<vin>")
-            print(vehicle_data)
+            vehicle = api.vehicles.createFleet("<vin>")
+            data = await vehicle.vehicle_data()
+            print(data)
         except TeslaFleetError as e:
             print(e)
 
@@ -75,7 +76,7 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
+            vehicle = api.vehicles.createFleet("<vin>")
             wake_up_response = await vehicle.wake_up()
             print(wake_up_response)
         except TeslaFleetError as e:
@@ -103,10 +104,10 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
-            lock_response = await vehicle.lock()
+            vehicle = api.vehicles.createFleet("<vin>")
+            lock_response = await vehicle.door_lock()
             print(lock_response)
-            unlock_response = await vehicle.unlock()
+            unlock_response = await vehicle.door_unlock()
             print(unlock_response)
         except TeslaFleetError as e:
             print(e)
@@ -133,10 +134,10 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
-            start_charging_response = await vehicle.start_charging()
+            vehicle = api.vehicles.createFleet("<vin>")
+            start_charging_response = await vehicle.charge_start()
             print(start_charging_response)
-            stop_charging_response = await vehicle.stop_charging()
+            stop_charging_response = await vehicle.charge_stop()
             print(stop_charging_response)
         except TeslaFleetError as e:
             print(e)
@@ -163,7 +164,7 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
+            vehicle = api.vehicles.createFleet("<vin>")
             set_charge_limit_response = await vehicle.set_charge_limit(80)
             print(set_charge_limit_response)
         except TeslaFleetError as e:
@@ -191,7 +192,7 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
+            vehicle = api.vehicles.createFleet("<vin>")
             flash_lights_response = await vehicle.flash_lights()
             print(flash_lights_response)
         except TeslaFleetError as e:
@@ -219,7 +220,7 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
+            vehicle = api.vehicles.createFleet("<vin>")
             honk_horn_response = await vehicle.honk_horn()
             print(honk_horn_response)
         except TeslaFleetError as e:
@@ -247,8 +248,8 @@ async def main():
         )
 
         try:
-            vehicle = await api.vehicles.get("<vin>")
-            remote_start_response = await vehicle.remote_start()
+            vehicle = api.vehicles.createFleet("<vin>")
+            remote_start_response = await vehicle.remote_start_drive()
             print(remote_start_response)
         except TeslaFleetError as e:
             print(e)

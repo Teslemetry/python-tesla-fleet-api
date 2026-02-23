@@ -31,7 +31,7 @@ from tesla_fleet_api import TeslaBluetooth
 
 async def main():
     tesla_bluetooth = TeslaBluetooth()
-    tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     vehicle.find_vehicle()
     print(f"Created VehicleBluetooth instance for VIN: {vehicle.vin}")
@@ -50,7 +50,7 @@ from tesla_fleet_api import TeslaBluetooth
 async def main():
     tesla_bluetooth = TeslaBluetooth()
     device = await tesla_bluetooth.find_vehicle()
-    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     await vehicle.pair()
     print(f"Paired with VehicleBluetooth instance for VIN: {vehicle.vin}")
@@ -69,7 +69,7 @@ from tesla_fleet_api import TeslaBluetooth
 async def main():
     tesla_bluetooth = TeslaBluetooth()
     device = await tesla_bluetooth.find_vehicle()
-    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     await vehicle.wake_up()
     print(f"Woke up VehicleBluetooth instance for VIN: {vehicle.vin}")
@@ -88,7 +88,7 @@ from tesla_fleet_api import TeslaBluetooth, BluetoothVehicleData
 async def main():
     tesla_bluetooth = TeslaBluetooth()
     device = await tesla_bluetooth.find_vehicle()
-    private_key = tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     data = await vehicle.vehicle_data([BluetoothVehicleData.CHARGE_STATE, BluetoothVehicleData.CLIMATE_STATE])
     print(f"Vehicle data for VIN: {vehicle.vin}")

@@ -83,9 +83,9 @@ async def main():
         try:
             vehicle = VehicleSigned(api, "<vin>")
             await vehicle.handshake()
-            lock_response = await vehicle.lock()
+            lock_response = await vehicle.door_lock()
             print(lock_response)
-            unlock_response = await vehicle.unlock()
+            unlock_response = await vehicle.door_unlock()
             print(unlock_response)
         except TeslaFleetError as e:
             print(e)
@@ -115,9 +115,9 @@ async def main():
         try:
             vehicle = VehicleSigned(api, "<vin>")
             await vehicle.handshake()
-            start_charging_response = await vehicle.start_charging()
+            start_charging_response = await vehicle.charge_start()
             print(start_charging_response)
-            stop_charging_response = await vehicle.stop_charging()
+            stop_charging_response = await vehicle.charge_stop()
             print(stop_charging_response)
         except TeslaFleetError as e:
             print(e)
@@ -237,7 +237,7 @@ async def main():
         try:
             vehicle = VehicleSigned(api, "<vin>")
             await vehicle.handshake()
-            remote_start_response = await vehicle.remote_start()
+            remote_start_response = await vehicle.remote_start_drive()
             print(remote_start_response)
         except TeslaFleetError as e:
             print(e)

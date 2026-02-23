@@ -2,9 +2,9 @@
 
 This document provides detailed examples for using the Fleet API for energy sites.
 
-## List Energy Sites
+## Create an Energy Site
 
-The `TeslaFleetApi` class provides methods to interact with the Fleet API for energy sites. Here's a basic example to list all energy sites:
+The `TeslaFleetApi` class provides methods to interact with the Fleet API for energy sites. First, create an `EnergySite` instance using the energy site ID (which can be found via `api.products()`):
 
 ```python
 import asyncio
@@ -21,35 +21,9 @@ async def main():
         )
 
         try:
-            data = await api.energySites.list()
+            energy_site = api.energySites.create(12345)
+            data = await energy_site.site_info()
             print(data)
-        except TeslaFleetError as e:
-            print(e)
-
-asyncio.run(main())
-```
-
-## Get Energy Site Data
-
-You can get detailed data for a specific energy site using its ID:
-
-```python
-import asyncio
-import aiohttp
-from tesla_fleet_api import TeslaFleetApi
-from tesla_fleet_api.exceptions import TeslaFleetError
-
-async def main():
-    async with aiohttp.ClientSession() as session:
-        api = TeslaFleetApi(
-            access_token="<access_token>",
-            session=session,
-            region="na",
-        )
-
-        try:
-            energy_site_data = await api.energySites.get("<energy_site_id>")
-            print(energy_site_data)
         except TeslaFleetError as e:
             print(e)
 
@@ -75,7 +49,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             backup_reserve_response = await energy_site.backup(backup_reserve_percent=20)
             print(backup_reserve_response)
         except TeslaFleetError as e:
@@ -103,7 +77,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             backup_history_response = await energy_site.backup_history(period="day")
             print(backup_history_response)
         except TeslaFleetError as e:
@@ -131,7 +105,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             charge_history_response = await energy_site.charge_history(start_date="2022-01-01", end_date="2022-01-31")
             print(charge_history_response)
         except TeslaFleetError as e:
@@ -159,7 +133,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             energy_history_response = await energy_site.energy_history(period="day")
             print(energy_history_response)
         except TeslaFleetError as e:
@@ -187,7 +161,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             grid_import_export_response = await energy_site.grid_import_export(disallow_charge_from_grid_with_solar_installed=True)
             print(grid_import_export_response)
         except TeslaFleetError as e:
@@ -215,7 +189,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             live_status_response = await energy_site.live_status()
             print(live_status_response)
         except TeslaFleetError as e:
@@ -243,7 +217,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             off_grid_vehicle_charging_reserve_response = await energy_site.off_grid_vehicle_charging_reserve(off_grid_vehicle_charging_reserve_percent=10)
             print(off_grid_vehicle_charging_reserve_response)
         except TeslaFleetError as e:
@@ -271,7 +245,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             operation_mode_response = await energy_site.operation(default_real_mode="self_consumption")
             print(operation_mode_response)
         except TeslaFleetError as e:
@@ -299,7 +273,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             site_info_response = await energy_site.site_info()
             print(site_info_response)
         except TeslaFleetError as e:
@@ -327,7 +301,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             storm_mode_response = await energy_site.storm_mode(enabled=True)
             print(storm_mode_response)
         except TeslaFleetError as e:
@@ -355,7 +329,7 @@ async def main():
         )
 
         try:
-            energy_site = await api.energySites.get("<energy_site_id>")
+            energy_site = api.energySites.create(12345)
             time_of_use_settings_response = await energy_site.time_of_use_settings(settings={"tou_settings": {"tariff_content_v2": {}}})
             print(time_of_use_settings_response)
         except TeslaFleetError as e:
