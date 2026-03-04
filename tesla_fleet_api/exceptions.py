@@ -18,6 +18,12 @@ class TeslaFleetError(BaseException):
         super().__init__(self.message)
 
 
+class BluetoothTimeout(TeslaFleetError):
+    """Bluetooth command timed out waiting for vehicle response."""
+
+    message = "Bluetooth command timed out waiting for vehicle response."
+
+
 class ResponseError(TeslaFleetError):
     """The response from the server was not JSON."""
 

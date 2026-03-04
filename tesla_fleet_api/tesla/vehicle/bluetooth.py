@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import asyncio
 import struct
+from random import randbytes
 from typing import TYPE_CHECKING, Callable, Any
 from google.protobuf.message import DecodeError
 from bleak_retry_connector import establish_connection, MAX_CONNECT_ATTEMPTS
@@ -20,6 +21,7 @@ from tesla_fleet_api.const import (
     BluetoothVehicleData
 )
 from tesla_fleet_api.exceptions import (
+    BluetoothTimeout,
     WHITELIST_OPERATION_STATUS,
     WhitelistOperationStatus,
 )
@@ -234,8 +236,8 @@ class VehicleBluetooth(Commands):
     def _on_message(self, msg: RoutableMessage) -> None:
         """Receive messages from the Tesla BLE data."""
 
-        if(msg.to_destination.routing_address != self._from_destination):
-            # Ignore ephemeral key broadcasts
+        if msg.to_destination.routing_address != self._from_destination:
+            LOGGER.debug("Ignoring broadcast message (not addressed to us)")
             return
 
         LOGGER.info(f"Received response: {msg}")
@@ -252,26 +254,46 @@ class VehicleBluetooth(Commands):
 
             # Empty the queue before sending the message
             while not self._queues[domain].empty():
-                msg = await self._queues[domain].get()
-                LOGGER.warning(f"Discarded message {msg}")
+                discarded = await self._queues[domain].get()
+                LOGGER.warning(f"Discarded message {discarded}")
 
             await self.connect_if_needed()
             assert self.client is not None
             await self.client.write_gatt_char(WRITE_UUID, payload, True)
 
             # Process the response
-            async with asyncio.timeout(timeout):
-                LOGGER.info(f"Waiting for response with {requires}")
-                while True:
-                    resp = await self._queues[domain].get()
-                    LOGGER.debug(f"Received message {resp}")
+            try:
+                async with asyncio.timeout(timeout):
+                    LOGGER.info(f"Waiting for response with {requires}")
+                    while True:
+                        resp = await self._queues[domain].get()
+                        LOGGER.debug(f"Received message {resp}")
 
-                    self.validate_msg(resp)
+                        self.validate_msg(resp)
 
-                    if resp.HasField(requires):
-                        return resp
-                    else:
-                        LOGGER.debug(f"Ignoring message since it does not contain the required field {requires}, {resp.HasField(requires)}")
+                        if resp.HasField(requires):
+                            return resp
+
+                        # ACK response: has our request_uuid but not the required field.
+                        # Some commands (e.g. RKE wake/lock) only return an ACK with no data.
+                        # Wait briefly for a follow-up data response before returning the ACK.
+                        if msg.uuid and resp.request_uuid == msg.uuid:
+                            LOGGER.debug("Received ACK for our request, waiting briefly for data follow-up")
+                            try:
+                                async with asyncio.timeout(2):
+                                    while True:
+                                        resp2 = await self._queues[domain].get()
+                                        LOGGER.debug(f"Received follow-up message {resp2}")
+                                        self.validate_msg(resp2)
+                                        if resp2.HasField(requires):
+                                            return resp2
+                            except TimeoutError:
+                                LOGGER.debug("No data follow-up, returning ACK response")
+                                return resp
+
+                        LOGGER.debug(f"Ignoring message without required field {requires}")
+            except TimeoutError as e:
+                raise BluetoothTimeout from e
 
     async def query_display_name(self, max_attempts: int = 5) -> str | None:
         """Read the device name via GATT characteristic if available"""
@@ -340,6 +362,7 @@ class VehicleBluetooth(Commands):
                 routing_address=self._from_destination
             ),
             protobuf_message_as_bytes=request.SerializeToString(),
+            uuid=randbytes(16),
         )
         resp = await self._send(msg, "protobuf_message_as_bytes", timeout)
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)

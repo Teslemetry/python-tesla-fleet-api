@@ -176,7 +176,7 @@ class Session:
         self.domain: Domain = domain
         self.counter: int = 0
         self.epoch: bytes | None = None
-        self.delta: int = 0
+        self.delta: int | None = None
         self.sharedKey: bytes | None = None
         self.hmac: bytes | None = None
         self.publicKey: bytes | None = None
@@ -184,7 +184,7 @@ class Session:
 
     @property
     def ready(self) -> bool:
-        return self.epoch is not None and self.hmac is not None and self.delta > 0
+        return self.epoch is not None and self.hmac is not None and self.delta is not None
 
     def update(self, sessionInfo: SessionInfo):
         """Update the session with new information"""
