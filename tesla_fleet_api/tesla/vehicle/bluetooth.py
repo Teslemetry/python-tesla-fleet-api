@@ -50,6 +50,8 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     RoutableMessage,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+    ClosureMoveRequest,
+    ClosureMoveType_E,
     FromVCSECMessage,
     InformationRequest,
     InformationRequestType,
@@ -294,6 +296,88 @@ class VehicleBluetooth(Commands):
                         LOGGER.debug(f"Ignoring message without required field {requires}")
             except TimeoutError as e:
                 raise BluetoothTimeout from e
+
+    # Group 12: VCSEC closures (Bluetooth-only for individual doors)
+
+    async def open_front_driver_door(self) -> dict[str, Any]:
+        """Opens the front driver door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    frontDriverDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_front_driver_door(self) -> dict[str, Any]:
+        """Closes the front driver door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    frontDriverDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
+    async def open_front_passenger_door(self) -> dict[str, Any]:
+        """Opens the front passenger door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    frontPassengerDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_front_passenger_door(self) -> dict[str, Any]:
+        """Closes the front passenger door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    frontPassengerDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
+    async def open_rear_driver_door(self) -> dict[str, Any]:
+        """Opens the rear driver door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearDriverDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_rear_driver_door(self) -> dict[str, Any]:
+        """Closes the rear driver door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearDriverDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
+    async def open_rear_passenger_door(self) -> dict[str, Any]:
+        """Opens the rear passenger door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearPassengerDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_rear_passenger_door(self) -> dict[str, Any]:
+        """Closes the rear passenger door."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearPassengerDoor=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
 
     async def query_display_name(self, max_attempts: int = 5) -> str | None:
         """Read the device name via GATT characteristic if available"""

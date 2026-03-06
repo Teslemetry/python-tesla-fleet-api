@@ -111,6 +111,55 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     NavigationRequest,
     NavigationSuperchargerRequest,
     NavigationWaypointsRequest,
+    # Group 1: Steering wheel heat level
+    StwHeatLevelAction,
+    # Group 2: General infotainment
+    HvacRecirculationAction,
+    DashcamSaveClipAction,
+    SetSuspensionLevelAction,
+    StartLightShowAction,
+    StopLightShowAction,
+    CancelSohTestAction,
+    # Group 3: Schedules
+    RemoveChargeScheduleAction,
+    RemovePreconditionScheduleAction,
+    BatchRemoveChargeSchedulesAction,
+    BatchRemovePreconditionSchedulesAction,
+    # Group 4: Powershare
+    SetPowershareFeatureAction,
+    SetPowershareRequestAction,
+    SetPowershareDischargeLimitAction,
+    # Group 5: Outlets & power feeds
+    SetOutletsOnOffAction,
+    SetOutletTimerAction,
+    SetOutletSocLimitAction,
+    SetPowerFeedOnOffAction,
+    SetPowerFeedTimerAction,
+    SetPowerFeedSocLimitAction,
+    # Group 6: Lighting
+    SetLightbarBrightnessAction,
+    SetLightbarMiddleAction,
+    SetLightbarDitchAction,
+    SetZoneLightRequestAction,
+    SetTrailerLightTestStartStopAction,
+    SetTruckBedLightAutoStateAction,
+    SetTruckBedLightBrightnessAction,
+    # Group 7: Tent mode
+    SetTentModeRequestAction,
+    # Group 8: Parental controls
+    ParentalControlsAction,
+    ParentalControlsClearPinAction,
+    ParentalControlsClearPinAdminAction,
+    ParentalControlsEnableSettingsAction,
+    ParentalControlsSetSpeedLimitAction,
+    # Group 9: Charge on solar
+    UpdateChargeOnSolarFeatureRequest,
+    GetChargeOnSolarFeatureRequest,
+    ChargeOnSolarFeature,
+    # Group 10: Navigation
+    NavigationGpsDestinationRequest,
+    # Group 11: Admin
+    VehicleControlResetPinToDriveAdminAction,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
     VehicleData,
@@ -131,6 +180,9 @@ from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
     Void,
     PreconditioningTimes,
     OffPeakChargingTimes,
+    StwHeatLevel,
+    ChargeSchedule,
+    PreconditionSchedule,
 )
 
 if TYPE_CHECKING:
@@ -167,6 +219,12 @@ CopActivationTemps = (
     ClimateState.CopActivationTemp.CopActivationTempHigh,
 )
 
+StwHeatLevels = (
+    StwHeatLevel.StwHeatLevel_Off,
+    StwHeatLevel.StwHeatLevel_Low,
+    StwHeatLevel.StwHeatLevel_High,
+)
+
 
 class Session:
     """A connect to a domain"""
@@ -184,7 +242,9 @@ class Session:
 
     @property
     def ready(self) -> bool:
-        return self.epoch is not None and self.hmac is not None and self.delta is not None
+        return (
+            self.epoch is not None and self.hmac is not None and self.delta is not None
+        )
 
     def update(self, sessionInfo: SessionInfo):
         """Update the session with new information"""
@@ -1061,7 +1121,7 @@ class Commands(ABC, Vehicle):
             case _:
                 raise ValueError(f"Invalid seat heater level: {seat_heater_level}")
 
-        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction(**heater_action_dict) # pyright: ignore[reportUnknownArgumentType]
+        heater_action = HvacSeatHeaterActions.HvacSeatHeaterAction(**heater_action_dict)  # pyright: ignore[reportUnknownArgumentType]
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1082,7 +1142,15 @@ class Commands(ABC, Vehicle):
         self, level: int
     ) -> dict[str, Any]:
         """Sets steering wheel heat level."""
-        raise NotImplementedError()
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    stwHeatLevelAction=StwHeatLevelAction(
+                        stw_heat_level=StwHeatLevels[level]
+                    )
+                )
+            )
+        )
 
     async def remote_steering_wheel_heater_request(self, on: bool) -> dict[str, Any]:
         """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
@@ -1431,7 +1499,9 @@ class Commands(ABC, Vehicle):
             Action(
                 vehicleAction=VehicleAction(
                     vehicleControlTriggerHomelinkAction=VehicleControlTriggerHomelinkAction(
-                        location=LatLong(latitude=lat, longitude=lon) if lat is not None and lon is not None else None,
+                        location=LatLong(latitude=lat, longitude=lon)
+                        if lat is not None and lon is not None
+                        else None,
                         token=token,
                     )
                 )
@@ -1507,3 +1577,580 @@ class Commands(ABC, Vehicle):
 
     # fleet_telemetry_config_get doesnt require signing
     # fleet_telemetry_config_delete doesnt require signing
+
+    # Group 2: New infotainment commands — general
+
+    async def set_recirculation(self, on: bool) -> dict[str, Any]:
+        """Sets HVAC recirculation mode on/off."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    hvacRecirculationAction=HvacRecirculationAction(on=on)
+                )
+            )
+        )
+
+    async def dashcam_save_clip(self) -> dict[str, Any]:
+        """Saves a dashcam clip."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    dashcamSaveClipAction=DashcamSaveClipAction()
+                )
+            )
+        )
+
+    async def set_suspension_level(self, level: int) -> dict[str, Any]:
+        """Sets the vehicle suspension level (1=entry, 2=low, 3=medium, 4=high, 5=very_high, 6=extract)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setSuspensionLevelAction=SetSuspensionLevelAction(
+                        suspension_level=level  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def start_light_show(
+        self,
+        show_index: int = 0,
+        start_time: int = 0,
+        volume: float = 0.0,
+        dance_moves: bool = False,
+    ) -> dict[str, Any]:
+        """Starts a light show."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    startLightShowAction=StartLightShowAction(
+                        show_index=show_index,
+                        start_time=start_time,
+                        volume=volume,
+                        dance_moves=dance_moves,
+                    )
+                )
+            )
+        )
+
+    async def stop_light_show(self) -> dict[str, Any]:
+        """Stops the current light show."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(stopLightShowAction=StopLightShowAction())
+            )
+        )
+
+    async def cancel_soh_test(self) -> dict[str, Any]:
+        """Cancels a State of Health test."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(cancelSohTestAction=CancelSohTestAction())
+            )
+        )
+
+    # Group 3: Schedule commands
+
+    async def add_charge_schedule(
+        self,
+        days_of_week: str | int,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        one_time: bool | None = None,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a schedule for vehicle charging."""
+        if not start_time and not end_time:
+            raise ValueError("Either start_time or end_time or both must be provided")
+        schedule = ChargeSchedule(
+            days_of_week=int(days_of_week),
+            enabled=enabled,
+            start_enabled=start_time is not None,
+            end_enabled=end_time is not None,
+            latitude=lat,
+            longitude=lon,
+        )
+        if start_time is not None:
+            schedule.start_time = start_time
+        if end_time is not None:
+            schedule.end_time = end_time
+        if one_time is not None:
+            schedule.one_time = one_time
+        if id is not None:
+            schedule.id = id
+        if name is not None:
+            schedule.name = name
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(addChargeScheduleAction=schedule))
+        )
+
+    async def remove_charge_schedule(self, id: int) -> dict[str, Any]:
+        """Removes the scheduled charging settings."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    removeChargeScheduleAction=RemoveChargeScheduleAction(id=id)
+                )
+            )
+        )
+
+    async def add_precondition_schedule(
+        self,
+        days_of_week: str | int,
+        enabled: bool,
+        lat: float,
+        lon: float,
+        precondition_time: int,
+        id: int | None = None,
+        one_time: bool | None = None,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Add or modify a preconditioning schedule."""
+        schedule = PreconditionSchedule(
+            days_of_week=int(days_of_week),
+            enabled=enabled,
+            precondition_time=precondition_time,
+            latitude=lat,
+            longitude=lon,
+        )
+        if one_time is not None:
+            schedule.one_time = one_time
+        if id is not None:
+            schedule.id = id
+        if name is not None:
+            schedule.name = name
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(addPreconditionScheduleAction=schedule))
+        )
+
+    async def remove_precondition_schedule(self, id: int) -> dict[str, Any]:
+        """Removes the scheduled precondition settings."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    removePreconditionScheduleAction=RemovePreconditionScheduleAction(
+                        id=id
+                    )
+                )
+            )
+        )
+
+    async def batch_remove_charge_schedules(
+        self, home: bool, work: bool, other: bool
+    ) -> dict[str, Any]:
+        """Batch removes charge schedules by location type."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    batchRemoveChargeSchedulesAction=BatchRemoveChargeSchedulesAction(
+                        home=home, work=work, other=other
+                    )
+                )
+            )
+        )
+
+    async def batch_remove_precondition_schedules(
+        self, home: bool, work: bool, other: bool
+    ) -> dict[str, Any]:
+        """Batch removes precondition schedules by location type."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    batchRemovePreconditionSchedulesAction=BatchRemovePreconditionSchedulesAction(
+                        home=home, work=work, other=other
+                    )
+                )
+            )
+        )
+
+    # Group 4: Cybertruck — powershare
+
+    async def set_powershare_feature(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the Powershare feature."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowershareFeatureAction=SetPowershareFeatureAction(
+                        powershare_feature_request=(
+                            SetPowershareFeatureAction.POWERSHARE_FEATURE_REQUEST_ON
+                            if on
+                            else SetPowershareFeatureAction.POWERSHARE_FEATURE_REQUEST_OFF
+                        )
+                    )
+                )
+            )
+        )
+
+    async def set_powershare_request(self, on: bool) -> dict[str, Any]:
+        """Enables or disables powershare."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowershareRequestAction=SetPowershareRequestAction(
+                        powershare_request=(
+                            SetPowershareRequestAction.POWERSHARE_REQUEST_ON
+                            if on
+                            else SetPowershareRequestAction.POWERSHARE_REQUEST_OFF
+                        )
+                    )
+                )
+            )
+        )
+
+    async def set_powershare_discharge_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the Powershare discharge limit percentage."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowershareDischargeLimitAction=SetPowershareDischargeLimitAction(
+                        powershare_discharge_limit=percent
+                    )
+                )
+            )
+        )
+
+    # Group 5: Cybertruck — outlets & power feeds
+
+    async def set_outlets(self, request: int) -> dict[str, Any]:
+        """Sets outlets on/off (0=off, 1=cabin+bed, 2=cabin)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setOutletsOnOffAction=SetOutletsOnOffAction(outlet_request=request)  # pyright: ignore[reportArgumentType]
+                )
+            )
+        )
+
+    async def set_outlet_timer(self, num_minutes: int) -> dict[str, Any]:
+        """Sets the outlet timer in minutes."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setOutletTimerAction=SetOutletTimerAction(num_minutes=num_minutes)
+                )
+            )
+        )
+
+    async def set_outlet_soc_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the outlet SOC limit percentage."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setOutletSocLimitAction=SetOutletSocLimitAction(percent=percent)
+                )
+            )
+        )
+
+    async def set_power_feed(self, request: int) -> dict[str, Any]:
+        """Sets power feed on/off (0=off, 1=feed1, 2=feed2, 3=both)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowerFeedOnOffAction=SetPowerFeedOnOffAction(
+                        power_feed_request=request  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_power_feed_timer(self, num_minutes: int) -> dict[str, Any]:
+        """Sets the power feed timer in minutes."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowerFeedTimerAction=SetPowerFeedTimerAction(
+                        num_minutes=num_minutes
+                    )
+                )
+            )
+        )
+
+    async def set_power_feed_soc_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the power feed SOC limit percentage."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setPowerFeedSocLimitAction=SetPowerFeedSocLimitAction(
+                        percent=percent
+                    )
+                )
+            )
+        )
+
+    # Group 6: Cybertruck — lighting
+
+    async def set_lightbar_brightness(self, brightness: int) -> dict[str, Any]:
+        """Sets the lightbar brightness."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setLightbarBrightnessAction=SetLightbarBrightnessAction(
+                        brightness_request=brightness
+                    )
+                )
+            )
+        )
+
+    async def set_lightbar_middle(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the lightbar middle light."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setLightbarMiddleAction=SetLightbarMiddleAction(
+                        middle_light_request=on
+                    )
+                )
+            )
+        )
+
+    async def set_lightbar_ditch(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the ditch lights."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setLightbarDitchAction=SetLightbarDitchAction(
+                        ditch_lights_request=on
+                    )
+                )
+            )
+        )
+
+    async def set_front_zone_lights(self, level: int) -> dict[str, Any]:
+        """Sets front zone light level (0=off, 1=low, 2=med, 3=high)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setFrontZoneLightRequestAction=SetZoneLightRequestAction(
+                        zone_light_request=level  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_rear_zone_lights(self, level: int) -> dict[str, Any]:
+        """Sets rear zone light level (0=off, 1=low, 2=med, 3=high)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setRearZoneLightRequestAction=SetZoneLightRequestAction(
+                        zone_light_request=level  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_trailer_light_test(self, on: bool) -> dict[str, Any]:
+        """Starts or stops trailer light test."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTrailerLightTestStartStopAction=SetTrailerLightTestStartStopAction(
+                        start_stop=on
+                    )
+                )
+            )
+        )
+
+    async def set_truck_bed_light_auto(self, on: bool) -> dict[str, Any]:
+        """Sets truck bed light auto state."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTruckBedLightAutoStateAction=SetTruckBedLightAutoStateAction(
+                        power_state=on
+                    )
+                )
+            )
+        )
+
+    async def set_truck_bed_light_brightness(self, brightness: int) -> dict[str, Any]:
+        """Sets truck bed light brightness."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTruckBedLightBrightnessAction=SetTruckBedLightBrightnessAction(
+                        brightness=brightness
+                    )
+                )
+            )
+        )
+
+    # Group 7: Cybertruck — tent mode
+
+    async def set_tent_mode(self, on: bool) -> dict[str, Any]:
+        """Enables or disables tent mode."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTentModeRequestAction=SetTentModeRequestAction(on=on)
+                )
+            )
+        )
+
+    # Group 8: Parental controls
+
+    async def parental_controls(self, activate: bool, pin: str) -> dict[str, Any]:
+        """Activates or deactivates parental controls with PIN."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    parentalControlsAction=ParentalControlsAction(
+                        activate=activate, pin=pin
+                    )
+                )
+            )
+        )
+
+    async def parental_controls_clear_pin(self, pin: str) -> dict[str, Any]:
+        """Clears the parental controls PIN."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    parentalControlsClearPinAction=ParentalControlsClearPinAction(
+                        pin=pin
+                    )
+                )
+            )
+        )
+
+    async def parental_controls_clear_pin_admin(self) -> dict[str, Any]:
+        """Clears the parental controls PIN as admin (fleet manager/owner)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    parentalControlsClearPinAdminAction=ParentalControlsClearPinAdminAction()
+                )
+            )
+        )
+
+    async def parental_controls_enable_setting(
+        self, setting: int, enable: bool
+    ) -> dict[str, Any]:
+        """Enables or disables a parental controls setting (1=speed_limit, 2=acceleration, 3=safety_features, 4=curfew)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    parentalControlsEnableSettingsAction=ParentalControlsEnableSettingsAction(
+                        setting=setting,  # pyright: ignore[reportArgumentType]
+                        enable=enable,
+                    )
+                )
+            )
+        )
+
+    async def parental_controls_set_speed_limit(
+        self, limit_mph: float
+    ) -> dict[str, Any]:
+        """Sets the parental controls speed limit."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    parentalControlsSetSpeedLimitAction=ParentalControlsSetSpeedLimitAction(
+                        limit_mph=limit_mph
+                    )
+                )
+            )
+        )
+
+    # Group 9: Charge on solar
+
+    async def update_charge_on_solar(
+        self, enabled: bool, lower_charge_limit: float, upper_charge_limit: float
+    ) -> dict[str, Any]:
+        """Updates charge on solar feature settings."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    updateChargeOnSolarFeatureRequest=UpdateChargeOnSolarFeatureRequest(
+                        charge_on_solar=ChargeOnSolarFeature(
+                            enabled=enabled,
+                            lower_charge_limit=lower_charge_limit,
+                            upper_charge_limit=upper_charge_limit,
+                        )
+                    )
+                )
+            )
+        )
+
+    async def get_charge_on_solar(self) -> dict[str, Any]:
+        """Gets charge on solar feature settings."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getChargeOnSolarFeatureRequest=GetChargeOnSolarFeatureRequest()
+                )
+            )
+        )
+
+    # Group 10: Navigation
+
+    async def navigation_gps_destination_request(
+        self, lat: float, lon: float, destination: str, order: int
+    ) -> dict[str, Any]:
+        """Navigates to a GPS destination with a named destination string."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationGpsDestinationRequest=NavigationGpsDestinationRequest(
+                        lat=lat,
+                        lon=lon,
+                        destination=destination,
+                        order=order,  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    # Group 11: Admin
+
+    async def reset_pin_to_drive_admin(self) -> dict[str, Any]:
+        """Resets PIN to Drive as admin (fleet manager/owner). Requires firmware 2023.44+."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    vehicleControlResetPinToDriveAdminAction=VehicleControlResetPinToDriveAdminAction()
+                )
+            )
+        )
+
+    # Group 12: VCSEC — closures & RKE
+
+    async def open_tonneau(self) -> dict[str, Any]:
+        """Opens the tonneau cover."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    tonneau=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_tonneau(self) -> dict[str, Any]:
+        """Closes the tonneau cover."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    tonneau=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
+    async def stop_tonneau(self) -> dict[str, Any]:
+        """Stops the tonneau cover."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    tonneau=ClosureMoveType_E.CLOSURE_MOVE_TYPE_STOP
+                )
+            )
+        )
+
+    async def auto_secure_vehicle(self) -> dict[str, Any]:
+        """Auto secures the vehicle (locks, closes windows, etc.)."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_AUTO_SECURE_VEHICLE)
+        )

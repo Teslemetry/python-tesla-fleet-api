@@ -77,6 +77,39 @@ async def main():
 asyncio.run(main())
 ```
 
+## Open/Close Individual Doors (Bluetooth Only)
+
+The individual door closure commands are Bluetooth-only and are not available via Fleet API signed commands.
+
+Available commands:
+
+- `open_front_driver_door()`
+- `close_front_driver_door()`
+- `open_front_passenger_door()`
+- `close_front_passenger_door()`
+- `open_rear_driver_door()`
+- `close_rear_driver_door()`
+- `open_rear_passenger_door()`
+- `close_rear_passenger_door()`
+
+Example:
+
+```python
+import asyncio
+from tesla_fleet_api import TeslaBluetooth
+
+async def main():
+    tesla_bluetooth = TeslaBluetooth()
+    await tesla_bluetooth.get_private_key("path/to/private_key.pem")
+    vehicle = tesla_bluetooth.vehicles.create("<vin>")
+    await vehicle.connect()
+    await vehicle.open_front_driver_door()
+    await vehicle.close_front_driver_door()
+    await vehicle.disconnect()
+
+asyncio.run(main())
+```
+
 ## Get Vehicle Data
 
 You can get data from a `VehicleBluetooth` instance using the `vehicle_data` method. Here's a basic example to get data from a `VehicleBluetooth` instance:
