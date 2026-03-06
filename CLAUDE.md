@@ -10,14 +10,14 @@ Python library (`tesla_fleet_api`) providing async interfaces for Tesla Fleet AP
 
 ```bash
 # Install dependencies
-pip install -e .
+uv sync
 
 # Type checking (strict mode)
-pyright tesla_fleet_api
+uv run pyright tesla_fleet_api
 
 # Linting
-ruff check tesla_fleet_api
-ruff format tesla_fleet_api
+uv run ruff check tesla_fleet_api
+uv run ruff format tesla_fleet_api
 ```
 
 No test suite exists in this repo.
