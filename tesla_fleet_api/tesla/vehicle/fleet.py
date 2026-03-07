@@ -17,10 +17,11 @@ from tesla_fleet_api.const import (
 )
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
-DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_","-")
+DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_", "-")
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
+
 
 class VehicleFleet(Vehicle):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
@@ -29,9 +30,7 @@ class VehicleFleet(Vehicle):
         super().__init__(parent, vin)
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
-    async def actuate_trunk(
-        self, which_trunk: Trunk | str
-    ) -> dict[str, Any]:
+    async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
         """Controls the front or rear trunk."""
         return await self._request(
             Method.POST,
@@ -39,9 +38,7 @@ class VehicleFleet(Vehicle):
             json={"which_trunk": which_trunk},
         )
 
-    async def adjust_volume(
-        self, volume: float
-    ) -> dict[str, Any]:
+    async def adjust_volume(self, volume: float) -> dict[str, Any]:
         """Adjusts vehicle media playback volume."""
         if volume < 0.0 or volume > 11.0:
             raise ValueError("Volume must a number from 0.0 to 11.0")
@@ -115,7 +112,7 @@ class VehicleFleet(Vehicle):
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/clear_pin_to_drive_admin",
-            json={"pin": pin}
+            json={"pin": pin},
         )
 
     async def door_lock(self) -> dict[str, Any]:
@@ -204,7 +201,11 @@ class VehicleFleet(Vehicle):
         )
 
     async def navigation_request(
-        self, value: str, type: str = "share_ext_content_raw", locale: str | None = None, timestamp_ms: int | None = None
+        self,
+        value: str,
+        type: str = "share_ext_content_raw",
+        locale: str | None = None,
+        timestamp_ms: int | None = None,
     ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
         timestamp_ms = timestamp_ms or int(time() * 1000)
@@ -212,7 +213,12 @@ class VehicleFleet(Vehicle):
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/navigation_request",
-            json={"value": {"android.intent.extra.TEXT":value}, "type": type, "locale": locale, "timestamp_ms": timestamp_ms},
+            json={
+                "value": {"android.intent.extra.TEXT": value},
+                "type": type,
+                "locale": locale,
+                "timestamp_ms": timestamp_ms,
+            },
         )
 
     async def navigation_sc_request(
@@ -250,9 +256,7 @@ class VehicleFleet(Vehicle):
             json={"on": on},
         )
 
-    async def remote_boombox(
-        self, sound: int
-    ) -> dict[str, Any]:
+    async def remote_boombox(self, sound: int) -> dict[str, Any]:
         """Plays a sound through the vehicle external speaker."""
         return await self._request(
             Method.POST,
@@ -306,9 +310,7 @@ class VehicleFleet(Vehicle):
             json={"level": level},
         )
 
-    async def remote_steering_wheel_heater_request(
-        self, on: bool
-    ) -> dict[str, Any]:
+    async def remote_steering_wheel_heater_request(self, on: bool) -> dict[str, Any]:
         """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
         return await self._request(
             Method.POST,
@@ -329,9 +331,7 @@ class VehicleFleet(Vehicle):
             Method.POST, f"api/1/vehicles/{self.vin}/command/reset_valet_pin"
         )
 
-    async def schedule_software_update(
-        self, offset_sec: int
-    ) -> dict[str, Any]:
+    async def schedule_software_update(self, offset_sec: int) -> dict[str, Any]:
         """Schedules a vehicle software update (over the air "OTA") to be installed in the future."""
         return await self._request(
             Method.POST,
@@ -359,9 +359,7 @@ class VehicleFleet(Vehicle):
             json={"on": on, "fan_only": fan_only},
         )
 
-    async def set_charge_limit(
-        self, percent: int
-    ) -> dict[str, Any]:
+    async def set_charge_limit(self, percent: int) -> dict[str, Any]:
         """Sets the vehicle charge limit."""
         return await self._request(
             Method.POST,
@@ -369,9 +367,7 @@ class VehicleFleet(Vehicle):
             json={"percent": percent},
         )
 
-    async def set_charging_amps(
-        self, charging_amps: int
-    ) -> dict[str, Any]:
+    async def set_charging_amps(self, charging_amps: int) -> dict[str, Any]:
         """Sets the vehicle charging amps."""
         return await self._request(
             Method.POST,
@@ -399,9 +395,7 @@ class VehicleFleet(Vehicle):
             json={"cop_temp": cop_temp},
         )
 
-    async def set_pin_to_drive(
-        self, on: bool, password: str | int
-    ) -> dict[str, Any]:
+    async def set_pin_to_drive(self, on: bool, password: str | int) -> dict[str, Any]:
         """Sets a four-digit passcode for PIN to Drive. This PIN must then be entered before the vehicle can be driven."""
         return await self._request(
             Method.POST,
@@ -419,9 +413,7 @@ class VehicleFleet(Vehicle):
             json={"on": on, "manual_override": manual_override},
         )
 
-    async def set_scheduled_charging(
-        self, enable: bool, time: int
-    ) -> dict[str, Any]:
+    async def set_scheduled_charging(self, enable: bool, time: int) -> dict[str, Any]:
         """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
         return await self._request(
             Method.POST,
@@ -478,7 +470,7 @@ class VehicleFleet(Vehicle):
         self, on: bool, password: str | int | None = None
     ) -> dict[str, Any]:
         """Turns on Valet Mode and sets a four-digit passcode that must then be entered to disable Valet Mode."""
-        json_data: dict[str,Any] = {"on": on}
+        json_data: dict[str, Any] = {"on": on}
         if password is not None:
             json_data["password"] = str(password)
         return await self._request(
@@ -487,9 +479,7 @@ class VehicleFleet(Vehicle):
             json=json_data,
         )
 
-    async def set_vehicle_name(
-        self, vehicle_name: str
-    ) -> dict[str, Any]:
+    async def set_vehicle_name(self, vehicle_name: str) -> dict[str, Any]:
         """Changes the name of a vehicle. This command also requires the Tesla Vehicle Command Protocol - for more information, please see refer to the documentation here."""
         return await self._request(
             Method.POST,
@@ -497,9 +487,7 @@ class VehicleFleet(Vehicle):
             json={"vehicle_name": vehicle_name},
         )
 
-    async def speed_limit_activate(
-        self, pin: str | int
-    ) -> dict[str, Any]:
+    async def speed_limit_activate(self, pin: str | int) -> dict[str, Any]:
         """Activates Speed Limit Mode with a four-digit PIN."""
         return await self._request(
             Method.POST,
@@ -507,9 +495,7 @@ class VehicleFleet(Vehicle):
             json={"pin": str(pin)},
         )
 
-    async def speed_limit_clear_pin(
-        self, pin: str | int
-    ) -> dict[str, Any]:
+    async def speed_limit_clear_pin(self, pin: str | int) -> dict[str, Any]:
         """Deactivates Speed Limit Mode and resets the associated PIN."""
         return await self._request(
             Method.POST,
@@ -517,18 +503,14 @@ class VehicleFleet(Vehicle):
             json={"pin": str(pin)},
         )
 
-    async def speed_limit_clear_pin_admin(
-        self
-    ) -> dict[str, Any]:
+    async def speed_limit_clear_pin_admin(self) -> dict[str, Any]:
         """Deactivates Speed Limit Mode and resets the associated PIN for vehicles running firmware versions 2023.38+. This command is only accessible to fleet managers or owners."""
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/speed_limit_clear_pin_admin",
         )
 
-    async def speed_limit_deactivate(
-        self, pin: str | int
-    ) -> dict[str, Any]:
+    async def speed_limit_deactivate(self, pin: str | int) -> dict[str, Any]:
         """Deactivates Speed Limit Mode."""
         return await self._request(
             Method.POST,
@@ -536,9 +518,7 @@ class VehicleFleet(Vehicle):
             json={"pin": str(pin)},
         )
 
-    async def speed_limit_set_limit(
-        self, limit_mph: int
-    ) -> dict[str, Any]:
+    async def speed_limit_set_limit(self, limit_mph: int) -> dict[str, Any]:
         """Sets the maximum speed allowed when Speed Limit Mode is active."""
         return await self._request(
             Method.POST,
@@ -546,9 +526,7 @@ class VehicleFleet(Vehicle):
             json={"limit_mph": limit_mph},
         )
 
-    async def sun_roof_control(
-        self, state: str | SunRoofCommand
-    ) -> dict[str, Any]:
+    async def sun_roof_control(self, state: str | SunRoofCommand) -> dict[str, Any]:
         """Controls the panoramic sunroof on the Model S."""
         return await self._request(
             Method.POST,
@@ -583,10 +561,7 @@ class VehicleFleet(Vehicle):
             json=data,
         )
 
-    async def upcoming_calendar_entries(
-        self,
-        calendar_data: str
-    ) -> dict[str, Any]:
+    async def upcoming_calendar_entries(self, calendar_data: str) -> dict[str, Any]:
         """Upcoming calendar entries stored on the vehicle."""
         return await self._request(
             Method.POST,
@@ -607,12 +582,14 @@ class VehicleFleet(Vehicle):
             json={"lat": lat, "lon": lon, "command": command},
         )
 
-    async def drivers(self, ) -> dict[str, Any]:
+    async def drivers(
+        self,
+    ) -> dict[str, Any]:
         """Returns all allowed drivers for a vehicle. This endpoint is only available for the vehicle owner."""
         return await self._request(Method.GET, f"api/1/vehicles/{self.vin}/drivers")
 
     async def drivers_remove(
-        self,  share_user_id: str | int | None = None
+        self, share_user_id: str | int | None = None
     ) -> dict[str, Any]:
         """Removes driver access from a vehicle. Share users can only remove their own access. Owners can remove share access or their own."""
         return await self._request(
@@ -629,7 +606,9 @@ class VehicleFleet(Vehicle):
             Method.GET, "api/1/vehicles", {"page": page, "per_page": per_page}
         )
 
-    async def mobile_enabled(self, ) -> dict[str, Any]:
+    async def mobile_enabled(
+        self,
+    ) -> dict[str, Any]:
         """Returns whether or not mobile access is enabled for the vehicle."""
         return await self._request(
             Method.GET, f"api/1/vehicles/{self.vin}/mobile_enabled"
@@ -680,9 +659,7 @@ class VehicleFleet(Vehicle):
 
     async def share_invites(self) -> dict[str, Any]:
         """Returns the share invites for a vehicle."""
-        return await self._request(
-            Method.GET, f"api/1/vehicles/{self.vin}/invitations"
-        )
+        return await self._request(Method.GET, f"api/1/vehicles/{self.vin}/invitations")
 
     async def share_invites_create(self) -> dict[str, Any]:
         """Creates a share invite for a vehicle."""
@@ -696,17 +673,13 @@ class VehicleFleet(Vehicle):
             Method.POST, "api/1/invitations/redeem", {code: code}
         )
 
-    async def share_invites_revoke(
-        self, id: str
-    ) -> dict[str, Any]:
+    async def share_invites_revoke(self, id: str) -> dict[str, Any]:
         """Revokes a share invite."""
         return await self._request(
             Method.POST, f"api/1/vehicles/{self.vin}/invitations/{id}/revoke"
         )
 
-    async def signed_command(
-        self, routable_message: str
-    ) -> dict[str, Any]:
+    async def signed_command(self, routable_message: str) -> dict[str, Any]:
         """Signed Commands is a generic endpoint replacing legacy commands."""
         return await self._request(
             Method.POST,
@@ -714,12 +687,15 @@ class VehicleFleet(Vehicle):
             json={"routable_message": routable_message},
         )
 
-    async def vehicle(self, ) -> dict[str, Any]:
+    async def vehicle(
+        self,
+    ) -> dict[str, Any]:
         """Returns information about a vehicle."""
         return await self._request(Method.GET, f"api/1/vehicles/{self.vin}")
 
     async def vehicle_data(
-        self, endpoints: list[VehicleDataEndpoint | str] | None = None,
+        self,
+        endpoints: list[VehicleDataEndpoint | str] | None = None,
     ) -> dict[str, Any]:
         """Makes a live call to the vehicle. This may return cached data if the vehicle is offline. For vehicles running firmware versions 2023.38+, location_data is required to fetch vehicle location. This will result in a location sharing icon to show on the vehicle UI."""
         endpoint_payload = ";".join(endpoints) if endpoints else None
@@ -776,7 +752,6 @@ class VehicleFleet(Vehicle):
         one_time: bool | None = None,
         id: int | None = None,
         name: str | None = None,
-
     ) -> dict[str, Any]:
         """Add a schedule for vehicle charging."""
         if not start_time and not end_time:
@@ -805,7 +780,8 @@ class VehicleFleet(Vehicle):
         )
 
     async def add_precondition_schedule(
-        self,days_of_week: str | int,
+        self,
+        days_of_week: str | int,
         enabled: bool,
         lat: float,
         lon: float,
@@ -833,18 +809,38 @@ class VehicleFleet(Vehicle):
             json=json_payload,
         )
 
-    async def remove_charge_schedule(
-        self,  id: int
-    ) -> dict[str, Any]:
+    async def remove_charge_schedule(self, id: int) -> dict[str, Any]:
         """Removes the scheduled charging settings."""
         return await self._request(
-            Method.POST, f"api/1/vehicles/{self.vin}/command/remove_charge_schedule", json={"id": id}
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/command/remove_charge_schedule",
+            json={"id": id},
         )
 
-    async def remove_precondition_schedule(
-        self,  id: int
-    ) -> dict[str, Any]:
+    async def remove_precondition_schedule(self, id: int) -> dict[str, Any]:
         """Removes the scheduled precondition settings."""
         return await self._request(
-            Method.POST, f"api/1/vehicles/{self.vin}/command/remove_precondition_schedule", json={"id": id}
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/command/remove_precondition_schedule",
+            json={"id": id},
+        )
+
+    async def batch_remove_charge_schedules(
+        self, home: bool, work: bool, other: bool
+    ) -> dict[str, Any]:
+        """Batch removes charge schedules by location type."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/command/batch_remove_charge_schedules",
+            json={"home": home, "work": work, "other": other},
+        )
+
+    async def batch_remove_precondition_schedules(
+        self, home: bool, work: bool, other: bool
+    ) -> dict[str, Any]:
+        """Batch removes precondition schedules by location type."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/command/batch_remove_precondition_schedules",
+            json={"home": home, "work": work, "other": other},
         )
