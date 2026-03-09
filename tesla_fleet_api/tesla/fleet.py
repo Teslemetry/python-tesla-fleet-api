@@ -1,7 +1,8 @@
 """Tesla Fleet API for Python."""
 
+from collections.abc import Awaitable, Callable
 from json import dumps
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
