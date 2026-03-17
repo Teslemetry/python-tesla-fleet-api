@@ -180,7 +180,7 @@ class TeslaFleetApi(Tesla):
         self,
         client_id: str,
         client_secret: str,
-        scopes: list[Scope] = [Scope.VEHICLE_DEVICE_DATA],
+        scopes: list[Scope] = [Scope.OPENID],
     ) -> dict[str, Any]:
         """Generate a partner token using client credentials authentication.
 
