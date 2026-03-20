@@ -242,6 +242,7 @@ class Session:
 
     @property
     def ready(self) -> bool:
+        """Return whether the session has the handshake material needed to send commands."""
         return (
             self.epoch is not None and self.hmac is not None and self.delta is not None
         )
@@ -319,6 +320,7 @@ class Commands(ABC, Vehicle):
         )
 
     def shared_key(self, vehicleKey: bytes) -> bytes:
+        """Derive the 16-byte shared key used for signed-command session encryption."""
         exchange = self.private_key.exchange(
             ec.ECDH(),
             ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), vehicleKey),

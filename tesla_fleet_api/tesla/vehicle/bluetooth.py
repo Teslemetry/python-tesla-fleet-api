@@ -158,6 +158,7 @@ class ReassemblingBuffer:
                 return
 
     def discard_packet(self):
+        """Drop the current packet and resynchronize on the next candidate start byte."""
         self.packet_starts.pop(0)
         if len(self.packet_starts) > 0:
             self.buffer = self.buffer[self.packet_starts[0] :]
@@ -219,9 +220,11 @@ class VehicleBluetooth(Commands):
         return self.device
 
     def set_device(self, device: BLEDevice) -> None:
+        """Assign the BLE device that should be used for subsequent connections."""
         self.device = device
 
     def get_device(self) -> BLEDevice | None:
+        """Return the currently assigned BLE device, if one has been discovered."""
         return self.device
 
     async def connect(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
@@ -573,6 +576,7 @@ class VehicleBluetooth(Commands):
         )
 
     async def charge_state(self) -> ChargeState:
+        """Return the current charging state over the BLE vehicle data channel."""
         return (
             await self._getInfotainment(
                 Action(
@@ -584,6 +588,7 @@ class VehicleBluetooth(Commands):
         ).charge_state
 
     async def climate_state(self) -> ClimateState:
+        """Return the current HVAC and cabin climate state over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -595,6 +600,7 @@ class VehicleBluetooth(Commands):
         ).climate_state
 
     async def drive_state(self) -> DriveState:
+        """Return the current drive state, including gear and motion-related fields."""
         return (
             await self._getInfotainment(
                 Action(
@@ -606,6 +612,7 @@ class VehicleBluetooth(Commands):
         ).drive_state
 
     async def location_state(self) -> LocationState:
+        """Return the current location state reported over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -619,6 +626,7 @@ class VehicleBluetooth(Commands):
         ).location_state
 
     async def closures_state(self) -> ClosuresState:
+        """Return the current closures state for doors, trunks, and windows over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -632,6 +640,7 @@ class VehicleBluetooth(Commands):
         ).closures_state
 
     async def charge_schedule_state(self) -> ChargeScheduleState:
+        """Return the current scheduled charging configuration over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -645,6 +654,7 @@ class VehicleBluetooth(Commands):
         ).charge_schedule_state
 
     async def preconditioning_schedule_state(self) -> PreconditioningScheduleState:
+        """Return the current preconditioning schedule configuration over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -658,6 +668,7 @@ class VehicleBluetooth(Commands):
         ).preconditioning_schedule_state
 
     async def tire_pressure_state(self) -> TirePressureState:
+        """Return the current tire pressure state over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -671,6 +682,7 @@ class VehicleBluetooth(Commands):
         ).tire_pressure_state
 
     async def media_state(self) -> MediaState:
+        """Return the current media playback state over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -682,6 +694,7 @@ class VehicleBluetooth(Commands):
         ).media_state
 
     async def media_detail_state(self) -> MediaDetailState:
+        """Return detailed media metadata, such as track and source information, over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -695,6 +708,7 @@ class VehicleBluetooth(Commands):
         ).media_detail_state
 
     async def software_update_state(self) -> SoftwareUpdateState:
+        """Return the current software update status over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -708,6 +722,7 @@ class VehicleBluetooth(Commands):
         ).software_update_state
 
     async def parental_controls_state(self) -> ParentalControlsState:
+        """Return the current parental controls state over BLE."""
         return (
             await self._getInfotainment(
                 Action(
@@ -721,6 +736,7 @@ class VehicleBluetooth(Commands):
         ).parental_controls_state
 
     async def vehicle_state(self) -> VehicleStatus:
+        """Return the vehicle security-domain status over BLE."""
         return await self._getVehicleSecurity(
             UnsignedMessage(
                 InformationRequest=InformationRequest(
