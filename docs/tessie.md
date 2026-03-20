@@ -480,13 +480,13 @@ async def main():
         response = await vehicle.stop_steering_wheel_heater()
         print(response)
 
-        response = await vehicle.tessie_set_cabin_overheat_protection(mode="on")
+        response = await vehicle.tessie_set_cabin_overheat_protection(on=True)
         print(response)
 
-        response = await vehicle.tessie_set_cop_temp(temperature="low")
+        response = await vehicle.tessie_set_cop_temp(cop_temp=1)
         print(response)
 
-        response = await vehicle.tessie_set_bioweapon_mode(enable=True)
+        response = await vehicle.tessie_set_bioweapon_mode(on=True)
         print(response)
 
         response = await vehicle.tessie_set_climate_keeper_mode(mode=2)
@@ -584,7 +584,7 @@ async def main():
 ### Software Updates
 
 ```python
-        response = await vehicle.tessie_schedule_software_update(offset_seconds=3600)
+        response = await vehicle.tessie_schedule_software_update(in_seconds=3600)
         print(response)
 
         response = await vehicle.cancel_software_update()
@@ -609,13 +609,15 @@ async def main():
 
 ```python
         response = await vehicle.tessie_add_charge_schedule(
-            id=1,
+            days_of_week="Weekdays",
             enabled=True,
-            days_of_week="0111110",
-            start_time=360,
-            end_time=480,
+            start_enabled=True,
+            end_enabled=True,
             lat=37.7749,
             lon=-122.4194,
+            start_time=360,
+            end_time=480,
+            id=1,
         )
         print(response)
 
@@ -627,12 +629,12 @@ async def main():
 
 ```python
         response = await vehicle.tessie_add_precondition_schedule(
-            id=1,
+            days_of_week="Weekdays",
             enabled=True,
-            days_of_week="0111110",
-            precondition_time=420,
             lat=37.7749,
             lon=-122.4194,
+            precondition_time=420,
+            id=1,
         )
         print(response)
 

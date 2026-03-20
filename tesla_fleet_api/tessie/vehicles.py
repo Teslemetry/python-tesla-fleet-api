@@ -183,50 +183,72 @@ class TessieVehicle(VehicleFleet):
 
     async def tessie_set_cabin_overheat_protection(
         self,
-        mode: str,
+        on: bool,
+        fan_only: bool = False,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Configure overheat protection (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_cabin_overheat_protection",
-            params={"mode": mode, "wait_for_completion": wait_for_completion},
+            params={
+                "on": on,
+                "fan_only": fan_only,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def tessie_set_cop_temp(
         self,
-        temperature: str,
+        cop_temp: int,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Set overheat protection temperature (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_cop_temp",
-            params={"temperature": temperature, "wait_for_completion": wait_for_completion},
+            params={
+                "cop_temp": cop_temp,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def tessie_set_bioweapon_mode(
         self,
-        enable: bool,
+        on: bool,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Enable/disable defense mode (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_bioweapon_mode",
-            params={"enable": enable, "wait_for_completion": wait_for_completion},
+            params={
+                "on": on,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def tessie_set_climate_keeper_mode(
         self,
         mode: int,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Configure climate keeper (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_climate_keeper_mode",
-            params={"mode": mode, "wait_for_completion": wait_for_completion},
+            params={
+                "mode": mode,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def start_charging(
@@ -262,13 +284,18 @@ class TessieVehicle(VehicleFleet):
     async def tessie_set_charging_amps(
         self,
         amps: int,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Adjust charging amperage (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_charging_amps",
-            params={"amps": amps, "wait_for_completion": wait_for_completion},
+            params={
+                "amps": amps,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def open_charge_port(
@@ -308,13 +335,18 @@ class TessieVehicle(VehicleFleet):
         )
 
     async def tessie_trigger_homelink(
-        self, wait_for_completion: bool = True
+        self,
+        max_attempts: int = 3,
+        wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Activate HomeLink device (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/trigger_homelink",
-            params={"wait_for_completion": wait_for_completion},
+            params={
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def remote_start(self, wait_for_completion: bool = True) -> dict[str, Any]:
@@ -383,14 +415,19 @@ class TessieVehicle(VehicleFleet):
 
     async def tessie_schedule_software_update(
         self,
-        offset_seconds: int,
+        in_seconds: int,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Schedule update installation (Tessie API)."""
         return await self._request(
             Method.POST,
             f"{self.vin}/command/schedule_software_update",
-            params={"offset_seconds": offset_seconds, "wait_for_completion": wait_for_completion},
+            params={
+                "in_seconds": in_seconds,
+                "max_attempts": max_attempts,
+                "wait_for_completion": wait_for_completion,
+            },
         )
 
     async def cancel_software_update(
@@ -425,6 +462,7 @@ class TessieVehicle(VehicleFleet):
         off_peak_charging_enabled: bool = False,
         off_peak_charging_weekdays_only: bool = False,
         end_off_peak_time: int | None = None,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Configure scheduled departure (Tessie API)."""
@@ -435,6 +473,7 @@ class TessieVehicle(VehicleFleet):
             "preconditioning_weekdays_only": preconditioning_weekdays_only,
             "off_peak_charging_enabled": off_peak_charging_enabled,
             "off_peak_charging_weekdays_only": off_peak_charging_weekdays_only,
+            "max_attempts": max_attempts,
             "wait_for_completion": wait_for_completion,
         }
         if end_off_peak_time is not None:
@@ -447,29 +486,47 @@ class TessieVehicle(VehicleFleet):
 
     async def tessie_add_charge_schedule(
         self,
-        id: int,
-        enabled: bool,
         days_of_week: str,
-        start_time: int,
-        end_time: int,
+        enabled: bool,
+        start_enabled: bool,
+        end_enabled: bool,
         lat: float,
         lon: float,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        one_time: bool = False,
+        id: int | None = None,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Add new charging schedule (Tessie API)."""
+        if not start_enabled and not end_enabled:
+            raise ValueError("Either start_enabled or end_enabled must be True")
+        if start_enabled and start_time is None:
+            raise ValueError("start_time is required when start_enabled is True")
+        if end_enabled and end_time is None:
+            raise ValueError("end_time is required when end_enabled is True")
+        params: dict[str, Any] = {
+            "days_of_week": days_of_week,
+            "enabled": enabled,
+            "start_enabled": start_enabled,
+            "end_enabled": end_enabled,
+            "lat": lat,
+            "lon": lon,
+            "one_time": one_time,
+            "max_attempts": max_attempts,
+            "wait_for_completion": wait_for_completion,
+        }
+        if start_time is not None:
+            params["start_time"] = start_time
+        if end_time is not None:
+            params["end_time"] = end_time
+        if id is not None:
+            params["id"] = id
         return await self._request(
             Method.POST,
             f"{self.vin}/command/add_charge_schedule",
-            params={
-                "id": id,
-                "enabled": enabled,
-                "days_of_week": days_of_week,
-                "start_time": start_time,
-                "end_time": end_time,
-                "lat": lat,
-                "lon": lon,
-                "wait_for_completion": wait_for_completion,
-            },
+            params=params,
         )
 
     async def remove_charge_schedule(
@@ -486,27 +543,33 @@ class TessieVehicle(VehicleFleet):
 
     async def tessie_add_precondition_schedule(
         self,
-        id: int,
-        enabled: bool,
         days_of_week: str,
-        precondition_time: int,
+        enabled: bool,
         lat: float,
         lon: float,
+        precondition_time: int,
+        one_time: bool = False,
+        id: int | None = None,
+        max_attempts: int = 3,
         wait_for_completion: bool = True,
     ) -> dict[str, Any]:
         """Add preconditioning schedule (Tessie API)."""
+        params: dict[str, Any] = {
+            "days_of_week": days_of_week,
+            "enabled": enabled,
+            "lat": lat,
+            "lon": lon,
+            "precondition_time": precondition_time,
+            "one_time": one_time,
+            "max_attempts": max_attempts,
+            "wait_for_completion": wait_for_completion,
+        }
+        if id is not None:
+            params["id"] = id
         return await self._request(
             Method.POST,
             f"{self.vin}/command/add_precondition_schedule",
-            params={
-                "id": id,
-                "enabled": enabled,
-                "days_of_week": days_of_week,
-                "precondition_time": precondition_time,
-                "lat": lat,
-                "lon": lon,
-                "wait_for_completion": wait_for_completion,
-            },
+            params=params,
         )
 
     async def remove_precondition_schedule(

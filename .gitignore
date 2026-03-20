@@ -1,5 +1,7 @@
 test.py
 test*.py
+!tests/
+!tests/test_*.py
 register.py
 *.pyc
 __pycache__
