@@ -29,7 +29,7 @@ dependencies = [
 "Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
 
 [dependency-groups]
-dev = ["pyright>=1.1.399"]
+dev = ["mypy>=1.18.2", "types-aiofiles", "types-protobuf"]
 
 [tool.setuptools.packages.find]
 include = ["tesla_fleet_api*"]
@@ -40,7 +40,11 @@ tesla_fleet_api = ["py.typed"]
 [tool.ruff]
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
-[tool.pyright]
-include = ["tesla_fleet_api"]
-typeCheckingMode = "strict"
-exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
+[tool.mypy]
+files = ["tesla_fleet_api"]
+strict = true
+exclude = "^tesla_fleet_api/tesla/vehicle/proto/.*$"
+
+[[tool.mypy.overrides]]
+module = ["tesla_fleet_api.tesla.vehicle.proto.*"]
+ignore_errors = true
