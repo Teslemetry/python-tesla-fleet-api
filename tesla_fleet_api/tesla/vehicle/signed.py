@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 SignedParentT = TypeVar("SignedParentT", bound="TeslaFleetApi")
 
 
-class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generic[SignedParentT]):  # pyright: ignore[reportIncompatibleMethodOverride]
+class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generic[SignedParentT]):  # pyright: ignore[reportIncompatibleMethodOverride]  # type: ignore[misc]
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
 

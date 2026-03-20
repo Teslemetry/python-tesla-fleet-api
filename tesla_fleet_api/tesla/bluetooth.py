@@ -22,7 +22,7 @@ class TeslaBluetooth(Tesla):
 
     def __init__(
         self,
-    ):
+    ) -> None:
         """Initialize the Tesla Fleet API."""
 
         self.vehicles = self.Vehicles(self)

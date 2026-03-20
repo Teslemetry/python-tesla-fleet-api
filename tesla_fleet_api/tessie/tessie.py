@@ -37,7 +37,10 @@ class Tessie(TeslaFleetApi):
             Method.GET,
             "auth/tesla_scopes",
         )
-        return resp["scopes"]
+        scopes = resp.get("scopes")
+        if isinstance(scopes, list) and all(isinstance(scope, str) for scope in scopes):
+            return scopes
+        raise ValueError("Invalid scopes response")
 
     async def find_server(self) -> str:
         """Find the server URL for the Tesla Fleet API."""

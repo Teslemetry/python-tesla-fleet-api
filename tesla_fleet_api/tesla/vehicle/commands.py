@@ -40,6 +40,7 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     AutoStwHeatAction,
     BoomboxAction,
     DrivingClearSpeedLimitPinAdminAction,
+    OperationStatus_E as CarServerOperationStatus,
     Response,
 )
 from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
@@ -52,7 +53,7 @@ from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SignatureData,
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
-    OperationStatus_E,
+    OperationStatus_E as UniversalOperationStatus,
     Destination,
     Domain,
     RoutableMessage,
@@ -61,6 +62,7 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     FromVCSECMessage,
+    OperationStatus_E as VcsecOperationStatus,
     VehicleStatus,
 )
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
@@ -249,7 +251,7 @@ class Session(Generic[CommandParentT]):
             self.epoch is not None and self.hmac is not None and self.delta is not None
         )
 
-    def update(self, sessionInfo: SessionInfo):
+    def update(self, sessionInfo: SessionInfo) -> None:
         """Update the session with new information"""
 
         self.counter = sessionInfo.counter
@@ -382,7 +384,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         if (
             resp.signedMessageStatus.operation_status
-            == OperationStatus_E.OPERATIONSTATUS_WAIT
+            == UniversalOperationStatus.OPERATIONSTATUS_WAIT
         ):
             attempt += 1
             if attempt > 3:
@@ -477,12 +479,12 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     return {"response": vcsec.vehicleStatus}
                 elif (
                     vcsec.commandStatus.operationStatus
-                    == OperationStatus_E.OPERATIONSTATUS_OK
+                    == VcsecOperationStatus.OPERATIONSTATUS_OK
                 ):
                     return {"response": {"result": True, "reason": ""}}
                 elif (
                     vcsec.commandStatus.operationStatus
-                    == OperationStatus_E.OPERATIONSTATUS_WAIT
+                    == VcsecOperationStatus.OPERATIONSTATUS_WAIT
                 ):
                     attempt += 1
                     if attempt > 3:
@@ -495,7 +497,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     return await self._command(domain, command, attempt)
                 elif (
                     vcsec.commandStatus.operationStatus
-                    == OperationStatus_E.OPERATIONSTATUS_ERROR
+                    == VcsecOperationStatus.OPERATIONSTATUS_ERROR
                 ):
                     if resp.HasField("signedMessageStatus"):
                         exception = SIGNED_MESSAGE_INFORMATION_FAULTS[
@@ -526,7 +528,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     return {
                         "response": {
                             "result": response.actionStatus.result
-                            == OperationStatus_E.OPERATIONSTATUS_OK,
+                            == CarServerOperationStatus.OPERATIONSTATUS_OK,
                             "reason": response.actionStatus.result_reason.plain_text
                             or "",
                         }
@@ -656,7 +658,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         reply = await self._command(
             Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
         )
-        return reply["response"]
+        response = reply.get("response")
+        if isinstance(response, VehicleStatus):
+            return response
+        raise TypeError("Vehicle security response did not contain VehicleStatus")
 
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
@@ -669,7 +674,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         reply = await self._command(
             Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
         )
-        return reply["response"]
+        response = reply.get("response")
+        if isinstance(response, VehicleData):
+            return response
+        raise TypeError("Infotainment response did not contain VehicleData")
 
     async def handshakeVehicleSecurity(self) -> None:
         """Perform a handshake with the vehicle security domain."""
@@ -825,7 +833,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    async def clear_pin_to_drive_admin(self, pin: str | None = None):
+    async def clear_pin_to_drive_admin(self, pin: str | None = None) -> dict[str, Any]:
         """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
         return await self._sendInfotainment(
             Action(
@@ -943,23 +951,35 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def navigation_gps_request(
-        self, lat: float, lon: float, order: int
+        self, lat: float, lon: float, order: int | None = None
     ) -> dict[str, Any]:
         """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
+        resolved_order = (
+            NavigationGpsRequest.REMOTE_NAV_TRIP_ORDER_REPLACE
+            if order is None
+            else NavigationGpsRequest.RemoteNavTripOrder(order)
+        )
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     navigationGpsRequest=NavigationGpsRequest(
                         lat=lat,
                         lon=lon,
-                        order=NavigationGpsRequest.RemoteNavTripOrder(order),
+                        order=resolved_order,
                     )
                 )
             )
         )
 
-    async def navigation_request(self, value: str) -> dict[str, Any]:
+    async def navigation_request(
+        self,
+        value: str,
+        type: str = "share_ext_content_raw",
+        locale: str | None = None,
+        timestamp_ms: int | None = None,
+    ) -> dict[str, Any]:
         """Sends a location to the in-vehicle navigation system."""
+        _ = (type, locale, timestamp_ms)
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -968,13 +988,16 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    async def navigation_sc_request(self, order: int) -> dict[str, Any]:
+    async def navigation_sc_request(
+        self, id: int, order: int | None = None
+    ) -> dict[str, Any]:
         """Start navigation to a supercharger."""
+        resolved_order = id if order is None else order
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     navigationSuperchargerRequest=NavigationSuperchargerRequest(
-                        order=order
+                        order=resolved_order
                     )
                 )
             )
@@ -1610,12 +1633,14 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         """Sets the vehicle suspension level (1=entry, 2=low, 3=medium, 4=high, 5=very_high, 6=extract)."""
         return await self._sendInfotainment(
             Action(
-                vehicleAction=VehicleAction(
-                    setSuspensionLevelAction=SetSuspensionLevelAction(
-                        suspension_level=level  # pyright: ignore[reportArgumentType]
+                    vehicleAction=VehicleAction(
+                        setSuspensionLevelAction=SetSuspensionLevelAction(
+                            suspension_level=SetSuspensionLevelAction.SuspensionLevel(
+                                level
+                            )
+                        )
                     )
                 )
-            )
         )
 
     async def start_light_show(
@@ -1826,7 +1851,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
-                    setOutletsOnOffAction=SetOutletsOnOffAction(outlet_request=request)  # pyright: ignore[reportArgumentType]
+                    setOutletsOnOffAction=SetOutletsOnOffAction(
+                        outlet_request=SetOutletsOnOffAction.OutletRequest(request)
+                    )
                 )
             )
         )
@@ -1857,7 +1884,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     setPowerFeedOnOffAction=SetPowerFeedOnOffAction(
-                        power_feed_request=request  # pyright: ignore[reportArgumentType]
+                        power_feed_request=SetPowerFeedOnOffAction.PowerFeedRequest(
+                            request
+                        )
                     )
                 )
             )
@@ -1931,7 +1960,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     setFrontZoneLightRequestAction=SetZoneLightRequestAction(
-                        zone_light_request=level  # pyright: ignore[reportArgumentType]
+                        zone_light_request=SetZoneLightRequestAction.ZoneLightRequest(
+                            level
+                        )
                     )
                 )
             )
@@ -1943,7 +1974,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     setRearZoneLightRequestAction=SetZoneLightRequestAction(
-                        zone_light_request=level  # pyright: ignore[reportArgumentType]
+                        zone_light_request=SetZoneLightRequestAction.ZoneLightRequest(
+                            level
+                        )
                     )
                 )
             )
@@ -2041,7 +2074,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     parentalControlsEnableSettingsAction=ParentalControlsEnableSettingsAction(
-                        setting=setting,  # pyright: ignore[reportArgumentType]
+                        setting=ParentalControlsEnableSettingsAction.ParentalControlsSetting(
+                            setting
+                        ),
                         enable=enable,
                     )
                 )
@@ -2105,7 +2140,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                         lat=lat,
                         lon=lon,
                         destination=destination,
-                        order=order,  # pyright: ignore[reportArgumentType]
+                        order=NavigationGpsDestinationRequest.RemoteNavTripOrder(order),
                     )
                 )
             )

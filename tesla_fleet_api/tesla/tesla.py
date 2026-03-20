@@ -1,6 +1,7 @@
 """Tesla Fleet API for Python."""
 
 from os.path import exists
+from typing import Any
 import aiofiles
 
 from tesla_fleet_api.tesla.charging import Charging
@@ -21,7 +22,7 @@ class Tesla:
     EnergySites = EnergySites
     Partner = Partner
     User = User
-    Vehicles = Vehicles
+    Vehicles: type[Any] = Vehicles
 
     private_key: ec.EllipticCurvePrivateKey | None = None
 

@@ -114,7 +114,7 @@ class ReassemblingBuffer:
         self.packet_starts: list[int] = []
         self.callback = callback
 
-    def receive_data(self, data: bytearray):
+    def receive_data(self, data: bytearray) -> None:
         """
         Receives a chunk of bytearray data and attempts to assemble a complete message.
 
@@ -159,7 +159,7 @@ class ReassemblingBuffer:
             else:
                 return
 
-    def discard_packet(self):
+    def discard_packet(self) -> None:
         """Drop the current packet and resynchronize on the next candidate start byte."""
         self.packet_starts.pop(0)
         if len(self.packet_starts) > 0:
@@ -188,7 +188,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-    ):
+    ) -> None:
         super().__init__(parent, vin, key)
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
@@ -450,6 +450,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 )
             except Exception as e:
                 LOGGER.error(f"Failed to read device name: {e}")
+        return None
 
     async def query_appearance(self) -> bytearray | None:
         """Read the device appearance via GATT characteristic if available"""
@@ -488,7 +489,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         role: Role = Role.ROLE_OWNER,
         form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY,
         timeout: int = 60,
-    ):
+    ) -> None:
         """Pair the key."""
 
         request = UnsignedMessage(
@@ -523,7 +524,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 )
         return
 
-    async def wake_up(self):
+    async def wake_up(self) -> dict[str, Any]:
         """Wake up the vehicle."""
         return await self._sendVehicleSecurity(
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)

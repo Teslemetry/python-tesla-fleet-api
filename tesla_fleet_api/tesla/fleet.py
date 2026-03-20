@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from json import dumps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from tesla_fleet_api.tesla.energysite import EnergySites
     from tesla_fleet_api.tesla.partner import Partner
     from tesla_fleet_api.tesla.user import User
-    from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 
 
 def _normalize_query_value(value: Any) -> Any:
@@ -44,7 +43,7 @@ class TeslaFleetApi(Tesla):
     energySites: "EnergySites"
     user: "User"
     partner: "Partner"
-    vehicles: "Vehicles[TeslaFleetApi]"
+    vehicles: Any
 
     def __init__(
         self,
@@ -91,10 +90,16 @@ class TeslaFleetApi(Tesla):
             try:
                 region_response = await self.user.region()
                 response = region_response.get("response")
-                if response:
-                    self.server = response["fleet_api_base_url"]
+                if isinstance(response, dict):
+                    fleet_api_base_url = response.get("fleet_api_base_url")
+                    region = response.get("region")
+                    if not isinstance(fleet_api_base_url, str) or not isinstance(
+                        region, str
+                    ):
+                        continue
+                    self.server = fleet_api_base_url
                     LOGGER.debug("Using server %s", self.server)
-                    return response["region"]
+                    return region
             except InvalidRegion:
                 continue
         raise LibraryError("Could not find a valid Tesla API server.")
@@ -168,8 +173,10 @@ class TeslaFleetApi(Tesla):
                 raise ResponseError(status=resp.status, data=await resp.text())
 
             data = await resp.json()
+            if not isinstance(data, dict):
+                raise ResponseError(status=resp.status, data=str(data))
             LOGGER.debug("Response JSON: %s", data)
-            return data
+            return cast(dict[str, Any], data)
 
     async def status(self) -> str:
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
@@ -221,9 +228,14 @@ class TeslaFleetApi(Tesla):
         ) as resp:
             if resp.ok:
                 token_data = await resp.json()
+                if not isinstance(token_data, dict):
+                    raise ResponseError(status=resp.status, data=str(token_data))
+                access_token = token_data.get("access_token")
+                if not isinstance(access_token, str):
+                    raise ValueError("Partner login response did not include access_token")
                 # Set the access token for subsequent API calls
-                self._access_token = token_data["access_token"]
-                return token_data
+                self._access_token = access_token
+                return cast(dict[str, Any], token_data)
             else:
                 error_data = await resp.json()
                 raise ValueError(f"Partner login failed: {error_data}")
