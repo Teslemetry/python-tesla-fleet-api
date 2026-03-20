@@ -109,7 +109,7 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
             Method.POST, f"api/1/vehicles/{self.vin}/command/charge_stop"
         )
 
-    async def clear_pin_to_drive_admin(self, pin: str | None = None):
+    async def clear_pin_to_drive_admin(self, pin: str | None = None) -> dict[str, Any]:
         """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
         return await self._request(
             Method.POST,
