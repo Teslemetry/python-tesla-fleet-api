@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 import struct
 from random import randbytes
-from typing import Any, TYPE_CHECKING, ClassVar, Literal
+from typing import Any, TYPE_CHECKING, ClassVar, Generic, Literal, TypeVar
 import time
 import hmac
 import hashlib
@@ -188,6 +188,8 @@ from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
 
+CommandParentT = TypeVar("CommandParentT", bound="Tesla")
+
 # ENUMs to convert ints to proto typed ints
 AutoSeatClimatePositions = (
     AutoSeatClimateAction.AutoSeatPosition_FrontLeft,
@@ -226,11 +228,11 @@ StwHeatLevels = (
 )
 
 
-class Session:
+class Session(Generic[CommandParentT]):
     """A connect to a domain"""
 
-    def __init__(self, parent: Commands, domain: Domain):
-        self.parent: Commands = parent
+    def __init__(self, parent: Commands[CommandParentT], domain: Domain):
+        self.parent: Commands[CommandParentT] = parent
         self.domain: Domain = domain
         self.counter: int = 0
         self.epoch: bytes | None = None
@@ -262,6 +264,7 @@ class Session:
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
+        assert self.delta is not None
         self.counter += 1
         return HMAC_Personalized_Signature_Data(
             epoch=self.epoch,
@@ -272,6 +275,7 @@ class Session:
 
     def aes_gcm_personalized(self) -> AES_GCM_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
+        assert self.delta is not None
         self.counter += 1
         return AES_GCM_Personalized_Signature_Data(
             epoch=self.epoch,
@@ -282,18 +286,18 @@ class Session:
         )
 
 
-class Commands(ABC, Vehicle):
+class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     private_key: ec.EllipticCurvePrivateKey
     _public_key: bytes
     _from_destination: bytes
-    _sessions: dict[int, Session]
+    _sessions: dict[int, Session[CommandParentT]]
     _auth_method: ClassVar[Literal["hmac", "aes"]]
 
     def __init__(
         self,
-        parent: Tesla,
+        parent: CommandParentT,
         vin: str,
         private_key: ec.EllipticCurvePrivateKey | None = None,
         public_key: bytes | None = None,
@@ -531,7 +535,7 @@ class Commands(ABC, Vehicle):
         return {"response": {"result": True, "reason": ""}}
 
     async def _commandHmac(
-        self, session: Session, command: bytes, attempt: int = 1
+        self, session: Session[CommandParentT], command: bytes, attempt: int = 1
     ) -> RoutableMessage:
         """Create a signed message."""
         LOGGER.debug(f"Sending HMAC to domain {Domain.Name(session.domain)}")
@@ -583,7 +587,7 @@ class Commands(ABC, Vehicle):
         )
 
     async def _commandAes(
-        self, session: Session, command: bytes, attempt: int = 1
+        self, session: Session[CommandParentT], command: bytes, attempt: int = 1
     ) -> RoutableMessage:
         """Create an encrypted message."""
         LOGGER.debug(f"Sending AES to domain {Domain.Name(session.domain)}")

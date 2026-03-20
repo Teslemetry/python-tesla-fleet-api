@@ -1,4 +1,5 @@
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import aiohttp
@@ -14,7 +15,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
     refresh_token: str | None
     redirect_uri: str | None
     _client_secret: str | None
-    _access_token: str | None
+    _access_token: str | Callable[[], Awaitable[str | None]] | None
 
     def __init__(
         self,
@@ -90,7 +91,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         """Get the access token."""
         if self.expires < time.time():
             await self.refresh_access_token()
-        if self._access_token:
+        if self._access_token and not callable(self._access_token):
             return self._access_token
         raise ValueError("Access token is missing")
 

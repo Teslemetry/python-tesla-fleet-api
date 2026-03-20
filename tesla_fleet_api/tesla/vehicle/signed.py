@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.commands import Commands
@@ -12,14 +12,16 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
+SignedParentT = TypeVar("SignedParentT", bound="TeslaFleetApi")
 
-class VehicleSigned(Commands, VehicleFleet):  # pyright: ignore[reportIncompatibleMethodOverride]
+
+class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generic[SignedParentT]):  # pyright: ignore[reportIncompatibleMethodOverride]
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
 
     _auth_method = "hmac"
 
-    def __init__(self, parent: TeslaFleetApi, vin: str):
+    def __init__(self, parent: SignedParentT, vin: str):
         """Initialize the VehicleSigned class."""
         super().__init__(parent, vin)
         super(Commands, self).__init__(parent, vin)

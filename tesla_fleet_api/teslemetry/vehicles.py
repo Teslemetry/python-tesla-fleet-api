@@ -8,10 +8,13 @@ from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.const import LOGGER
 
 if TYPE_CHECKING:
-    pass
+    from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
-class TeslemetryVehicle(VehicleFleet):
+
+class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
     """Teslemetry specific API vehicle."""
+
+    parent: Teslemetry
 
     async def server_side_polling(
         self, value: bool | None = None
@@ -280,9 +283,10 @@ class TeslemetryVehicle(VehicleFleet):
         )
 
 
-class TeslemetryVehicles(Vehicles):
+class TeslemetryVehicles(Vehicles["Teslemetry"]):
     """Class containing and creating vehicles."""
 
+    _parent: Teslemetry
     Vehicle = TeslemetryVehicle
 
     def create(self, vin: str) -> TeslemetryVehicle:

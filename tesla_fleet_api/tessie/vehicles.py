@@ -1,13 +1,18 @@
 from __future__ import annotations
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 from tesla_fleet_api.const import Method
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 
+if TYPE_CHECKING:
+    from tesla_fleet_api.tessie.tessie import Tessie
 
-class TessieVehicle(VehicleFleet):
+
+class TessieVehicle(VehicleFleet["Tessie"]):
     """Tessie specific API vehicle."""
+
+    parent: Tessie
 
     def _command_params(
         self,
@@ -15,23 +20,16 @@ class TessieVehicle(VehicleFleet):
         max_attempts: int | None = None,
         **params: Any,
     ) -> dict[str, Any]:
-        default_wait_for_completion = cast(
-            bool, getattr(self.parent, "wait_for_completion", True)
-        )
-        default_max_attempts = cast(
-            int | None, getattr(self.parent, "max_attempts", 3)
-        )
         data: dict[str, Any] = {
-            "wait_for_completion": default_wait_for_completion
+            "wait_for_completion": self.parent.wait_for_completion
             if wait_for_completion is None
             else wait_for_completion,
             **params,
         }
-        resolved_max_attempts: int | None = (
-            default_max_attempts if max_attempts is None else max_attempts
+        resolved_max_attempts = (
+            self.parent.max_attempts if max_attempts is None else max_attempts
         )
-        if resolved_max_attempts is not None:
-            data["max_attempts"] = resolved_max_attempts
+        data["max_attempts"] = resolved_max_attempts
         return data
 
     async def wake(self, wait_for_completion: bool | None = None) -> dict[str, Any]:
@@ -1182,9 +1180,10 @@ class TessieVehicle(VehicleFleet):
             payload["state"] = state
         return await self._request(Method.POST, f"{self.vin}/plate", json=payload)
 
-class TessieVehicles(Vehicles):
+class TessieVehicles(Vehicles["Tessie"]):
     """Class containing and creating vehicles."""
 
+    _parent: Tessie
     Vehicle = TessieVehicle
 
     def create(self, vin: str) -> TessieVehicle:

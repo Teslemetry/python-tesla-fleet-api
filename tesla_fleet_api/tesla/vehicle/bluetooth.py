@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import struct
 from random import randbytes
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -85,6 +85,8 @@ APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
+
+BluetoothParentT = TypeVar("BluetoothParentT", bound="Tesla")
 
 
 def prependLength(message: bytes) -> bytearray:
@@ -169,7 +171,7 @@ class ReassemblingBuffer:
         self.expected_length = None
 
 
-class VehicleBluetooth(Commands):
+class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     ble_name: str
@@ -182,7 +184,7 @@ class VehicleBluetooth(Commands):
 
     def __init__(
         self,
-        parent: Tesla,
+        parent: BluetoothParentT,
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
@@ -255,7 +257,7 @@ class VehicleBluetooth(Commands):
                 LOGGER.info(f"Reconnecting to {self.ble_name}")
                 await self.connect(max_attempts=max_attempts)
 
-    async def __aenter__(self) -> VehicleBluetooth:
+    async def __aenter__(self) -> VehicleBluetooth[BluetoothParentT]:
         """Enter the async context."""
         await self.connect()
         return self

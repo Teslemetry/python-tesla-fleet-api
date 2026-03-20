@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
+
+ParentT = TypeVar("ParentT", bound="Tesla")
 
 MODELS = {
     "S": "Model S",
@@ -14,13 +17,13 @@ MODELS = {
     "T": "Semi",
 }
 
-class Vehicle:
+class Vehicle(Generic[ParentT]):
     """Base class describing a Tesla vehicle."""
 
     vin: str
-    parent: Tesla
+    parent: ParentT
 
-    def __init__(self, parent: Tesla, vin: str):
+    def __init__(self, parent: ParentT, vin: str):
         self.vin = vin
         self.parent = parent
 

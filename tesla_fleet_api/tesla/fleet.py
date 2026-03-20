@@ -37,7 +37,7 @@ class TeslaFleetApi(Tesla):
     energySites: "EnergySites"
     user: "User"
     partner: "Partner"
-    vehicles: "Vehicles"
+    vehicles: "Vehicles[TeslaFleetApi]"
 
     def __init__(
         self,

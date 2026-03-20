@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from locale import getlocale
 from time import time
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, Generic, List, TypeVar
 
 from tesla_fleet_api.const import (
     CabinOverheatProtectionTemp,
@@ -22,11 +22,13 @@ DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_", "-")
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
+FleetParentT = TypeVar("FleetParentT", bound="TeslaFleetApi")
 
-class VehicleFleet(Vehicle):
+
+class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
 
-    def __init__(self, parent: TeslaFleetApi, vin: str):
+    def __init__(self, parent: FleetParentT, vin: str):
         super().__init__(parent, vin)
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
