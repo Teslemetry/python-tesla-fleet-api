@@ -31,7 +31,7 @@ class StrEnum(str, Enum):
     """String Enum."""
 
     def __str__(self) -> str:
-        return self.value
+        return str(self.value)
 
 
 class Method(StrEnum):
