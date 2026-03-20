@@ -25,6 +25,13 @@ if TYPE_CHECKING:
     from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 
 
+def _normalize_query_value(value: Any) -> Any:
+    """Serialize query values into forms accepted by aiohttp/yarl."""
+    if isinstance(value, bool):
+        return str(value).lower()
+    return value
+
+
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
@@ -127,7 +134,9 @@ class TeslaFleetApi(Tesla):
 
         # Remove None values from params and json
         if params:
-            params = {k: v for k, v in params.items() if v is not None}
+            params = {
+                k: _normalize_query_value(v) for k, v in params.items() if v is not None
+            }
             LOGGER.debug("Parameters: %s", params)
         if json:
             json = {k: v for k, v in json.items() if v is not None}
