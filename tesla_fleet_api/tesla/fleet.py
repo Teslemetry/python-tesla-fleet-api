@@ -219,11 +219,10 @@ class TeslaFleetApi(Tesla):
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             data=data,
         ) as resp:
-            if resp.ok:
-                token_data = await resp.json()
-                # Set the access token for subsequent API calls
-                self._access_token = token_data["access_token"]
-                return token_data
-            else:
-                error_data = await resp.json()
-                raise ValueError(f"Partner login failed: {error_data}")
+            if not resp.ok:
+                await raise_for_status(resp)
+
+            token_data = await resp.json()
+            # Set the access token for subsequent API calls
+            self._access_token = token_data["access_token"]
+            return token_data

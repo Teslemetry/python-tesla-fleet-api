@@ -179,6 +179,14 @@ class Forbidden(TeslaFleetError):
     key = "Unauthorized missing scopes"
 
 
+class InvalidScope(TeslaFleetError):
+    """The requested scopes are not granted."""
+
+    message = "The requested scopes are not granted."
+    status = 403
+    key = "invalid_scope"
+
+
 class UnsupportedVehicle(TeslaFleetError):
     """The vehicle is unsupported."""
 
@@ -1079,8 +1087,9 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                 raise exception(data)
         raise PaymentRequired(data)
     elif resp.status == 403:
-        if error == UnsupportedVehicle.key:
-            raise UnsupportedVehicle(data)
+        for exception in [InvalidScope, UnsupportedVehicle]:
+            if error == exception.key:
+                raise exception(data)
         raise Forbidden(data)
     elif resp.status == 404:
         raise NotFound(data)
