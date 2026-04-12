@@ -4,6 +4,7 @@ from tesla_fleet_api.const import (
     Method,
     EnergyOperationMode,
     EnergyExportMode,
+    EnergyIslandMode,
     TeslaEnergyPeriod,
     EnergyDeviceIdentifierType,
 )
@@ -82,6 +83,42 @@ class EnergySite:
     async def cancel_backup_event(self) -> dict[str, Any]:
         """Cancel a scheduled manual backup event on the energy gateway."""
         return await self._command("teg", "cancel_manual_backup_event_request")
+
+    async def set_island_mode(
+        self,
+        mode: EnergyIslandMode | int,
+    ) -> dict[str, Any]:
+        """Set the island mode on the energy gateway.
+
+        Physically opens or closes the grid contactor on Powerwall 2/3.
+        Requires the command to be sent as a signed RoutableMessage via
+        the ``device_command`` endpoint — unsigned ``grpc_command`` calls
+        are accepted but do not physically operate the contactor on PW3.
+
+        Args:
+            mode: EnergyIslandMode.OFF_GRID (6) to island,
+                  EnergyIslandMode.ON_GRID (1) to reconnect.
+        """
+        return await self._command(
+            "teg",
+            "set_island_mode_request",
+            {"mode": int(mode), "force": False},
+        )
+
+    async def go_off_grid(self) -> dict[str, Any]:
+        """Physically disconnect from the grid (open contactor).
+
+        Convenience wrapper around set_island_mode(OFF_GRID).
+        Causes an inverter restart (~30s solar dropout).
+        """
+        return await self.set_island_mode(EnergyIslandMode.OFF_GRID)
+
+    async def reconnect_grid(self) -> dict[str, Any]:
+        """Reconnect to the grid (close contactor).
+
+        Convenience wrapper around set_island_mode(ON_GRID).
+        """
+        return await self.set_island_mode(EnergyIslandMode.ON_GRID)
 
     async def backup(self, backup_reserve_percent: int) -> dict[str, Any]:
         """Adjust the site's backup reserve."""

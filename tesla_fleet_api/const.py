@@ -181,6 +181,18 @@ class TeslaEnergyPeriod(StrEnum):
     LIFETIME = "lifetime"
 
 
+class EnergyIslandMode(IntEnum):
+    """Island mode values for setIslandModeRequest.
+
+    Discovered via mitmproxy capture of the Tesla mobile app.
+    Mode 6 physically opens the grid contactor (off-grid).
+    Mode 1 physically closes it (reconnect / on-grid).
+    """
+
+    ON_GRID = 1
+    OFF_GRID = 6
+
+
 class EnergyDeviceIdentifierType(IntEnum):
     """Identifier type for energy device gRPC commands."""
 
