@@ -184,9 +184,15 @@ class TeslaEnergyPeriod(StrEnum):
 class EnergyIslandMode(IntEnum):
     """Island mode values for setIslandModeRequest.
 
-    Discovered via mitmproxy capture of the Tesla mobile app.
-    Mode 6 physically opens the grid contactor (off-grid).
-    Mode 1 physically closes it (reconnect / on-grid).
+    Discovered via mitmproxy capture of the Tesla mobile app and
+    confirmed on PW2 (firmware 26.10.0) and PW3 (firmware 26.2.1).
+
+    Mode 6 physically opens the grid contactor (off-grid) when sent
+    with force=True. Mode 1 physically closes it (reconnect / on-grid).
+
+    Note: mode=2 (previously assumed by the community to be off-grid)
+    sets a preference but does NOT physically operate the contactor
+    on either PW2 or PW3.
     """
 
     ON_GRID = 1

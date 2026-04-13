@@ -87,29 +87,41 @@ class EnergySite:
     async def set_island_mode(
         self,
         mode: EnergyIslandMode | int,
+        force: bool | None = None,
     ) -> dict[str, Any]:
         """Set the island mode on the energy gateway.
 
         Physically opens or closes the grid contactor on Powerwall 2/3.
         Requires the command to be sent as a signed RoutableMessage via
         the ``device_command`` endpoint — unsigned ``grpc_command`` calls
-        are accepted but do not physically operate the contactor on PW3.
+        are accepted but do not physically operate the contactor.
+
+        Confirmed working on PW2 (firmware 26.10.0) and PW3 (firmware
+        26.2.1) when delivered as a signed ``routable_message`` with
+        ``force=True`` for off-grid.
 
         Args:
             mode: EnergyIslandMode.OFF_GRID (6) to island,
                   EnergyIslandMode.ON_GRID (1) to reconnect.
+            force: Whether to force the contactor operation. Defaults to
+                   True for OFF_GRID, False for ON_GRID. Required for
+                   off-grid — without force=True the gateway acknowledges
+                   the command but does not physically open the contactor.
         """
+        if force is None:
+            force = int(mode) == EnergyIslandMode.OFF_GRID
         return await self._command(
             "teg",
             "set_island_mode_request",
-            {"mode": int(mode), "force": False},
+            {"mode": int(mode), "force": force},
         )
 
     async def go_off_grid(self) -> dict[str, Any]:
         """Physically disconnect from the grid (open contactor).
 
-        Convenience wrapper around set_island_mode(OFF_GRID).
-        Causes an inverter restart (~30s solar dropout).
+        Convenience wrapper around set_island_mode(OFF_GRID, force=True).
+        Confirmed working on both Powerwall 2 and Powerwall 3 when sent
+        as a signed RoutableMessage via the device_command endpoint.
         """
         return await self.set_island_mode(EnergyIslandMode.OFF_GRID)
 
