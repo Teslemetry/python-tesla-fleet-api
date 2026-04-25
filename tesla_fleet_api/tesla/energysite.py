@@ -65,6 +65,32 @@ class EnergySite:
         """Get the energy device certificate including subject, issuer, and validity."""
         return await self._command("common", "device_cert_request")
 
+    async def get_cellular_info(self) -> dict[str, Any]:
+        """Get cellular modem information from the energy gateway including the embedded SIM identifier (EID) and supported cellular profiles."""
+        return await self._command("common", "get_cellular_info_request")
+
+    async def check_for_update(self) -> dict[str, Any]:
+        """Check if a firmware update is available for the energy gateway."""
+        return await self._command("common", "check_for_update_request")
+
+    async def check_for_update_urgency(self) -> dict[str, Any]:
+        """Check the urgency level of any available firmware update for the energy gateway."""
+        return await self._command("common", "check_for_update_urgency_request")
+
+    async def check_internet(self) -> dict[str, Any]:
+        """Test internet connectivity on the energy gateway across all network interfaces (WiFi, Ethernet, GSM)."""
+        return await self._command("common", "check_internet_request")
+
+    async def set_local_site_config(
+        self, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Update local site configuration on the energy gateway.
+
+        Accepts raw protobuf request fields. This writes gateway
+        configuration and is an undocumented energy device gRPC command.
+        """
+        return await self._command("common", "set_local_site_config_request", params)
+
     async def list_authorized_clients(self) -> dict[str, Any]:
         """List authorized clients (paired keys) on the energy gateway including their roles and state."""
         return await self._command("authorization", "list_authorized_clients_request")
@@ -120,13 +146,40 @@ class EnergySite:
         """Get backup events from the energy gateway. May timeout on some firmware versions."""
         return await self._command("teg", "get_backup_events_request")
 
-    async def schedule_backup_event(self) -> dict[str, Any]:
-        """Schedule a manual backup event on the energy gateway."""
-        return await self._command("teg", "schedule_manual_backup_event_request")
+    async def schedule_backup_event(
+        self,
+        start_time: str | None = None,
+        duration_seconds: int | None = None,
+        priority: int | None = None,
+    ) -> dict[str, Any]:
+        """Schedule a manual backup event on the energy gateway.
+
+        Args:
+            start_time: ISO 8601 timestamp for when the backup event should start.
+            duration_seconds: Duration of the backup event in seconds.
+            priority: Priority level for the backup event.
+        """
+        params: dict[str, Any] = {}
+        if start_time is not None or duration_seconds is not None or priority is not None:
+            scheduling_info: dict[str, Any] = {}
+            if start_time is not None:
+                scheduling_info["start_time"] = start_time
+            if duration_seconds is not None:
+                scheduling_info["duration_seconds"] = duration_seconds
+            if priority is not None:
+                scheduling_info["priority"] = priority
+            params["scheduling_info"] = scheduling_info
+        return await self._command(
+            "teg", "schedule_manual_backup_event_request", params or None
+        )
 
     async def cancel_backup_event(self) -> dict[str, Any]:
         """Cancel a scheduled manual backup event on the energy gateway."""
         return await self._command("teg", "cancel_manual_backup_event_request")
+
+    async def get_teg_config(self) -> dict[str, Any]:
+        """Get Tesla Energy Gateway configuration from the TEG service."""
+        return await self._command("teg", "get_config_request")
 
     async def set_island_mode(
         self,
