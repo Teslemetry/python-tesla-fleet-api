@@ -209,15 +209,31 @@ class EnergyDeviceIdentifierType(IntEnum):
 
 
 class AuthorizedClientKeyType(IntEnum):
-    """Key type for energy gateway authorized clients."""
+    """Key type for energy gateway authorized clients.
+
+    Note: Tesla has not published the full ``key_type`` enum body. The RSA
+    value below is empirically known to work for registering an RSA-4096
+    key via ``add_authorized_client_request``; other values may exist but
+    are not publicly documented.
+    """
 
     RSA = 1
 
 
 class AuthorizedClientType(IntEnum):
-    """Client type used when registering an authorized client on an energy gateway."""
+    """Client type used when registering an authorized client on an energy gateway.
 
-    LAN = 1
+    Sourced from Tesla's ``AuthorizedClientType`` protobuf enum (as
+    reverse-engineered in pypowerwall's ``tedapi_combined.proto``).
+
+    There is no WiFi-specific value: WiFi vs LAN refers to the transport,
+    not the client type. pypowerwall's v1r flow registers its RSA key as
+    ``CUSTOMER_MOBILE_APP``.
+    """
+
+    INVALID = 0
+    CUSTOMER_MOBILE_APP = 1
+    VEHICLE = 2
 
 
 class AuthorizedClientState(IntEnum):

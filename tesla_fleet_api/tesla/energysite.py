@@ -74,7 +74,8 @@ class EnergySite:
         public_key: bytes | str,
         description: str = "Powerwall LAN Client",
         key_type: AuthorizedClientKeyType | int = AuthorizedClientKeyType.RSA,
-        authorized_client_type: AuthorizedClientType | int = AuthorizedClientType.LAN,
+        authorized_client_type: AuthorizedClientType
+        | int = AuthorizedClientType.CUSTOMER_MOBILE_APP,
     ) -> dict[str, Any]:
         """Register an authorized client (public key) with the energy gateway.
 
