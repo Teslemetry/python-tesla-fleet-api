@@ -1,4 +1,5 @@
 from __future__ import annotations
+import base64
 from typing import Any, TYPE_CHECKING
 from tesla_fleet_api.const import (
     Method,
@@ -7,6 +8,8 @@ from tesla_fleet_api.const import (
     EnergyIslandMode,
     TeslaEnergyPeriod,
     EnergyDeviceIdentifierType,
+    AuthorizedClientKeyType,
+    AuthorizedClientType,
 )
 
 if TYPE_CHECKING:
@@ -65,6 +68,47 @@ class EnergySite:
     async def list_authorized_clients(self) -> dict[str, Any]:
         """List authorized clients (paired keys) on the energy gateway including their roles and state."""
         return await self._command("authorization", "list_authorized_clients_request")
+
+    async def add_authorized_client(
+        self,
+        public_key: bytes | str,
+        description: str = "Powerwall LAN Client",
+        key_type: AuthorizedClientKeyType | int = AuthorizedClientKeyType.RSA,
+        authorized_client_type: AuthorizedClientType
+        | int = AuthorizedClientType.CUSTOMER_MOBILE_APP,
+    ) -> dict[str, Any]:
+        """Register an authorized client (public key) with the energy gateway.
+
+        Used to pair a local key (typically RSA-4096 in DER PKCS1 format) with
+        a Powerwall so it can be used for the LAN TEDapi v1r protocol. After
+        registration the key may be in PENDING or PENDING_VERIFICATION state
+        until the gateway confirms it — see ``AuthorizedClientState``. The
+        gateway may auto-verify via cloud, otherwise a physical breaker
+        toggle is required to confirm. Use ``list_authorized_clients`` to
+        poll for VERIFIED state.
+
+        Args:
+            public_key: The public key to register. Either raw DER PKCS1
+                bytes (which will be base64-encoded), or an already
+                base64-encoded string.
+            description: Human-readable description of the client.
+            key_type: The type of key being registered (default RSA).
+            authorized_client_type: The authorized client type (default LAN).
+        """
+        if isinstance(public_key, bytes):
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+        else:
+            public_key_b64 = public_key
+        return await self._command(
+            "authorization",
+            "add_authorized_client_request",
+            {
+                "key_type": int(key_type),
+                "public_key": public_key_b64,
+                "authorized_client_type": int(authorized_client_type),
+                "description": description,
+            },
+        )
 
     async def get_signed_commands_public_key(self) -> dict[str, Any]:
         """Get the energy gateway's public key for signed commands."""
