@@ -208,6 +208,26 @@ class EnergyDeviceIdentifierType(IntEnum):
     WALL_CONNECTOR_DIN = 4
 
 
+class AuthorizedClientKeyType(IntEnum):
+    """Key type for energy gateway authorized clients."""
+
+    RSA = 1
+
+
+class AuthorizedClientType(IntEnum):
+    """Client type used when registering an authorized client on an energy gateway."""
+
+    LAN = 1
+
+
+class AuthorizedClientState(IntEnum):
+    """State of an authorized client registered on an energy gateway."""
+
+    PENDING = 1
+    PENDING_VERIFICATION = 2
+    VERIFIED = 3
+
+
 class ClosureState(StrEnum):
     """Closure state options"""
 
