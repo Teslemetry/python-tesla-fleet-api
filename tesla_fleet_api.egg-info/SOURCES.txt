@@ -47,6 +47,7 @@ tesla_fleet_api/tesla/vehicle/proto/vcsec_pb2.pyi
 tesla_fleet_api/tesla/vehicle/proto/vehicle_pb2.py
 tesla_fleet_api/tesla/vehicle/proto/vehicle_pb2.pyi
 tesla_fleet_api/teslemetry/__init__.py
+tesla_fleet_api/teslemetry/energysite.py
 tesla_fleet_api/teslemetry/teslemetry.py
 tesla_fleet_api/teslemetry/vehicles.py
 tesla_fleet_api/tessie/__init__.py
