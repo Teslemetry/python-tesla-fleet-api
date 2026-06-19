@@ -1,15 +1,17 @@
 from __future__ import annotations
+
 import base64
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 from tesla_fleet_api.const import (
-    Method,
-    EnergyOperationMode,
-    EnergyExportMode,
-    EnergyIslandMode,
-    TeslaEnergyPeriod,
-    EnergyDeviceIdentifierType,
     AuthorizedClientKeyType,
     AuthorizedClientType,
+    EnergyDeviceIdentifierType,
+    EnergyExportMode,
+    EnergyIslandMode,
+    EnergyOperationMode,
+    Method,
+    TeslaEnergyPeriod,
 )
 
 if TYPE_CHECKING:
@@ -53,9 +55,21 @@ class EnergySite:
         """Get energy device system information including firmware version, device type, part number, serial number, and DIN."""
         return await self._command("common", "get_system_info_request")
 
+    async def raw_networking_status(self) -> dict[str, Any]:
+        """Get raw energy device networking status including WiFi, Ethernet, and cellular connectivity."""
+        return await self._command("common", "get_networking_status_request")
+
     async def get_networking_status(self) -> dict[str, Any]:
         """Get energy device networking status including WiFi, Ethernet, and cellular connectivity."""
-        return await self._command("common", "get_networking_status_request")
+        result = await self.raw_networking_status()
+        return (
+            result.get("response", {})
+            .get("message", {})
+            .get("Payload", {})
+            .get("Common", {})
+            .get("Message", {})
+            .get("GetNetworkingStatusResponse", {})
+        )
 
     async def wifi_scan(self) -> dict[str, Any]:
         """Scan for available WiFi networks from the energy gateway."""
@@ -160,7 +174,11 @@ class EnergySite:
             priority: Priority level for the backup event.
         """
         params: dict[str, Any] = {}
-        if start_time is not None or duration_seconds is not None or priority is not None:
+        if (
+            start_time is not None
+            or duration_seconds is not None
+            or priority is not None
+        ):
             scheduling_info: dict[str, Any] = {}
             if start_time is not None:
                 scheduling_info["start_time"] = start_time
