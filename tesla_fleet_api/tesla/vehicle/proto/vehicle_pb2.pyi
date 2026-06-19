@@ -1,14 +1,16 @@
 import datetime
+
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
-import vcsec_pb2 as _vcsec_pb2
-import common_pb2 as _common_pb2
-import managed_charging_pb2 as _managed_charging_pb2
+from . import vcsec_pb2 as _vcsec_pb2
+from . import common_pb2 as _common_pb2
+from . import managed_charging_pb2 as _managed_charging_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class MediaSourceType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
@@ -81,7 +83,7 @@ MediaSourceType_HomeApps: MediaSourceType
 MediaSourceType_Search: MediaSourceType
 
 class VehicleData(_message.Message):
-    __slots__ = ('charge_state', 'climate_state', 'drive_state', 'location_state', 'closures_state', 'charge_schedule_state', 'preconditioning_schedule_state', 'tire_pressure_state', 'media_state', 'media_detail_state', 'software_update_state', 'parental_controls_state')
+    __slots__ = ("charge_state", "climate_state", "drive_state", "location_state", "closures_state", "charge_schedule_state", "preconditioning_schedule_state", "tire_pressure_state", "media_state", "media_detail_state", "software_update_state", "parental_controls_state")
     CHARGE_STATE_FIELD_NUMBER: _ClassVar[int]
     CLIMATE_STATE_FIELD_NUMBER: _ClassVar[int]
     DRIVE_STATE_FIELD_NUMBER: _ClassVar[int]
@@ -106,15 +108,12 @@ class VehicleData(_message.Message):
     media_detail_state: MediaDetailState
     software_update_state: SoftwareUpdateState
     parental_controls_state: ParentalControlsState
-
-    def __init__(self, charge_state: _Optional[_Union[ChargeState, _Mapping]]=..., climate_state: _Optional[_Union[ClimateState, _Mapping]]=..., drive_state: _Optional[_Union[DriveState, _Mapping]]=..., location_state: _Optional[_Union[LocationState, _Mapping]]=..., closures_state: _Optional[_Union[ClosuresState, _Mapping]]=..., charge_schedule_state: _Optional[_Union[ChargeScheduleState, _Mapping]]=..., preconditioning_schedule_state: _Optional[_Union[PreconditioningScheduleState, _Mapping]]=..., tire_pressure_state: _Optional[_Union[TirePressureState, _Mapping]]=..., media_state: _Optional[_Union[MediaState, _Mapping]]=..., media_detail_state: _Optional[_Union[MediaDetailState, _Mapping]]=..., software_update_state: _Optional[_Union[SoftwareUpdateState, _Mapping]]=..., parental_controls_state: _Optional[_Union[ParentalControlsState, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, charge_state: _Optional[_Union[ChargeState, _Mapping]] = ..., climate_state: _Optional[_Union[ClimateState, _Mapping]] = ..., drive_state: _Optional[_Union[DriveState, _Mapping]] = ..., location_state: _Optional[_Union[LocationState, _Mapping]] = ..., closures_state: _Optional[_Union[ClosuresState, _Mapping]] = ..., charge_schedule_state: _Optional[_Union[ChargeScheduleState, _Mapping]] = ..., preconditioning_schedule_state: _Optional[_Union[PreconditioningScheduleState, _Mapping]] = ..., tire_pressure_state: _Optional[_Union[TirePressureState, _Mapping]] = ..., media_state: _Optional[_Union[MediaState, _Mapping]] = ..., media_detail_state: _Optional[_Union[MediaDetailState, _Mapping]] = ..., software_update_state: _Optional[_Union[SoftwareUpdateState, _Mapping]] = ..., parental_controls_state: _Optional[_Union[ParentalControlsState, _Mapping]] = ...) -> None: ...
 
 class ClosuresState(_message.Message):
-    __slots__ = ('door_open_driver_front', 'door_open_driver_rear', 'door_open_passenger_front', 'door_open_passenger_rear', 'door_open_trunk_front', 'door_open_trunk_rear', 'window_open_driver_front', 'window_open_passenger_front', 'window_open_driver_rear', 'window_open_passenger_rear', 'sun_roof_state', 'sun_roof_percent_open', 'locked', 'is_user_present', 'center_display_state', 'remote_start', 'valet_mode', 'valet_pin_needed', 'sentry_mode_state', 'sentry_mode_available', 'speed_limit_mode', 'tonneau_state', 'tonneau_percent_open', 'tonneau_in_motion', 'timestamp')
-
+    __slots__ = ("door_open_driver_front", "door_open_driver_rear", "door_open_passenger_front", "door_open_passenger_rear", "door_open_trunk_front", "door_open_trunk_rear", "window_open_driver_front", "window_open_passenger_front", "window_open_driver_rear", "window_open_passenger_rear", "sun_roof_state", "sun_roof_percent_open", "locked", "is_user_present", "center_display_state", "remote_start", "valet_mode", "valet_pin_needed", "sentry_mode_state", "sentry_mode_available", "speed_limit_mode", "tonneau_state", "tonneau_percent_open", "tonneau_in_motion", "timestamp")
     class SunRoofState(_message.Message):
-        __slots__ = ('Unknown', 'Calibrating', 'Closed', 'Open', 'Moving', 'Vent')
+        __slots__ = ("Unknown", "Calibrating", "Closed", "Open", "Moving", "Vent")
         UNKNOWN_FIELD_NUMBER: _ClassVar[int]
         CALIBRATING_FIELD_NUMBER: _ClassVar[int]
         CLOSED_FIELD_NUMBER: _ClassVar[int]
@@ -127,12 +126,9 @@ class ClosuresState(_message.Message):
         Open: _common_pb2.Void
         Moving: _common_pb2.Void
         Vent: _common_pb2.Void
-
-        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Calibrating: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Closed: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Open: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Moving: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Vent: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Calibrating: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Closed: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Open: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Moving: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Vent: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class DisplayState(_message.Message):
-        __slots__ = ('Off', 'Dim', 'Accessory', 'On', 'Driving', 'Charging', 'Lock', 'Sentry', 'Dog', 'Entertainment')
+        __slots__ = ("Off", "Dim", "Accessory", "On", "Driving", "Charging", "Lock", "Sentry", "Dog", "Entertainment")
         OFF_FIELD_NUMBER: _ClassVar[int]
         DIM_FIELD_NUMBER: _ClassVar[int]
         ACCESSORY_FIELD_NUMBER: _ClassVar[int]
@@ -153,12 +149,9 @@ class ClosuresState(_message.Message):
         Sentry: _common_pb2.Void
         Dog: _common_pb2.Void
         Entertainment: _common_pb2.Void
-
-        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Dim: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Accessory: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., On: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Driving: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Charging: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Lock: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Sentry: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Dog: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Entertainment: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Dim: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Accessory: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., On: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Driving: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Charging: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Lock: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Sentry: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Dog: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Entertainment: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class SentryModeState(_message.Message):
-        __slots__ = ('Off', 'Idle', 'Armed', 'Aware', 'Panic', 'Quiet')
+        __slots__ = ("Off", "Idle", "Armed", "Aware", "Panic", "Quiet")
         OFF_FIELD_NUMBER: _ClassVar[int]
         IDLE_FIELD_NUMBER: _ClassVar[int]
         ARMED_FIELD_NUMBER: _ClassVar[int]
@@ -171,9 +164,7 @@ class ClosuresState(_message.Message):
         Aware: _common_pb2.Void
         Panic: _common_pb2.Void
         Quiet: _common_pb2.Void
-
-        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Idle: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Armed: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Aware: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Panic: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Quiet: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
+        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Idle: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Armed: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Aware: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Panic: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Quiet: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     DOOR_OPEN_DRIVER_FRONT_FIELD_NUMBER: _ClassVar[int]
     DOOR_OPEN_DRIVER_REAR_FIELD_NUMBER: _ClassVar[int]
     DOOR_OPEN_PASSENGER_FRONT_FIELD_NUMBER: _ClassVar[int]
@@ -224,12 +215,10 @@ class ClosuresState(_message.Message):
     tonneau_percent_open: int
     tonneau_in_motion: bool
     timestamp: _timestamp_pb2.Timestamp
-
-    def __init__(self, door_open_driver_front: bool=..., door_open_driver_rear: bool=..., door_open_passenger_front: bool=..., door_open_passenger_rear: bool=..., door_open_trunk_front: bool=..., door_open_trunk_rear: bool=..., window_open_driver_front: bool=..., window_open_passenger_front: bool=..., window_open_driver_rear: bool=..., window_open_passenger_rear: bool=..., sun_roof_state: _Optional[_Union[ClosuresState.SunRoofState, _Mapping]]=..., sun_roof_percent_open: _Optional[int]=..., locked: bool=..., is_user_present: bool=..., center_display_state: _Optional[_Union[ClosuresState.DisplayState, _Mapping]]=..., remote_start: bool=..., valet_mode: bool=..., valet_pin_needed: bool=..., sentry_mode_state: _Optional[_Union[ClosuresState.SentryModeState, _Mapping]]=..., sentry_mode_available: bool=..., speed_limit_mode: _Optional[_Union[SpeedLimitMode, _Mapping]]=..., tonneau_state: _Optional[_Union[_vcsec_pb2.ClosureState_E, str]]=..., tonneau_percent_open: _Optional[int]=..., tonneau_in_motion: bool=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, door_open_driver_front: _Optional[bool] = ..., door_open_driver_rear: _Optional[bool] = ..., door_open_passenger_front: _Optional[bool] = ..., door_open_passenger_rear: _Optional[bool] = ..., door_open_trunk_front: _Optional[bool] = ..., door_open_trunk_rear: _Optional[bool] = ..., window_open_driver_front: _Optional[bool] = ..., window_open_passenger_front: _Optional[bool] = ..., window_open_driver_rear: _Optional[bool] = ..., window_open_passenger_rear: _Optional[bool] = ..., sun_roof_state: _Optional[_Union[ClosuresState.SunRoofState, _Mapping]] = ..., sun_roof_percent_open: _Optional[int] = ..., locked: _Optional[bool] = ..., is_user_present: _Optional[bool] = ..., center_display_state: _Optional[_Union[ClosuresState.DisplayState, _Mapping]] = ..., remote_start: _Optional[bool] = ..., valet_mode: _Optional[bool] = ..., valet_pin_needed: _Optional[bool] = ..., sentry_mode_state: _Optional[_Union[ClosuresState.SentryModeState, _Mapping]] = ..., sentry_mode_available: _Optional[bool] = ..., speed_limit_mode: _Optional[_Union[SpeedLimitMode, _Mapping]] = ..., tonneau_state: _Optional[_Union[_vcsec_pb2.ClosureState_E, str]] = ..., tonneau_percent_open: _Optional[int] = ..., tonneau_in_motion: _Optional[bool] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class ChargeScheduleState(_message.Message):
-    __slots__ = ('charge_schedules', 'charge_schedule_window', 'charge_buffer', 'max_num_charge_schedules', 'next_schedule', 'show_schedule_complete_state', 'timestamp')
+    __slots__ = ("charge_schedules", "charge_schedule_window", "charge_buffer", "max_num_charge_schedules", "next_schedule", "show_schedule_complete_state", "timestamp")
     CHARGE_SCHEDULES_FIELD_NUMBER: _ClassVar[int]
     CHARGE_SCHEDULE_WINDOW_FIELD_NUMBER: _ClassVar[int]
     CHARGE_BUFFER_FIELD_NUMBER: _ClassVar[int]
@@ -244,12 +233,10 @@ class ChargeScheduleState(_message.Message):
     next_schedule: bool
     show_schedule_complete_state: bool
     timestamp: _timestamp_pb2.Timestamp
-
-    def __init__(self, charge_schedules: _Optional[_Iterable[_Union[_common_pb2.ChargeSchedule, _Mapping]]]=..., charge_schedule_window: _Optional[_Union[_common_pb2.ChargeSchedule, _Mapping]]=..., charge_buffer: _Optional[int]=..., max_num_charge_schedules: _Optional[int]=..., next_schedule: bool=..., show_schedule_complete_state: bool=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, charge_schedules: _Optional[_Iterable[_Union[_common_pb2.ChargeSchedule, _Mapping]]] = ..., charge_schedule_window: _Optional[_Union[_common_pb2.ChargeSchedule, _Mapping]] = ..., charge_buffer: _Optional[int] = ..., max_num_charge_schedules: _Optional[int] = ..., next_schedule: _Optional[bool] = ..., show_schedule_complete_state: _Optional[bool] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class PreconditioningScheduleState(_message.Message):
-    __slots__ = ('precondition_schedules', 'preconditioning_schedule_window', 'max_num_precondition_schedules', 'next_schedule', 'timestamp')
+    __slots__ = ("precondition_schedules", "preconditioning_schedule_window", "max_num_precondition_schedules", "next_schedule", "timestamp")
     PRECONDITION_SCHEDULES_FIELD_NUMBER: _ClassVar[int]
     PRECONDITIONING_SCHEDULE_WINDOW_FIELD_NUMBER: _ClassVar[int]
     MAX_NUM_PRECONDITION_SCHEDULES_FIELD_NUMBER: _ClassVar[int]
@@ -260,12 +247,10 @@ class PreconditioningScheduleState(_message.Message):
     max_num_precondition_schedules: int
     next_schedule: bool
     timestamp: _timestamp_pb2.Timestamp
-
-    def __init__(self, precondition_schedules: _Optional[_Iterable[_Union[_common_pb2.PreconditionSchedule, _Mapping]]]=..., preconditioning_schedule_window: _Optional[_Union[_common_pb2.PreconditionSchedule, _Mapping]]=..., max_num_precondition_schedules: _Optional[int]=..., next_schedule: bool=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, precondition_schedules: _Optional[_Iterable[_Union[_common_pb2.PreconditionSchedule, _Mapping]]] = ..., preconditioning_schedule_window: _Optional[_Union[_common_pb2.PreconditionSchedule, _Mapping]] = ..., max_num_precondition_schedules: _Optional[int] = ..., next_schedule: _Optional[bool] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class SpeedLimitMode(_message.Message):
-    __slots__ = ('active', 'pin_code_set', 'max_limit_mph', 'min_limit_mph', 'current_limit_mph')
+    __slots__ = ("active", "pin_code_set", "max_limit_mph", "min_limit_mph", "current_limit_mph")
     ACTIVE_FIELD_NUMBER: _ClassVar[int]
     PIN_CODE_SET_FIELD_NUMBER: _ClassVar[int]
     MAX_LIMIT_MPH_FIELD_NUMBER: _ClassVar[int]
@@ -276,12 +261,10 @@ class SpeedLimitMode(_message.Message):
     max_limit_mph: float
     min_limit_mph: float
     current_limit_mph: float
-
-    def __init__(self, active: bool=..., pin_code_set: bool=..., max_limit_mph: _Optional[float]=..., min_limit_mph: _Optional[float]=..., current_limit_mph: _Optional[float]=...) -> None:
-        ...
+    def __init__(self, active: _Optional[bool] = ..., pin_code_set: _Optional[bool] = ..., max_limit_mph: _Optional[float] = ..., min_limit_mph: _Optional[float] = ..., current_limit_mph: _Optional[float] = ...) -> None: ...
 
 class ParentalControlsSettings(_message.Message):
-    __slots__ = ('speed_limit_enabled', 'max_limit_mph', 'min_limit_mph', 'current_limit_mph', 'chill_acceleration_enabled', 'require_safety_settings_enabled', 'curfew_enabled', 'curfew_start_time', 'curfew_end_time')
+    __slots__ = ("speed_limit_enabled", "max_limit_mph", "min_limit_mph", "current_limit_mph", "chill_acceleration_enabled", "require_safety_settings_enabled", "curfew_enabled", "curfew_start_time", "curfew_end_time")
     SPEED_LIMIT_ENABLED_FIELD_NUMBER: _ClassVar[int]
     MAX_LIMIT_MPH_FIELD_NUMBER: _ClassVar[int]
     MIN_LIMIT_MPH_FIELD_NUMBER: _ClassVar[int]
@@ -300,12 +283,10 @@ class ParentalControlsSettings(_message.Message):
     curfew_enabled: bool
     curfew_start_time: int
     curfew_end_time: int
-
-    def __init__(self, speed_limit_enabled: bool=..., max_limit_mph: _Optional[float]=..., min_limit_mph: _Optional[float]=..., current_limit_mph: _Optional[float]=..., chill_acceleration_enabled: bool=..., require_safety_settings_enabled: bool=..., curfew_enabled: bool=..., curfew_start_time: _Optional[int]=..., curfew_end_time: _Optional[int]=...) -> None:
-        ...
+    def __init__(self, speed_limit_enabled: _Optional[bool] = ..., max_limit_mph: _Optional[float] = ..., min_limit_mph: _Optional[float] = ..., current_limit_mph: _Optional[float] = ..., chill_acceleration_enabled: _Optional[bool] = ..., require_safety_settings_enabled: _Optional[bool] = ..., curfew_enabled: _Optional[bool] = ..., curfew_start_time: _Optional[int] = ..., curfew_end_time: _Optional[int] = ...) -> None: ...
 
 class ParentalControlsState(_message.Message):
-    __slots__ = ('timestamp', 'parental_controls_active', 'parental_controls_pin_set', 'parental_controls_settings')
+    __slots__ = ("timestamp", "parental_controls_active", "parental_controls_pin_set", "parental_controls_settings")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     PARENTAL_CONTROLS_ACTIVE_FIELD_NUMBER: _ClassVar[int]
     PARENTAL_CONTROLS_PIN_SET_FIELD_NUMBER: _ClassVar[int]
@@ -314,15 +295,12 @@ class ParentalControlsState(_message.Message):
     parental_controls_active: bool
     parental_controls_pin_set: bool
     parental_controls_settings: ParentalControlsSettings
-
-    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., parental_controls_active: bool=..., parental_controls_pin_set: bool=..., parental_controls_settings: _Optional[_Union[ParentalControlsSettings, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., parental_controls_active: _Optional[bool] = ..., parental_controls_pin_set: _Optional[bool] = ..., parental_controls_settings: _Optional[_Union[ParentalControlsSettings, _Mapping]] = ...) -> None: ...
 
 class SoftwareUpdateState(_message.Message):
-    __slots__ = ('status', 'scheduled_time_ms', 'warning_time_remaining_ms', 'expected_duration_sec', 'download_perc', 'install_perc', 'version', 'timestamp')
-
+    __slots__ = ("status", "scheduled_time_ms", "warning_time_remaining_ms", "expected_duration_sec", "download_perc", "install_perc", "version", "timestamp")
     class SoftwareUpdateStatus(_message.Message):
-        __slots__ = ('Unknown', 'Installing', 'Scheduled', 'Available', 'DownloadingWifiWait', 'Downloading')
+        __slots__ = ("Unknown", "Installing", "Scheduled", "Available", "DownloadingWifiWait", "Downloading")
         UNKNOWN_FIELD_NUMBER: _ClassVar[int]
         INSTALLING_FIELD_NUMBER: _ClassVar[int]
         SCHEDULED_FIELD_NUMBER: _ClassVar[int]
@@ -335,9 +313,7 @@ class SoftwareUpdateState(_message.Message):
         Available: _common_pb2.Void
         DownloadingWifiWait: _common_pb2.Void
         Downloading: _common_pb2.Void
-
-        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Installing: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Scheduled: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Available: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., DownloadingWifiWait: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Downloading: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
+        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Installing: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Scheduled: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Available: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., DownloadingWifiWait: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Downloading: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     STATUS_FIELD_NUMBER: _ClassVar[int]
     SCHEDULED_TIME_MS_FIELD_NUMBER: _ClassVar[int]
     WARNING_TIME_REMAINING_MS_FIELD_NUMBER: _ClassVar[int]
@@ -354,12 +330,10 @@ class SoftwareUpdateState(_message.Message):
     install_perc: int
     version: str
     timestamp: _timestamp_pb2.Timestamp
-
-    def __init__(self, status: _Optional[_Union[SoftwareUpdateState.SoftwareUpdateStatus, _Mapping]]=..., scheduled_time_ms: _Optional[int]=..., warning_time_remaining_ms: _Optional[int]=..., expected_duration_sec: _Optional[int]=..., download_perc: _Optional[int]=..., install_perc: _Optional[int]=..., version: _Optional[str]=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, status: _Optional[_Union[SoftwareUpdateState.SoftwareUpdateStatus, _Mapping]] = ..., scheduled_time_ms: _Optional[int] = ..., warning_time_remaining_ms: _Optional[int] = ..., expected_duration_sec: _Optional[int] = ..., download_perc: _Optional[int] = ..., install_perc: _Optional[int] = ..., version: _Optional[str] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class DriveState(_message.Message):
-    __slots__ = ('shift_state', 'speed', 'power', 'timestamp', 'odometer_in_hundredths_of_a_mile', 'speed_float', 'active_route_destination', 'active_route_minutes_to_arrival', 'active_route_miles_to_arrival', 'active_route_traffic_minutes_delay', 'active_route_energy_at_arrival', 'last_route_update', 'last_traffic_update', 'active_route_coordinates')
+    __slots__ = ("shift_state", "speed", "power", "timestamp", "odometer_in_hundredths_of_a_mile", "speed_float", "active_route_destination", "active_route_minutes_to_arrival", "active_route_miles_to_arrival", "active_route_traffic_minutes_delay", "active_route_energy_at_arrival", "last_route_update", "last_traffic_update", "active_route_coordinates")
     SHIFT_STATE_FIELD_NUMBER: _ClassVar[int]
     SPEED_FIELD_NUMBER: _ClassVar[int]
     POWER_FIELD_NUMBER: _ClassVar[int]
@@ -388,13 +362,10 @@ class DriveState(_message.Message):
     last_route_update: int
     last_traffic_update: _timestamp_pb2.Timestamp
     active_route_coordinates: _common_pb2.LatLong
-
-    def __init__(self, shift_state: _Optional[_Union[ShiftState, _Mapping]]=..., speed: _Optional[int]=..., power: _Optional[int]=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., odometer_in_hundredths_of_a_mile: _Optional[int]=..., speed_float: _Optional[float]=..., active_route_destination: _Optional[str]=..., active_route_minutes_to_arrival: _Optional[float]=..., active_route_miles_to_arrival: _Optional[float]=..., active_route_traffic_minutes_delay: _Optional[float]=..., active_route_energy_at_arrival: _Optional[float]=..., last_route_update: _Optional[int]=..., last_traffic_update: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., active_route_coordinates: _Optional[_Union[_common_pb2.LatLong, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, shift_state: _Optional[_Union[ShiftState, _Mapping]] = ..., speed: _Optional[int] = ..., power: _Optional[int] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., odometer_in_hundredths_of_a_mile: _Optional[int] = ..., speed_float: _Optional[float] = ..., active_route_destination: _Optional[str] = ..., active_route_minutes_to_arrival: _Optional[float] = ..., active_route_miles_to_arrival: _Optional[float] = ..., active_route_traffic_minutes_delay: _Optional[float] = ..., active_route_energy_at_arrival: _Optional[float] = ..., last_route_update: _Optional[int] = ..., last_traffic_update: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., active_route_coordinates: _Optional[_Union[_common_pb2.LatLong, _Mapping]] = ...) -> None: ...
 
 class ChargeState(_message.Message):
-    __slots__ = ('charging_state', 'fast_charger_type', 'fast_charger_brand', 'charge_limit_soc', 'charge_limit_soc_std', 'charge_limit_soc_min', 'charge_limit_soc_max', 'max_range_charge_counter', 'fast_charger_present', 'battery_range', 'est_battery_range', 'ideal_battery_range', 'battery_level', 'usable_battery_level', 'charge_energy_added', 'charge_miles_added_rated', 'charge_miles_added_ideal', 'charger_voltage', 'charger_pilot_current', 'charger_actual_current', 'charger_power', 'minutes_to_full_charge', 'minutes_to_charge_limit', 'trip_charging', 'charge_rate_mph', 'charge_port_door_open', 'conn_charge_cable', 'scheduled_charging_start_time', 'scheduled_charging_pending', 'scheduled_departure_time', 'user_charge_enable_request', 'charge_enable_request', 'charger_phases', 'charge_port_latch', 'charge_port_cold_weather_mode', 'charge_current_request', 'charge_current_request_max', 'managed_charging_active', 'managed_charging_user_canceled', 'managed_charging_start_time', 'timestamp', 'preconditioning_times', 'off_peak_charging_times', 'off_peak_hours_end_time', 'scheduled_charging_mode', 'charging_amps', 'scheduled_charging_start_time_minutes', 'scheduled_departure_time_minutes', 'preconditioning_enabled', 'scheduled_charging_start_time_app', 'supercharger_session_trip_planner', 'charge_port_color', 'charge_rate_mph_float', 'charge_limit_reason', 'managed_charging_state', 'charge_cable_unlatched', 'outlet_state', 'power_feed_state', 'outlet_soc_limit', 'power_feed_soc_limit', 'outlet_time_remaining', 'power_feed_time_remaining', 'powershare_feature_allowed', 'powershare_feature_enabled', 'powershare_request', 'powershare_type', 'powershare_status', 'powershare_stop_reason', 'powershare_instantaneous_load_kw', 'powershare_vehicle_energy_left_hr', 'powershare_soc_limit', 'one_time_soc_limit', 'home_location', 'work_location', 'outlet_max_timer_minutes')
-
+    __slots__ = ("charging_state", "fast_charger_type", "fast_charger_brand", "charge_limit_soc", "charge_limit_soc_std", "charge_limit_soc_min", "charge_limit_soc_max", "max_range_charge_counter", "fast_charger_present", "battery_range", "est_battery_range", "ideal_battery_range", "battery_level", "usable_battery_level", "charge_energy_added", "charge_miles_added_rated", "charge_miles_added_ideal", "charger_voltage", "charger_pilot_current", "charger_actual_current", "charger_power", "minutes_to_full_charge", "minutes_to_charge_limit", "trip_charging", "charge_rate_mph", "charge_port_door_open", "conn_charge_cable", "scheduled_charging_start_time", "scheduled_charging_pending", "scheduled_departure_time", "user_charge_enable_request", "charge_enable_request", "charger_phases", "charge_port_latch", "charge_port_cold_weather_mode", "charge_current_request", "charge_current_request_max", "managed_charging_active", "managed_charging_user_canceled", "managed_charging_start_time", "timestamp", "preconditioning_times", "off_peak_charging_times", "off_peak_hours_end_time", "scheduled_charging_mode", "charging_amps", "scheduled_charging_start_time_minutes", "scheduled_departure_time_minutes", "preconditioning_enabled", "scheduled_charging_start_time_app", "supercharger_session_trip_planner", "charge_port_color", "charge_rate_mph_float", "charge_limit_reason", "managed_charging_state", "charge_cable_unlatched", "outlet_state", "power_feed_state", "outlet_soc_limit", "power_feed_soc_limit", "outlet_time_remaining", "power_feed_time_remaining", "powershare_feature_allowed", "powershare_feature_enabled", "powershare_request", "powershare_type", "powershare_status", "powershare_stop_reason", "powershare_instantaneous_load_kw", "powershare_vehicle_energy_left_hr", "powershare_soc_limit", "one_time_soc_limit", "home_location", "work_location", "outlet_max_timer_minutes")
     class ScheduledChargingMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         ScheduledChargingModeOff: _ClassVar[ChargeState.ScheduledChargingMode]
@@ -403,7 +374,6 @@ class ChargeState(_message.Message):
     ScheduledChargingModeOff: ChargeState.ScheduledChargingMode
     ScheduledChargingModeStartAt: ChargeState.ScheduledChargingMode
     ScheduledChargingModeDepartBy: ChargeState.ScheduledChargingMode
-
     class ChargePortColor_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         ChargePortColorOff: _ClassVar[ChargeState.ChargePortColor_E]
@@ -428,7 +398,6 @@ class ChargeState(_message.Message):
     ChargePortColorRave: ChargeState.ChargePortColor_E
     ChargePortColorDebug: ChargeState.ChargePortColor_E
     ChargePortColorFlashingBlue: ChargeState.ChargePortColor_E
-
     class ChargeLimitReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         ChargeLimitReasonUnknown: _ClassVar[ChargeState.ChargeLimitReason]
@@ -443,7 +412,6 @@ class ChargeState(_message.Message):
     ChargeLimitReasonBattTempLow: ChargeState.ChargeLimitReason
     ChargeLimitReasonHighSoc: ChargeState.ChargeLimitReason
     ChargeLimitReasonCabin: ChargeState.ChargeLimitReason
-
     class OutletState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         OutletStateOff: _ClassVar[ChargeState.OutletState]
@@ -452,7 +420,6 @@ class ChargeState(_message.Message):
     OutletStateOff: ChargeState.OutletState
     OutletStateCabinAndBed: ChargeState.OutletState
     OutletStateCabin: ChargeState.OutletState
-
     class PowerFeedState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         PowerFeedStateOff: _ClassVar[ChargeState.PowerFeedState]
@@ -461,7 +428,6 @@ class ChargeState(_message.Message):
     PowerFeedStateOff: ChargeState.PowerFeedState
     PowerFeedStateCabinAndBed: ChargeState.PowerFeedState
     PowerFeedStateCabin: ChargeState.PowerFeedState
-
     class PowershareStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         PowershareStatusInactive: _ClassVar[ChargeState.PowershareStatus]
@@ -476,7 +442,6 @@ class ChargeState(_message.Message):
     PowershareStatusStopped: ChargeState.PowershareStatus
     PowershareStatusHandshaking: ChargeState.PowershareStatus
     PowershareStatusActiveReconnectingSoon: ChargeState.PowershareStatus
-
     class PowershareType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         PowershareTypeNone: _ClassVar[ChargeState.PowershareType]
@@ -485,7 +450,6 @@ class ChargeState(_message.Message):
     PowershareTypeNone: ChargeState.PowershareType
     PowershareTypeLoad: ChargeState.PowershareType
     PowershareTypeHome: ChargeState.PowershareType
-
     class PowershareStopReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         PowershareStopReasonNone: _ClassVar[ChargeState.PowershareStopReason]
@@ -502,9 +466,8 @@ class ChargeState(_message.Message):
     PowershareStopReasonUser: ChargeState.PowershareStopReason
     PowershareStopReasonReconnecting: ChargeState.PowershareStopReason
     PowershareStopReasonAuthentication: ChargeState.PowershareStopReason
-
     class CableType(_message.Message):
-        __slots__ = ('SNA', 'IEC', 'SAE', 'GB_AC', 'GB_DC')
+        __slots__ = ("SNA", "IEC", "SAE", "GB_AC", "GB_DC")
         SNA_FIELD_NUMBER: _ClassVar[int]
         IEC_FIELD_NUMBER: _ClassVar[int]
         SAE_FIELD_NUMBER: _ClassVar[int]
@@ -515,12 +478,9 @@ class ChargeState(_message.Message):
         SAE: _common_pb2.Void
         GB_AC: _common_pb2.Void
         GB_DC: _common_pb2.Void
-
-        def __init__(self, SNA: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., IEC: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., SAE: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., GB_AC: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., GB_DC: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, SNA: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., IEC: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., SAE: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., GB_AC: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., GB_DC: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class ChargerType(_message.Message):
-        __slots__ = ('SNA', 'Supercharger', 'Chademo', 'Gb', 'ACSingleWireCAN', 'Combo', 'MCSingleWireCAN', 'Other', 'Tesla')
+        __slots__ = ("SNA", "Supercharger", "Chademo", "Gb", "ACSingleWireCAN", "Combo", "MCSingleWireCAN", "Other", "Tesla")
         SNA_FIELD_NUMBER: _ClassVar[int]
         SUPERCHARGER_FIELD_NUMBER: _ClassVar[int]
         CHADEMO_FIELD_NUMBER: _ClassVar[int]
@@ -539,12 +499,9 @@ class ChargeState(_message.Message):
         MCSingleWireCAN: _common_pb2.Void
         Other: _common_pb2.Void
         Tesla: _common_pb2.Void
-
-        def __init__(self, SNA: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Supercharger: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Chademo: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Gb: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., ACSingleWireCAN: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Combo: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., MCSingleWireCAN: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Other: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Tesla: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, SNA: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Supercharger: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Chademo: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Gb: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., ACSingleWireCAN: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Combo: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., MCSingleWireCAN: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Other: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Tesla: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class ChargingState(_message.Message):
-        __slots__ = ('Unknown', 'Disconnected', 'NoPower', 'Starting', 'Charging', 'Complete', 'Stopped', 'Calibrating')
+        __slots__ = ("Unknown", "Disconnected", "NoPower", "Starting", "Charging", "Complete", "Stopped", "Calibrating")
         UNKNOWN_FIELD_NUMBER: _ClassVar[int]
         DISCONNECTED_FIELD_NUMBER: _ClassVar[int]
         NOPOWER_FIELD_NUMBER: _ClassVar[int]
@@ -561,19 +518,14 @@ class ChargeState(_message.Message):
         Complete: _common_pb2.Void
         Stopped: _common_pb2.Void
         Calibrating: _common_pb2.Void
-
-        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Disconnected: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., NoPower: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Starting: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Charging: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Complete: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Stopped: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Calibrating: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Disconnected: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., NoPower: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Starting: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Charging: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Complete: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Stopped: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Calibrating: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class ChargerBrand(_message.Message):
-        __slots__ = ('Tesla', 'SNA')
+        __slots__ = ("Tesla", "SNA")
         TESLA_FIELD_NUMBER: _ClassVar[int]
         SNA_FIELD_NUMBER: _ClassVar[int]
         Tesla: _common_pb2.Void
         SNA: _common_pb2.Void
-
-        def __init__(self, Tesla: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., SNA: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
+        def __init__(self, Tesla: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., SNA: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     CHARGING_STATE_FIELD_NUMBER: _ClassVar[int]
     FAST_CHARGER_TYPE_FIELD_NUMBER: _ClassVar[int]
     FAST_CHARGER_BRAND_FIELD_NUMBER: _ClassVar[int]
@@ -724,12 +676,10 @@ class ChargeState(_message.Message):
     home_location: _common_pb2.LatLong
     work_location: _common_pb2.LatLong
     outlet_max_timer_minutes: int
-
-    def __init__(self, charging_state: _Optional[_Union[ChargeState.ChargingState, _Mapping]]=..., fast_charger_type: _Optional[_Union[ChargeState.ChargerType, _Mapping]]=..., fast_charger_brand: _Optional[_Union[ChargeState.ChargerBrand, _Mapping]]=..., charge_limit_soc: _Optional[int]=..., charge_limit_soc_std: _Optional[int]=..., charge_limit_soc_min: _Optional[int]=..., charge_limit_soc_max: _Optional[int]=..., max_range_charge_counter: _Optional[int]=..., fast_charger_present: bool=..., battery_range: _Optional[float]=..., est_battery_range: _Optional[float]=..., ideal_battery_range: _Optional[float]=..., battery_level: _Optional[int]=..., usable_battery_level: _Optional[int]=..., charge_energy_added: _Optional[float]=..., charge_miles_added_rated: _Optional[float]=..., charge_miles_added_ideal: _Optional[float]=..., charger_voltage: _Optional[int]=..., charger_pilot_current: _Optional[int]=..., charger_actual_current: _Optional[int]=..., charger_power: _Optional[int]=..., minutes_to_full_charge: _Optional[int]=..., minutes_to_charge_limit: _Optional[int]=..., trip_charging: bool=..., charge_rate_mph: _Optional[int]=..., charge_port_door_open: bool=..., conn_charge_cable: _Optional[_Union[ChargeState.CableType, _Mapping]]=..., scheduled_charging_start_time: _Optional[int]=..., scheduled_charging_pending: bool=..., scheduled_departure_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., user_charge_enable_request: bool=..., charge_enable_request: bool=..., charger_phases: _Optional[int]=..., charge_port_latch: _Optional[_Union[_common_pb2.ChargePortLatchState, _Mapping]]=..., charge_port_cold_weather_mode: bool=..., charge_current_request: _Optional[int]=..., charge_current_request_max: _Optional[int]=..., managed_charging_active: bool=..., managed_charging_user_canceled: bool=..., managed_charging_start_time: _Optional[int]=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., preconditioning_times: _Optional[_Union[_common_pb2.PreconditioningTimes, _Mapping]]=..., off_peak_charging_times: _Optional[_Union[_common_pb2.OffPeakChargingTimes, _Mapping]]=..., off_peak_hours_end_time: _Optional[int]=..., scheduled_charging_mode: _Optional[_Union[ChargeState.ScheduledChargingMode, str]]=..., charging_amps: _Optional[int]=..., scheduled_charging_start_time_minutes: _Optional[int]=..., scheduled_departure_time_minutes: _Optional[int]=..., preconditioning_enabled: bool=..., scheduled_charging_start_time_app: _Optional[int]=..., supercharger_session_trip_planner: bool=..., charge_port_color: _Optional[_Union[ChargeState.ChargePortColor_E, str]]=..., charge_rate_mph_float: _Optional[float]=..., charge_limit_reason: _Optional[_Union[ChargeState.ChargeLimitReason, str]]=..., managed_charging_state: _Optional[_Union[ManagedChargingState, _Mapping]]=..., charge_cable_unlatched: bool=..., outlet_state: _Optional[_Union[ChargeState.OutletState, str]]=..., power_feed_state: _Optional[_Union[ChargeState.PowerFeedState, str]]=..., outlet_soc_limit: _Optional[int]=..., power_feed_soc_limit: _Optional[int]=..., outlet_time_remaining: _Optional[int]=..., power_feed_time_remaining: _Optional[int]=..., powershare_feature_allowed: bool=..., powershare_feature_enabled: bool=..., powershare_request: bool=..., powershare_type: _Optional[_Union[ChargeState.PowershareType, str]]=..., powershare_status: _Optional[_Union[ChargeState.PowershareStatus, str]]=..., powershare_stop_reason: _Optional[_Union[ChargeState.PowershareStopReason, str]]=..., powershare_instantaneous_load_kw: _Optional[float]=..., powershare_vehicle_energy_left_hr: _Optional[int]=..., powershare_soc_limit: _Optional[int]=..., one_time_soc_limit: _Optional[int]=..., home_location: _Optional[_Union[_common_pb2.LatLong, _Mapping]]=..., work_location: _Optional[_Union[_common_pb2.LatLong, _Mapping]]=..., outlet_max_timer_minutes: _Optional[int]=...) -> None:
-        ...
+    def __init__(self, charging_state: _Optional[_Union[ChargeState.ChargingState, _Mapping]] = ..., fast_charger_type: _Optional[_Union[ChargeState.ChargerType, _Mapping]] = ..., fast_charger_brand: _Optional[_Union[ChargeState.ChargerBrand, _Mapping]] = ..., charge_limit_soc: _Optional[int] = ..., charge_limit_soc_std: _Optional[int] = ..., charge_limit_soc_min: _Optional[int] = ..., charge_limit_soc_max: _Optional[int] = ..., max_range_charge_counter: _Optional[int] = ..., fast_charger_present: _Optional[bool] = ..., battery_range: _Optional[float] = ..., est_battery_range: _Optional[float] = ..., ideal_battery_range: _Optional[float] = ..., battery_level: _Optional[int] = ..., usable_battery_level: _Optional[int] = ..., charge_energy_added: _Optional[float] = ..., charge_miles_added_rated: _Optional[float] = ..., charge_miles_added_ideal: _Optional[float] = ..., charger_voltage: _Optional[int] = ..., charger_pilot_current: _Optional[int] = ..., charger_actual_current: _Optional[int] = ..., charger_power: _Optional[int] = ..., minutes_to_full_charge: _Optional[int] = ..., minutes_to_charge_limit: _Optional[int] = ..., trip_charging: _Optional[bool] = ..., charge_rate_mph: _Optional[int] = ..., charge_port_door_open: _Optional[bool] = ..., conn_charge_cable: _Optional[_Union[ChargeState.CableType, _Mapping]] = ..., scheduled_charging_start_time: _Optional[int] = ..., scheduled_charging_pending: _Optional[bool] = ..., scheduled_departure_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., user_charge_enable_request: _Optional[bool] = ..., charge_enable_request: _Optional[bool] = ..., charger_phases: _Optional[int] = ..., charge_port_latch: _Optional[_Union[_common_pb2.ChargePortLatchState, _Mapping]] = ..., charge_port_cold_weather_mode: _Optional[bool] = ..., charge_current_request: _Optional[int] = ..., charge_current_request_max: _Optional[int] = ..., managed_charging_active: _Optional[bool] = ..., managed_charging_user_canceled: _Optional[bool] = ..., managed_charging_start_time: _Optional[int] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., preconditioning_times: _Optional[_Union[_common_pb2.PreconditioningTimes, _Mapping]] = ..., off_peak_charging_times: _Optional[_Union[_common_pb2.OffPeakChargingTimes, _Mapping]] = ..., off_peak_hours_end_time: _Optional[int] = ..., scheduled_charging_mode: _Optional[_Union[ChargeState.ScheduledChargingMode, str]] = ..., charging_amps: _Optional[int] = ..., scheduled_charging_start_time_minutes: _Optional[int] = ..., scheduled_departure_time_minutes: _Optional[int] = ..., preconditioning_enabled: _Optional[bool] = ..., scheduled_charging_start_time_app: _Optional[int] = ..., supercharger_session_trip_planner: _Optional[bool] = ..., charge_port_color: _Optional[_Union[ChargeState.ChargePortColor_E, str]] = ..., charge_rate_mph_float: _Optional[float] = ..., charge_limit_reason: _Optional[_Union[ChargeState.ChargeLimitReason, str]] = ..., managed_charging_state: _Optional[_Union[ManagedChargingState, _Mapping]] = ..., charge_cable_unlatched: _Optional[bool] = ..., outlet_state: _Optional[_Union[ChargeState.OutletState, str]] = ..., power_feed_state: _Optional[_Union[ChargeState.PowerFeedState, str]] = ..., outlet_soc_limit: _Optional[int] = ..., power_feed_soc_limit: _Optional[int] = ..., outlet_time_remaining: _Optional[int] = ..., power_feed_time_remaining: _Optional[int] = ..., powershare_feature_allowed: _Optional[bool] = ..., powershare_feature_enabled: _Optional[bool] = ..., powershare_request: _Optional[bool] = ..., powershare_type: _Optional[_Union[ChargeState.PowershareType, str]] = ..., powershare_status: _Optional[_Union[ChargeState.PowershareStatus, str]] = ..., powershare_stop_reason: _Optional[_Union[ChargeState.PowershareStopReason, str]] = ..., powershare_instantaneous_load_kw: _Optional[float] = ..., powershare_vehicle_energy_left_hr: _Optional[int] = ..., powershare_soc_limit: _Optional[int] = ..., one_time_soc_limit: _Optional[int] = ..., home_location: _Optional[_Union[_common_pb2.LatLong, _Mapping]] = ..., work_location: _Optional[_Union[_common_pb2.LatLong, _Mapping]] = ..., outlet_max_timer_minutes: _Optional[int] = ...) -> None: ...
 
 class ManagedChargingState(_message.Message):
-    __slots__ = ('charge_on_solar_state', 'charge_on_solar_gateway_din', 'tesla_electric_asset_id', 'minutes_to_lower_limit')
+    __slots__ = ("charge_on_solar_state", "charge_on_solar_gateway_din", "tesla_electric_asset_id", "minutes_to_lower_limit")
     CHARGE_ON_SOLAR_STATE_FIELD_NUMBER: _ClassVar[int]
     CHARGE_ON_SOLAR_GATEWAY_DIN_FIELD_NUMBER: _ClassVar[int]
     TESLA_ELECTRIC_ASSET_ID_FIELD_NUMBER: _ClassVar[int]
@@ -738,12 +688,10 @@ class ManagedChargingState(_message.Message):
     charge_on_solar_gateway_din: str
     tesla_electric_asset_id: str
     minutes_to_lower_limit: int
-
-    def __init__(self, charge_on_solar_state: _Optional[_Union[ChargeOnSolarState, _Mapping]]=..., charge_on_solar_gateway_din: _Optional[str]=..., tesla_electric_asset_id: _Optional[str]=..., minutes_to_lower_limit: _Optional[int]=...) -> None:
-        ...
+    def __init__(self, charge_on_solar_state: _Optional[_Union[ChargeOnSolarState, _Mapping]] = ..., charge_on_solar_gateway_din: _Optional[str] = ..., tesla_electric_asset_id: _Optional[str] = ..., minutes_to_lower_limit: _Optional[int] = ...) -> None: ...
 
 class ChargeOnSolarState(_message.Message):
-    __slots__ = ('not_allowed', 'no_charge_recommended', 'charging_on_excess_solar', 'charging_on_anything', 'user_disabled', 'waiting_for_server', 'error', 'user_stopped')
+    __slots__ = ("not_allowed", "no_charge_recommended", "charging_on_excess_solar", "charging_on_anything", "user_disabled", "waiting_for_server", "error", "user_stopped")
     NOT_ALLOWED_FIELD_NUMBER: _ClassVar[int]
     NO_CHARGE_RECOMMENDED_FIELD_NUMBER: _ClassVar[int]
     CHARGING_ON_EXCESS_SOLAR_FIELD_NUMBER: _ClassVar[int]
@@ -760,72 +708,51 @@ class ChargeOnSolarState(_message.Message):
     waiting_for_server: ChargeOnSolarStateWaitingForServer
     error: ChargeOnSolarStateError
     user_stopped: ChargeOnSolarStateUserStopped
-
-    def __init__(self, not_allowed: _Optional[_Union[ChargeOnSolarStateNotAllowed, _Mapping]]=..., no_charge_recommended: _Optional[_Union[ChargeOnSolarStateNoChargeRecommended, _Mapping]]=..., charging_on_excess_solar: _Optional[_Union[ChargeOnSolarStateChargingOnExcessSolar, _Mapping]]=..., charging_on_anything: _Optional[_Union[ChargeOnSolarStateChargingOnAnything, _Mapping]]=..., user_disabled: _Optional[_Union[ChargeOnSolarStateUserDisabled, _Mapping]]=..., waiting_for_server: _Optional[_Union[ChargeOnSolarStateWaitingForServer, _Mapping]]=..., error: _Optional[_Union[ChargeOnSolarStateError, _Mapping]]=..., user_stopped: _Optional[_Union[ChargeOnSolarStateUserStopped, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, not_allowed: _Optional[_Union[ChargeOnSolarStateNotAllowed, _Mapping]] = ..., no_charge_recommended: _Optional[_Union[ChargeOnSolarStateNoChargeRecommended, _Mapping]] = ..., charging_on_excess_solar: _Optional[_Union[ChargeOnSolarStateChargingOnExcessSolar, _Mapping]] = ..., charging_on_anything: _Optional[_Union[ChargeOnSolarStateChargingOnAnything, _Mapping]] = ..., user_disabled: _Optional[_Union[ChargeOnSolarStateUserDisabled, _Mapping]] = ..., waiting_for_server: _Optional[_Union[ChargeOnSolarStateWaitingForServer, _Mapping]] = ..., error: _Optional[_Union[ChargeOnSolarStateError, _Mapping]] = ..., user_stopped: _Optional[_Union[ChargeOnSolarStateUserStopped, _Mapping]] = ...) -> None: ...
 
 class ChargeOnSolarStateNotAllowed(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateNoChargeRecommended(_message.Message):
-    __slots__ = ('reason',)
+    __slots__ = ("reason",)
     REASON_FIELD_NUMBER: _ClassVar[int]
     reason: _managed_charging_pb2.ChargeOnSolarNoChargeReason
-
-    def __init__(self, reason: _Optional[_Union[_managed_charging_pb2.ChargeOnSolarNoChargeReason, str]]=...) -> None:
-        ...
+    def __init__(self, reason: _Optional[_Union[_managed_charging_pb2.ChargeOnSolarNoChargeReason, str]] = ...) -> None: ...
 
 class ChargeOnSolarStateChargingOnExcessSolar(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateChargingOnAnything(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateUserDisabled(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateWaitingForServer(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateError(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class ChargeOnSolarStateUserStopped(_message.Message):
     __slots__ = ()
-
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
 
 class LocationState(_message.Message):
-    __slots__ = ('latitude', 'longitude', 'heading', 'gps_as_of', 'native_location_supported', 'native_latitude', 'native_longitude', 'native_type', 'corrected_latitude', 'corrected_longitude', 'timestamp', 'homelink_nearby', 'location_name', 'geo_latitude', 'geo_longitude', 'geo_heading', 'geo_elevation', 'geo_accuracy', 'estimated_gps_valid', 'estimated_to_raw_distance')
-
+    __slots__ = ("latitude", "longitude", "heading", "gps_as_of", "native_location_supported", "native_latitude", "native_longitude", "native_type", "corrected_latitude", "corrected_longitude", "timestamp", "homelink_nearby", "location_name", "geo_latitude", "geo_longitude", "geo_heading", "geo_elevation", "geo_accuracy", "estimated_gps_valid", "estimated_to_raw_distance")
     class GPSCoordinateType(_message.Message):
-        __slots__ = ('GCJ', 'WGS')
+        __slots__ = ("GCJ", "WGS")
         GCJ_FIELD_NUMBER: _ClassVar[int]
         WGS_FIELD_NUMBER: _ClassVar[int]
         GCJ: _common_pb2.Void
         WGS: _common_pb2.Void
-
-        def __init__(self, GCJ: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., WGS: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
+        def __init__(self, GCJ: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., WGS: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     LATITUDE_FIELD_NUMBER: _ClassVar[int]
     LONGITUDE_FIELD_NUMBER: _ClassVar[int]
     HEADING_FIELD_NUMBER: _ClassVar[int]
@@ -866,36 +793,27 @@ class LocationState(_message.Message):
     geo_accuracy: float
     estimated_gps_valid: bool
     estimated_to_raw_distance: float
-
-    def __init__(self, latitude: _Optional[float]=..., longitude: _Optional[float]=..., heading: _Optional[int]=..., gps_as_of: _Optional[int]=..., native_location_supported: bool=..., native_latitude: _Optional[float]=..., native_longitude: _Optional[float]=..., native_type: _Optional[_Union[LocationState.GPSCoordinateType, _Mapping]]=..., corrected_latitude: _Optional[float]=..., corrected_longitude: _Optional[float]=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., homelink_nearby: bool=..., location_name: _Optional[str]=..., geo_latitude: _Optional[float]=..., geo_longitude: _Optional[float]=..., geo_heading: _Optional[float]=..., geo_elevation: _Optional[float]=..., geo_accuracy: _Optional[float]=..., estimated_gps_valid: bool=..., estimated_to_raw_distance: _Optional[float]=...) -> None:
-        ...
+    def __init__(self, latitude: _Optional[float] = ..., longitude: _Optional[float] = ..., heading: _Optional[int] = ..., gps_as_of: _Optional[int] = ..., native_location_supported: _Optional[bool] = ..., native_latitude: _Optional[float] = ..., native_longitude: _Optional[float] = ..., native_type: _Optional[_Union[LocationState.GPSCoordinateType, _Mapping]] = ..., corrected_latitude: _Optional[float] = ..., corrected_longitude: _Optional[float] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., homelink_nearby: _Optional[bool] = ..., location_name: _Optional[str] = ..., geo_latitude: _Optional[float] = ..., geo_longitude: _Optional[float] = ..., geo_heading: _Optional[float] = ..., geo_elevation: _Optional[float] = ..., geo_accuracy: _Optional[float] = ..., estimated_gps_valid: _Optional[bool] = ..., estimated_to_raw_distance: _Optional[float] = ...) -> None: ...
 
 class VehicleState(_message.Message):
-    __slots__ = ('guestMode',)
-
+    __slots__ = ("guestMode",)
     class GuestMode(_message.Message):
-        __slots__ = ('GuestModeActive',)
+        __slots__ = ("GuestModeActive",)
         GUESTMODEACTIVE_FIELD_NUMBER: _ClassVar[int]
         GuestModeActive: bool
-
-        def __init__(self, GuestModeActive: bool=...) -> None:
-            ...
+        def __init__(self, GuestModeActive: _Optional[bool] = ...) -> None: ...
     GUESTMODE_FIELD_NUMBER: _ClassVar[int]
     guestMode: VehicleState.GuestMode
-
-    def __init__(self, guestMode: _Optional[_Union[VehicleState.GuestMode, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, guestMode: _Optional[_Union[VehicleState.GuestMode, _Mapping]] = ...) -> None: ...
 
 class ClimateState(_message.Message):
-    __slots__ = ('inside_temp_celsius', 'outside_temp_celsius', 'driver_temp_setting', 'passenger_temp_setting', 'left_temp_direction', 'right_temp_direction', 'is_front_defroster_on', 'is_rear_defroster_on', 'fan_status', 'is_climate_on', 'min_avail_temp_celsius', 'max_avail_temp_celsius', 'seat_heater_left', 'seat_heater_right', 'seat_heater_rear_left', 'seat_heater_rear_right', 'seat_heater_rear_center', 'seat_heater_rear_right_back', 'seat_heater_rear_left_back', 'seat_heater_third_row_right', 'seat_heater_third_row_left', 'battery_heater', 'battery_heater_no_power', 'steering_wheel_heater', 'wiper_blade_heater', 'side_mirror_heaters', 'is_preconditioning', 'remote_heater_control_enabled', 'climate_keeper_mode', 'timestamp', 'bioweapon_mode_on', 'defrost_mode', 'is_auto_conditioning_on', 'auto_seat_climate_left', 'auto_seat_climate_right', 'seat_fan_front_left', 'seat_fan_front_right', 'allow_cabin_overheat_protection', 'supports_fan_only_cabin_overheat_protection', 'cabin_overheat_protection', 'cabin_overheat_protection_actively_cooling', 'cop_activation_temperature', 'auto_steering_wheel_heat', 'steering_wheel_heat_level', 'hvac_auto_request', 'cop_not_running_reason')
-
+    __slots__ = ("inside_temp_celsius", "outside_temp_celsius", "driver_temp_setting", "passenger_temp_setting", "left_temp_direction", "right_temp_direction", "is_front_defroster_on", "is_rear_defroster_on", "fan_status", "is_climate_on", "min_avail_temp_celsius", "max_avail_temp_celsius", "seat_heater_left", "seat_heater_right", "seat_heater_rear_left", "seat_heater_rear_right", "seat_heater_rear_center", "seat_heater_rear_right_back", "seat_heater_rear_left_back", "seat_heater_third_row_right", "seat_heater_third_row_left", "battery_heater", "battery_heater_no_power", "steering_wheel_heater", "wiper_blade_heater", "side_mirror_heaters", "is_preconditioning", "remote_heater_control_enabled", "climate_keeper_mode", "timestamp", "bioweapon_mode_on", "defrost_mode", "is_auto_conditioning_on", "auto_seat_climate_left", "auto_seat_climate_right", "seat_fan_front_left", "seat_fan_front_right", "allow_cabin_overheat_protection", "supports_fan_only_cabin_overheat_protection", "cabin_overheat_protection", "cabin_overheat_protection_actively_cooling", "cop_activation_temperature", "auto_steering_wheel_heat", "steering_wheel_heat_level", "hvac_auto_request", "cop_not_running_reason")
     class HvacAutoRequest(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         HvacAutoRequestOn: _ClassVar[ClimateState.HvacAutoRequest]
         HvacAutoRequestOverride: _ClassVar[ClimateState.HvacAutoRequest]
     HvacAutoRequestOn: ClimateState.HvacAutoRequest
     HvacAutoRequestOverride: ClimateState.HvacAutoRequest
-
     class CabinOverheatProtection_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         CabinOverheatProtectionOff: _ClassVar[ClimateState.CabinOverheatProtection_E]
@@ -904,7 +822,6 @@ class ClimateState(_message.Message):
     CabinOverheatProtectionOff: ClimateState.CabinOverheatProtection_E
     CabinOverheatProtectionOn: ClimateState.CabinOverheatProtection_E
     CabinOverheatProtectionFanOnly: ClimateState.CabinOverheatProtection_E
-
     class SeatHeaterLevel_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         SeatHeaterLevelOff: _ClassVar[ClimateState.SeatHeaterLevel_E]
@@ -915,7 +832,6 @@ class ClimateState(_message.Message):
     SeatHeaterLevelLow: ClimateState.SeatHeaterLevel_E
     SeatHeaterLevelMed: ClimateState.SeatHeaterLevel_E
     SeatHeaterLevelHigh: ClimateState.SeatHeaterLevel_E
-
     class SeatCoolingLevel_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         SeatCoolingLevelOff: _ClassVar[ClimateState.SeatCoolingLevel_E]
@@ -926,7 +842,6 @@ class ClimateState(_message.Message):
     SeatCoolingLevelLow: ClimateState.SeatCoolingLevel_E
     SeatCoolingLevelMed: ClimateState.SeatCoolingLevel_E
     SeatCoolingLevelHigh: ClimateState.SeatCoolingLevel_E
-
     class CopActivationTemp(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         CopActivationTempUnspecified: _ClassVar[ClimateState.CopActivationTemp]
@@ -937,7 +852,6 @@ class ClimateState(_message.Message):
     CopActivationTempLow: ClimateState.CopActivationTemp
     CopActivationTempMedium: ClimateState.CopActivationTemp
     CopActivationTempHigh: ClimateState.CopActivationTemp
-
     class COPNotRunningReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         COPNotRunningReasonNoReason: _ClassVar[ClimateState.COPNotRunningReason]
@@ -954,9 +868,8 @@ class ClimateState(_message.Message):
     COPNotRunningReasonLowSolarLoad: ClimateState.COPNotRunningReason
     COPNotRunningReasonFault: ClimateState.COPNotRunningReason
     COPNotRunningReasonCabinBelowThreshold: ClimateState.COPNotRunningReason
-
     class ClimateKeeperMode(_message.Message):
-        __slots__ = ('Unknown', 'Off', 'On', 'Dog', 'Party')
+        __slots__ = ("Unknown", "Off", "On", "Dog", "Party")
         UNKNOWN_FIELD_NUMBER: _ClassVar[int]
         OFF_FIELD_NUMBER: _ClassVar[int]
         ON_FIELD_NUMBER: _ClassVar[int]
@@ -967,21 +880,16 @@ class ClimateState(_message.Message):
         On: _common_pb2.Void
         Dog: _common_pb2.Void
         Party: _common_pb2.Void
-
-        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Off: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., On: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Dog: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Party: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
-
+        def __init__(self, Unknown: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Off: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., On: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Dog: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Party: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     class DefrostMode(_message.Message):
-        __slots__ = ('Off', 'Normal', 'Max')
+        __slots__ = ("Off", "Normal", "Max")
         OFF_FIELD_NUMBER: _ClassVar[int]
         NORMAL_FIELD_NUMBER: _ClassVar[int]
         MAX_FIELD_NUMBER: _ClassVar[int]
         Off: _common_pb2.Void
         Normal: _common_pb2.Void
         Max: _common_pb2.Void
-
-        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Normal: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., Max: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-            ...
+        def __init__(self, Off: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Normal: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., Max: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...
     INSIDE_TEMP_CELSIUS_FIELD_NUMBER: _ClassVar[int]
     OUTSIDE_TEMP_CELSIUS_FIELD_NUMBER: _ClassVar[int]
     DRIVER_TEMP_SETTING_FIELD_NUMBER: _ClassVar[int]
@@ -1074,12 +982,10 @@ class ClimateState(_message.Message):
     steering_wheel_heat_level: _common_pb2.StwHeatLevel
     hvac_auto_request: ClimateState.HvacAutoRequest
     cop_not_running_reason: ClimateState.COPNotRunningReason
-
-    def __init__(self, inside_temp_celsius: _Optional[float]=..., outside_temp_celsius: _Optional[float]=..., driver_temp_setting: _Optional[float]=..., passenger_temp_setting: _Optional[float]=..., left_temp_direction: _Optional[int]=..., right_temp_direction: _Optional[int]=..., is_front_defroster_on: bool=..., is_rear_defroster_on: bool=..., fan_status: _Optional[int]=..., is_climate_on: bool=..., min_avail_temp_celsius: _Optional[float]=..., max_avail_temp_celsius: _Optional[float]=..., seat_heater_left: _Optional[int]=..., seat_heater_right: _Optional[int]=..., seat_heater_rear_left: _Optional[int]=..., seat_heater_rear_right: _Optional[int]=..., seat_heater_rear_center: _Optional[int]=..., seat_heater_rear_right_back: _Optional[int]=..., seat_heater_rear_left_back: _Optional[int]=..., seat_heater_third_row_right: _Optional[int]=..., seat_heater_third_row_left: _Optional[int]=..., battery_heater: bool=..., battery_heater_no_power: bool=..., steering_wheel_heater: bool=..., wiper_blade_heater: bool=..., side_mirror_heaters: bool=..., is_preconditioning: bool=..., remote_heater_control_enabled: bool=..., climate_keeper_mode: _Optional[_Union[ClimateState.ClimateKeeperMode, _Mapping]]=..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., bioweapon_mode_on: bool=..., defrost_mode: _Optional[_Union[ClimateState.DefrostMode, _Mapping]]=..., is_auto_conditioning_on: bool=..., auto_seat_climate_left: bool=..., auto_seat_climate_right: bool=..., seat_fan_front_left: _Optional[int]=..., seat_fan_front_right: _Optional[int]=..., allow_cabin_overheat_protection: bool=..., supports_fan_only_cabin_overheat_protection: bool=..., cabin_overheat_protection: _Optional[_Union[ClimateState.CabinOverheatProtection_E, str]]=..., cabin_overheat_protection_actively_cooling: bool=..., cop_activation_temperature: _Optional[_Union[ClimateState.CopActivationTemp, str]]=..., auto_steering_wheel_heat: bool=..., steering_wheel_heat_level: _Optional[_Union[_common_pb2.StwHeatLevel, str]]=..., hvac_auto_request: _Optional[_Union[ClimateState.HvacAutoRequest, str]]=..., cop_not_running_reason: _Optional[_Union[ClimateState.COPNotRunningReason, str]]=...) -> None:
-        ...
+    def __init__(self, inside_temp_celsius: _Optional[float] = ..., outside_temp_celsius: _Optional[float] = ..., driver_temp_setting: _Optional[float] = ..., passenger_temp_setting: _Optional[float] = ..., left_temp_direction: _Optional[int] = ..., right_temp_direction: _Optional[int] = ..., is_front_defroster_on: _Optional[bool] = ..., is_rear_defroster_on: _Optional[bool] = ..., fan_status: _Optional[int] = ..., is_climate_on: _Optional[bool] = ..., min_avail_temp_celsius: _Optional[float] = ..., max_avail_temp_celsius: _Optional[float] = ..., seat_heater_left: _Optional[int] = ..., seat_heater_right: _Optional[int] = ..., seat_heater_rear_left: _Optional[int] = ..., seat_heater_rear_right: _Optional[int] = ..., seat_heater_rear_center: _Optional[int] = ..., seat_heater_rear_right_back: _Optional[int] = ..., seat_heater_rear_left_back: _Optional[int] = ..., seat_heater_third_row_right: _Optional[int] = ..., seat_heater_third_row_left: _Optional[int] = ..., battery_heater: _Optional[bool] = ..., battery_heater_no_power: _Optional[bool] = ..., steering_wheel_heater: _Optional[bool] = ..., wiper_blade_heater: _Optional[bool] = ..., side_mirror_heaters: _Optional[bool] = ..., is_preconditioning: _Optional[bool] = ..., remote_heater_control_enabled: _Optional[bool] = ..., climate_keeper_mode: _Optional[_Union[ClimateState.ClimateKeeperMode, _Mapping]] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., bioweapon_mode_on: _Optional[bool] = ..., defrost_mode: _Optional[_Union[ClimateState.DefrostMode, _Mapping]] = ..., is_auto_conditioning_on: _Optional[bool] = ..., auto_seat_climate_left: _Optional[bool] = ..., auto_seat_climate_right: _Optional[bool] = ..., seat_fan_front_left: _Optional[int] = ..., seat_fan_front_right: _Optional[int] = ..., allow_cabin_overheat_protection: _Optional[bool] = ..., supports_fan_only_cabin_overheat_protection: _Optional[bool] = ..., cabin_overheat_protection: _Optional[_Union[ClimateState.CabinOverheatProtection_E, str]] = ..., cabin_overheat_protection_actively_cooling: _Optional[bool] = ..., cop_activation_temperature: _Optional[_Union[ClimateState.CopActivationTemp, str]] = ..., auto_steering_wheel_heat: _Optional[bool] = ..., steering_wheel_heat_level: _Optional[_Union[_common_pb2.StwHeatLevel, str]] = ..., hvac_auto_request: _Optional[_Union[ClimateState.HvacAutoRequest, str]] = ..., cop_not_running_reason: _Optional[_Union[ClimateState.COPNotRunningReason, str]] = ...) -> None: ...
 
 class TirePressureState(_message.Message):
-    __slots__ = ('timestamp', 'tpms_pressure_fl', 'tpms_pressure_fr', 'tpms_pressure_rl', 'tpms_pressure_rr', 'tpms_last_seen_pressure_time_fl', 'tpms_last_seen_pressure_time_fr', 'tpms_last_seen_pressure_time_rl', 'tpms_last_seen_pressure_time_rr', 'tpms_hard_warning_fl', 'tpms_hard_warning_fr', 'tpms_hard_warning_rl', 'tpms_hard_warning_rr', 'tpms_soft_warning_fl', 'tpms_soft_warning_fr', 'tpms_soft_warning_rl', 'tpms_soft_warning_rr', 'tpms_rcp_front_value', 'tpms_rcp_rear_value')
+    __slots__ = ("timestamp", "tpms_pressure_fl", "tpms_pressure_fr", "tpms_pressure_rl", "tpms_pressure_rr", "tpms_last_seen_pressure_time_fl", "tpms_last_seen_pressure_time_fr", "tpms_last_seen_pressure_time_rl", "tpms_last_seen_pressure_time_rr", "tpms_hard_warning_fl", "tpms_hard_warning_fr", "tpms_hard_warning_rl", "tpms_hard_warning_rr", "tpms_soft_warning_fl", "tpms_soft_warning_fr", "tpms_soft_warning_rl", "tpms_soft_warning_rr", "tpms_rcp_front_value", "tpms_rcp_rear_value")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     TPMS_PRESSURE_FL_FIELD_NUMBER: _ClassVar[int]
     TPMS_PRESSURE_FR_FIELD_NUMBER: _ClassVar[int]
@@ -1118,12 +1024,10 @@ class TirePressureState(_message.Message):
     tpms_soft_warning_rr: bool
     tpms_rcp_front_value: float
     tpms_rcp_rear_value: float
-
-    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., tpms_pressure_fl: _Optional[float]=..., tpms_pressure_fr: _Optional[float]=..., tpms_pressure_rl: _Optional[float]=..., tpms_pressure_rr: _Optional[float]=..., tpms_last_seen_pressure_time_fl: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., tpms_last_seen_pressure_time_fr: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., tpms_last_seen_pressure_time_rl: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., tpms_last_seen_pressure_time_rr: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., tpms_hard_warning_fl: bool=..., tpms_hard_warning_fr: bool=..., tpms_hard_warning_rl: bool=..., tpms_hard_warning_rr: bool=..., tpms_soft_warning_fl: bool=..., tpms_soft_warning_fr: bool=..., tpms_soft_warning_rl: bool=..., tpms_soft_warning_rr: bool=..., tpms_rcp_front_value: _Optional[float]=..., tpms_rcp_rear_value: _Optional[float]=...) -> None:
-        ...
+    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., tpms_pressure_fl: _Optional[float] = ..., tpms_pressure_fr: _Optional[float] = ..., tpms_pressure_rl: _Optional[float] = ..., tpms_pressure_rr: _Optional[float] = ..., tpms_last_seen_pressure_time_fl: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., tpms_last_seen_pressure_time_fr: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., tpms_last_seen_pressure_time_rl: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., tpms_last_seen_pressure_time_rr: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., tpms_hard_warning_fl: _Optional[bool] = ..., tpms_hard_warning_fr: _Optional[bool] = ..., tpms_hard_warning_rl: _Optional[bool] = ..., tpms_hard_warning_rr: _Optional[bool] = ..., tpms_soft_warning_fl: _Optional[bool] = ..., tpms_soft_warning_fr: _Optional[bool] = ..., tpms_soft_warning_rl: _Optional[bool] = ..., tpms_soft_warning_rr: _Optional[bool] = ..., tpms_rcp_front_value: _Optional[float] = ..., tpms_rcp_rear_value: _Optional[float] = ...) -> None: ...
 
 class MediaState(_message.Message):
-    __slots__ = ('timestamp', 'remote_control_enabled', 'now_playing_artist', 'now_playing_title', 'audio_volume', 'audio_volume_increment', 'audio_volume_max', 'now_playing_source', 'media_playback_status')
+    __slots__ = ("timestamp", "remote_control_enabled", "now_playing_artist", "now_playing_title", "audio_volume", "audio_volume_increment", "audio_volume_max", "now_playing_source", "media_playback_status")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     REMOTE_CONTROL_ENABLED_FIELD_NUMBER: _ClassVar[int]
     NOW_PLAYING_ARTIST_FIELD_NUMBER: _ClassVar[int]
@@ -1142,12 +1046,10 @@ class MediaState(_message.Message):
     audio_volume_max: float
     now_playing_source: MediaSourceType
     media_playback_status: _common_pb2.MediaPlaybackStatus
-
-    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., remote_control_enabled: bool=..., now_playing_artist: _Optional[str]=..., now_playing_title: _Optional[str]=..., audio_volume: _Optional[float]=..., audio_volume_increment: _Optional[float]=..., audio_volume_max: _Optional[float]=..., now_playing_source: _Optional[_Union[MediaSourceType, str]]=..., media_playback_status: _Optional[_Union[_common_pb2.MediaPlaybackStatus, str]]=...) -> None:
-        ...
+    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., remote_control_enabled: _Optional[bool] = ..., now_playing_artist: _Optional[str] = ..., now_playing_title: _Optional[str] = ..., audio_volume: _Optional[float] = ..., audio_volume_increment: _Optional[float] = ..., audio_volume_max: _Optional[float] = ..., now_playing_source: _Optional[_Union[MediaSourceType, str]] = ..., media_playback_status: _Optional[_Union[_common_pb2.MediaPlaybackStatus, str]] = ...) -> None: ...
 
 class MediaDetailState(_message.Message):
-    __slots__ = ('timestamp', 'now_playing_duration', 'now_playing_elapsed', 'now_playing_source_string', 'now_playing_album', 'now_playing_station', 'a2dp_source_name')
+    __slots__ = ("timestamp", "now_playing_duration", "now_playing_elapsed", "now_playing_source_string", "now_playing_album", "now_playing_station", "a2dp_source_name")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     NOW_PLAYING_DURATION_FIELD_NUMBER: _ClassVar[int]
     NOW_PLAYING_ELAPSED_FIELD_NUMBER: _ClassVar[int]
@@ -1162,12 +1064,10 @@ class MediaDetailState(_message.Message):
     now_playing_album: str
     now_playing_station: str
     a2dp_source_name: str
-
-    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]]=..., now_playing_duration: _Optional[int]=..., now_playing_elapsed: _Optional[int]=..., now_playing_source_string: _Optional[str]=..., now_playing_album: _Optional[str]=..., now_playing_station: _Optional[str]=..., a2dp_source_name: _Optional[str]=...) -> None:
-        ...
+    def __init__(self, timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., now_playing_duration: _Optional[int] = ..., now_playing_elapsed: _Optional[int] = ..., now_playing_source_string: _Optional[str] = ..., now_playing_album: _Optional[str] = ..., now_playing_station: _Optional[str] = ..., a2dp_source_name: _Optional[str] = ...) -> None: ...
 
 class ShiftState(_message.Message):
-    __slots__ = ('Invalid', 'P', 'R', 'N', 'D', 'SNA')
+    __slots__ = ("Invalid", "P", "R", "N", "D", "SNA")
     INVALID_FIELD_NUMBER: _ClassVar[int]
     P_FIELD_NUMBER: _ClassVar[int]
     R_FIELD_NUMBER: _ClassVar[int]
@@ -1180,6 +1080,4 @@ class ShiftState(_message.Message):
     N: _common_pb2.Void
     D: _common_pb2.Void
     SNA: _common_pb2.Void
-
-    def __init__(self, Invalid: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., P: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., R: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., N: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., D: _Optional[_Union[_common_pb2.Void, _Mapping]]=..., SNA: _Optional[_Union[_common_pb2.Void, _Mapping]]=...) -> None:
-        ...
+    def __init__(self, Invalid: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., P: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., R: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., N: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., D: _Optional[_Union[_common_pb2.Void, _Mapping]] = ..., SNA: _Optional[_Union[_common_pb2.Void, _Mapping]] = ...) -> None: ...

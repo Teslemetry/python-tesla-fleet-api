@@ -14,9 +14,13 @@ uv run pyright tesla_fleet_api
 # Linting
 uv run ruff check tesla_fleet_api
 uv run ruff format tesla_fleet_api
+
+# Tests
+uv run pytest tests
 ```
 
-No test suite exists in this repo.
+Tests live in `tests/` and use `unittest.IsolatedAsyncioTestCase` (collected and
+run natively by pytest — `pytest-asyncio` is not required).
 
 ## API References
 
