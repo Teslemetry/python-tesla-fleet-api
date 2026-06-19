@@ -29,7 +29,7 @@ dependencies = [
 "Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
 
 [dependency-groups]
-dev = ["pyright>=1.1.399"]
+dev = ["pyright>=1.1.399", "pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 include = ["tesla_fleet_api*"]
@@ -44,3 +44,6 @@ exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 include = ["tesla_fleet_api"]
 typeCheckingMode = "strict"
 exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
