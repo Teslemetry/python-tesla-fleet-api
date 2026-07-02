@@ -29,7 +29,7 @@ dependencies = [
 "Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
 
 [dependency-groups]
-dev = ["pyright>=1.1.399", "pytest>=8.0"]
+dev = ["pyright>=1.1.399", "pytest>=8.0", "ruff>=0.14"]
 
 [tool.setuptools.packages.find]
 include = ["tesla_fleet_api*"]
