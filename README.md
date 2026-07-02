@@ -174,7 +174,7 @@ The `Router` class composes an ordered list of two-or-more backends that share a
 import asyncio
 import aiohttp
 from tesla_fleet_api import TeslaBluetooth, Teslemetry
-from tesla_fleet_api.tesla.vehicle.router import VehicleRouter
+from tesla_fleet_api.tesla.router import VehicleRouter
 from tesla_fleet_api.exceptions import TeslaFleetError
 
 async def main():
@@ -205,13 +205,13 @@ By default the router attempts the primary and fails over on any error, with no 
 `EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
 
 ```python
-from tesla_fleet_api.tesla.vehicle.router import EnergySiteRouter
+from tesla_fleet_api.tesla.router import EnergySiteRouter
 
 router = EnergySiteRouter(local_energysite, teslemetry_energysite)
 await router.set_operation(...)  # local first, cloud on failure
 ```
 
-`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.tesla.vehicle.router` (and from `tesla_fleet_api.tesla`).
+`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.tesla.router` (and from `tesla_fleet_api.tesla`).
 
 > **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
