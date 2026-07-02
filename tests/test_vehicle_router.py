@@ -329,7 +329,9 @@ class EnergySiteRouterTests(IsolatedAsyncioTestCase):
             local, cloud
         )
 
-        self.assertEqual(await router.set_operation("self_consumption"), "local:self_consumption")
+        self.assertEqual(
+            await router.set_operation("self_consumption"), "local:self_consumption"
+        )
         self.assertEqual((local.calls, cloud.calls), (1, 0))
 
     async def test_falls_back_to_cloud(self):

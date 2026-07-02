@@ -189,11 +189,7 @@ class Router(Generic[PrimaryT, FallbackT]):
         if not callable(first_attr):
             return first_attr
 
-        targets = [
-            (b, attr)
-            for b in having
-            if callable(attr := getattr(b, name))
-        ]
+        targets = [(b, attr) for b in having if callable(attr := getattr(b, name))]
         return self._dispatch(name, targets)
 
     @property
