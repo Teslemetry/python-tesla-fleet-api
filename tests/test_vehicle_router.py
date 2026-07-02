@@ -1,4 +1,4 @@
-"""Unit tests for VehicleRouter health-gated dispatch and fall-through.
+"""Unit tests for VehicleRouter per-command failover and fall-through.
 
 These use plain fakes for the two composed vehicle instances so no real BLE
 hardware or network access is required.
@@ -10,21 +10,17 @@ from tesla_fleet_api.tesla.vehicle.router import VehicleRouter
 
 
 class _FakePrimary:
-    """A fake Bluetooth-style primary with a connect_if_needed health signal."""
+    """A fake primary whose shared command can be made to raise on demand."""
 
-    def __init__(self, *, can_connect: bool = True):
+    def __init__(self, *, fail: bool = False):
         self.vin = "PRIMARY_VIN"
-        self.can_connect = can_connect
-        self.connect_calls = 0
+        self.fail = fail
         self.shared_calls = 0
-
-    async def connect_if_needed(self) -> None:
-        self.connect_calls += 1
-        if not self.can_connect:
-            raise ConnectionError("BLE unreachable")
 
     async def shared(self, value: int) -> str:
         self.shared_calls += 1
+        if self.fail:
+            raise ConnectionError("BLE command failed")
         return f"primary:{value}"
 
     async def primary_only(self) -> str:
@@ -34,12 +30,15 @@ class _FakePrimary:
 class _FakeFallback:
     """A fake cloud-style fallback exposing the shared surface plus extras."""
 
-    def __init__(self):
+    def __init__(self, *, fail: bool = False):
         self.vin = "FALLBACK_VIN"
+        self.fail = fail
         self.shared_calls = 0
 
     async def shared(self, value: int) -> str:
         self.shared_calls += 1
+        if self.fail:
+            raise ConnectionError("cloud command failed")
         return f"fallback:{value}"
 
     async def fallback_only(self) -> str:
@@ -49,8 +48,8 @@ class _FakeFallback:
 class VehicleRouterTests(IsolatedAsyncioTestCase):
     """Behavioural tests for VehicleRouter."""
 
-    async def test_primary_healthy_routes_to_primary(self):
-        primary = _FakePrimary(can_connect=True)
+    async def test_primary_succeeds_routes_to_primary(self):
+        primary = _FakePrimary()
         fallback = _FakeFallback()
         router: VehicleRouter[_FakePrimary, _FakeFallback] = VehicleRouter(
             primary, fallback
@@ -61,33 +60,41 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         self.assertEqual(result, "primary:7")
         self.assertEqual(primary.shared_calls, 1)
         self.assertEqual(fallback.shared_calls, 0)
-        # Default health should have attempted a connection.
-        self.assertEqual(primary.connect_calls, 1)
 
-    async def test_primary_unhealthy_routes_to_fallback(self):
-        primary = _FakePrimary(can_connect=False)
+    async def test_primary_raises_falls_back_with_same_args(self):
+        primary = _FakePrimary(fail=True)
         fallback = _FakeFallback()
         router = VehicleRouter(primary, fallback)
 
         result = await router.shared(9)
 
+        # Primary was attempted, then the same call replayed on the fallback.
         self.assertEqual(result, "fallback:9")
-        self.assertEqual(primary.shared_calls, 0)
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_both_raise_propagates(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback(fail=True)
+        router = VehicleRouter(primary, fallback)
+
+        with self.assertRaises(ConnectionError):
+            await router.shared(1)
+
+        self.assertEqual(primary.shared_calls, 1)
         self.assertEqual(fallback.shared_calls, 1)
 
     async def test_method_missing_on_primary_falls_through(self):
-        primary = _FakePrimary(can_connect=True)
+        primary = _FakePrimary()
         fallback = _FakeFallback()
         router = VehicleRouter(primary, fallback)
 
         result = await router.fallback_only()
 
         self.assertEqual(result, "fallback_only")
-        # Pure fall-through: no health gate, so no connection attempt.
-        self.assertEqual(primary.connect_calls, 0)
 
     async def test_method_only_on_primary_calls_primary(self):
-        primary = _FakePrimary(can_connect=True)
+        primary = _FakePrimary()
         fallback = _FakeFallback()
         router = VehicleRouter(primary, fallback)
 
@@ -105,38 +112,51 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         router = VehicleRouter(_FakePrimary(), _FakeFallback())
         self.assertEqual(router.vin, "PRIMARY_VIN")
 
-    async def test_health_check_bool_true(self):
-        primary = _FakePrimary(can_connect=False)
+    async def test_health_check_bool_true_attempts_primary(self):
+        primary = _FakePrimary()
         fallback = _FakeFallback()
         router = VehicleRouter(primary, fallback, health=True)
 
         result = await router.shared(1)
 
         self.assertEqual(result, "primary:1")
-        # Static bool health should not consult the connection signal.
-        self.assertEqual(primary.connect_calls, 0)
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 0)
 
-    async def test_health_check_bool_false(self):
-        primary = _FakePrimary(can_connect=True)
+    async def test_health_check_true_but_primary_raises_falls_back(self):
+        primary = _FakePrimary(fail=True)
         fallback = _FakeFallback()
-        router = VehicleRouter(primary, fallback, health=False)
+        router = VehicleRouter(primary, fallback, health=True)
 
         result = await router.shared(2)
 
         self.assertEqual(result, "fallback:2")
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_health_check_bool_false_skips_primary(self):
+        primary = _FakePrimary()
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback, health=False)
+
+        result = await router.shared(3)
+
+        self.assertEqual(result, "fallback:3")
+        # An explicit False gate must not attempt the primary at all.
+        self.assertEqual(primary.shared_calls, 0)
 
     async def test_health_check_sync_callable(self):
-        primary = _FakePrimary(can_connect=True)
+        primary = _FakePrimary()
         fallback = _FakeFallback()
         state = {"healthy": False}
         router = VehicleRouter(primary, fallback, health=lambda: state["healthy"])
 
-        self.assertEqual(await router.shared(3), "fallback:3")
+        self.assertEqual(await router.shared(4), "fallback:4")
         state["healthy"] = True
-        self.assertEqual(await router.shared(4), "primary:4")
+        self.assertEqual(await router.shared(5), "primary:5")
 
     async def test_health_check_async_callable(self):
-        primary = _FakePrimary(can_connect=True)
+        primary = _FakePrimary()
         fallback = _FakeFallback()
 
         async def _health() -> bool:
@@ -144,35 +164,8 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
 
         router = VehicleRouter(primary, fallback, health=_health)
 
-        self.assertEqual(await router.shared(5), "fallback:5")
-
-    async def test_default_health_client_is_connected(self):
-        """A primary without connect_if_needed uses client.is_connected."""
-
-        class _ClientPrimary:
-            def __init__(self, connected: bool):
-                self.client = type("C", (), {"is_connected": connected})()
-
-            async def shared(self, value: int) -> str:
-                return f"primary:{value}"
-
-        fallback = _FakeFallback()
-
-        connected = VehicleRouter(_ClientPrimary(True), fallback)
-        self.assertEqual(await connected.shared(1), "primary:1")
-
-        disconnected = VehicleRouter(_ClientPrimary(False), fallback)
-        self.assertEqual(await disconnected.shared(1), "fallback:1")
-
-    async def test_default_health_no_signal_is_healthy(self):
-        """A primary with no recognised connection signal is treated healthy."""
-
-        class _PlainPrimary:
-            async def shared(self, value: int) -> str:
-                return f"primary:{value}"
-
-        router = VehicleRouter(_PlainPrimary(), _FakeFallback())
-        self.assertEqual(await router.shared(1), "primary:1")
+        self.assertEqual(await router.shared(6), "fallback:6")
+        self.assertEqual(primary.shared_calls, 0)
 
     async def test_primary_and_fallback_properties(self):
         primary = _FakePrimary()

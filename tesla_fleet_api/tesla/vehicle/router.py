@@ -16,8 +16,8 @@ PrimaryT = TypeVar("PrimaryT")
 FallbackT = TypeVar("FallbackT")
 
 # A health check may be a static bool, a sync callable returning bool, or an
-# async callable returning bool. When omitted the router derives a default from
-# the primary instance (see ``_default_health``).
+# async callable returning bool. When omitted the router attempts the primary
+# directly and fails over to the fallback on exception (no up-front probe).
 HealthCheck = Union[bool, Callable[[], bool], Callable[[], Awaitable[bool]]]
 
 
@@ -36,8 +36,8 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
     :class:`VehicleFleet`/``TeslemetryVehicle`` fallback). Method calls are
     dispatched dynamically:
 
-    - Present and callable on *both* -> the health check decides: primary when
-      healthy, otherwise fallback.
+    - Present and callable on *both* -> the primary is attempted (subject to an
+      explicit health check) with automatic failover to the fallback.
     - Present only on the fallback -> the fallback is called (no health gate).
     - Present only on the primary -> the primary is called.
     - Present on neither -> :class:`AttributeError`.
@@ -45,12 +45,18 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
     Non-callable attributes (e.g. ``vin``) resolve to the primary's value when
     present, otherwise the fallback's.
 
+    Dispatch to a both-present callable performs *per-command* failover: the
+    primary is attempted first and, if it raises any exception (a connection
+    failure or a mid-command transport error such as a write/notify failure or a
+    disconnect), the same call is automatically retried on the fallback with the
+    same arguments. The error only propagates when the fallback also fails.
+
     The health check may be provided as a ``bool``, a sync callable, or an async
-    callable returning ``bool``. When omitted, a default is derived from the
-    primary that treats "can establish a Bluetooth connection" as healthy and
-    routes to the fallback on any connection failure. The default feature-detects
-    its health signal, so it is not hard-wired to Bluetooth: a primary without a
-    recognised connection signal is simply treated as always healthy.
+    callable returning ``bool``. When an explicit check evaluates ``False`` the
+    primary is skipped entirely and the call routes straight to the fallback;
+    when it evaluates ``True`` the primary is attempted with the same
+    fall-back-on-exception behaviour. When omitted (the default) the primary is
+    attempted directly with fall-back-on-exception and no up-front probe.
 
     The class is deliberately unbound over its two type parameters so the same
     pattern can later wrap a pair of energy site classes.
@@ -70,35 +76,16 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
         self._fallback = fallback
         self._health = health
 
-    async def _default_health(self) -> bool:
-        """Derive health from the primary by feature-detecting a connection signal.
-
-        For a Bluetooth primary this attempts ``connect_if_needed()`` and treats a
-        successful connection as healthy, returning ``False`` on any connection
-        failure so calls route to the fallback. A primary exposing only a
-        ``client.is_connected`` flag is judged by that flag. A primary with no
-        recognised signal is treated as healthy.
-        """
-        connect_if_needed = getattr(self._primary, "connect_if_needed", None)
-        if callable(connect_if_needed):
-            try:
-                await _maybe_await(connect_if_needed())
-                return True
-            except Exception as e:  # noqa: BLE001 - any connection failure -> fallback
-                LOGGER.debug("Primary health check failed, routing to fallback: %s", e)
-                return False
-
-        client = getattr(self._primary, "client", None)
-        if client is not None:
-            return bool(getattr(client, "is_connected", False))
-
-        return True
-
     async def is_healthy(self) -> bool:
-        """Resolve the configured (or default) health check to a bool."""
+        """Resolve an explicit health check to a bool.
+
+        When no explicit check is configured the router does not probe up front —
+        it attempts the primary and fails over on exception — so this reports
+        ``True`` in that case.
+        """
         health = self._health
         if health is None:
-            return await self._default_health()
+            return True
         if isinstance(health, bool):
             return health
         return bool(await _maybe_await(health()))
@@ -109,12 +96,16 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
         primary_attr: Callable[..., Any],
         fallback_attr: Callable[..., Any],
     ) -> Callable[..., Awaitable[Any]]:
-        """Build a health-gated async wrapper for a method on both instances."""
+        """Build an async wrapper with per-command failover for a shared method."""
 
         async def _routed(*args: Any, **kwargs: Any) -> Any:
-            if await self.is_healthy():
+            if self._health is not None and not await self.is_healthy():
+                return await _maybe_await(fallback_attr(*args, **kwargs))
+            try:
                 return await _maybe_await(primary_attr(*args, **kwargs))
-            return await _maybe_await(fallback_attr(*args, **kwargs))
+            except Exception as e:  # noqa: BLE001 - any primary failure -> fallback
+                LOGGER.debug("Primary call %r failed, routing to fallback: %s", name, e)
+                return await _maybe_await(fallback_attr(*args, **kwargs))
 
         _routed.__name__ = name
         _routed.__qualname__ = f"{type(self).__name__}.{name}"

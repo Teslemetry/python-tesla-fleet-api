@@ -23,6 +23,7 @@ tesla_fleet_api/tesla/vehicle/__init__.py
 tesla_fleet_api/tesla/vehicle/bluetooth.py
 tesla_fleet_api/tesla/vehicle/commands.py
 tesla_fleet_api/tesla/vehicle/fleet.py
+tesla_fleet_api/tesla/vehicle/router.py
 tesla_fleet_api/tesla/vehicle/signed.py
 tesla_fleet_api/tesla/vehicle/vehicle.py
 tesla_fleet_api/tesla/vehicle/vehicles.py
@@ -55,3 +56,4 @@ tesla_fleet_api/tessie/tessie.py
 tesla_fleet_api/tessie/vehicles.py
 tests/test_fleet_auth_refresh.py
 tests/test_tessie_vehicle_params.py
+tests/test_vehicle_router.py

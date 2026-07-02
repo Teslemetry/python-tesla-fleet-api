@@ -11,13 +11,13 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: aiohttp
-Requires-Dist: aiofiles
-Requires-Dist: aiolimiter
-Requires-Dist: cryptography
-Requires-Dist: protobuf
-Requires-Dist: bleak
-Requires-Dist: bleak-retry-connector
+Requires-Dist: aiohttp>=3
+Requires-Dist: aiofiles>=24
+Requires-Dist: aiolimiter>=1
+Requires-Dist: cryptography>=43
+Requires-Dist: protobuf>=6.31.1
+Requires-Dist: bleak>=0.22
+Requires-Dist: bleak-retry-connector>=3.9
 Dynamic: license-file
 
 # Tesla Fleet API
