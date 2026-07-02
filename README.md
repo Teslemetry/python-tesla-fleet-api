@@ -200,6 +200,10 @@ asyncio.run(main())
 
 By default the router attempts the primary and fails over to the fallback on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or straight to the fallback.
 
+> **Warning:** Because a failed primary call is replayed on the fallback, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after the primary may have already partially applied it — can be **double-executed** when it is retried on the fallback. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying `primary`/`fallback` instances directly.
+>
+> Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with VehicleRouter(...)` does **not** manage the primary's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `vehicle.primary`.
+
 ### Teslemetry
 
 The `Teslemetry` class provides methods to interact with the Teslemetry service. Here's a basic example:

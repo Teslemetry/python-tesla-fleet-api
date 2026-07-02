@@ -52,12 +52,33 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
     disconnect), the same call is automatically retried on the fallback with the
     same arguments. The error only propagates when the fallback also fails.
 
+    .. warning::
+
+        Because a failed primary call is replayed on the fallback, a
+        *non-idempotent* command (e.g. ``honk_horn``, ``actuate_trunk``,
+        ``door_unlock``, ``charge_start``) that fails *mid-flight* — after the
+        primary may have already partially applied it — can be **double-executed**
+        when it is retried on the fallback. This is an accepted, deliberate
+        tradeoff of per-command failover. Callers that need exactly-once
+        semantics for non-idempotent commands should gate dispatch with an
+        explicit health check (so a failing primary skips the primary entirely
+        rather than replaying on the fallback) or call the underlying
+        :attr:`primary`/:attr:`fallback` instances directly.
+
     The health check may be provided as a ``bool``, a sync callable, or an async
     callable returning ``bool``. When an explicit check evaluates ``False`` the
     primary is skipped entirely and the call routes straight to the fallback;
     when it evaluates ``True`` the primary is attempted with the same
     fall-back-on-exception behaviour. When omitted (the default) the primary is
     attempted directly with fall-back-on-exception and no up-front probe.
+
+    Dispatch is implemented via :meth:`__getattr__`, which does **not** proxy
+    special/dunder methods (Python looks those up on the type, not the instance).
+    In particular ``async with VehicleRouter(...)`` does *not* enter the primary's
+    async context manager, so a :class:`VehicleBluetooth` primary's BLE connection
+    lifecycle (``__aenter__``/``__aexit__``) is not managed by the router — its
+    commands still auto-connect on send, but explicit connect/disconnect must be
+    done by reaching through :attr:`primary`.
 
     The class is deliberately unbound over its two type parameters so the same
     pattern can later wrap a pair of energy site classes.
