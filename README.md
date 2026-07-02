@@ -8,7 +8,7 @@ Tesla Fleet API is a Python library that provides an interface to interact with 
 - Fleet API for energy sites
 - Fleet API with signed vehicle commands
 - Bluetooth for vehicles
-- Routing and failover between vehicle transports (e.g. Bluetooth primary, cloud fallback)
+- Routing and failover across backends for vehicles and energy sites (e.g. Bluetooth/local primary, cloud fallback)
 - Teslemetry integration
 - Tessie integration
 
@@ -168,7 +168,7 @@ For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles
 
 ### Routing and Failover
 
-The `VehicleRouter` class composes a primary and a fallback vehicle instance and dispatches each method call to the primary when it is healthy, automatically failing over to the fallback on error. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
+The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on error. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
 
 ```python
 import asyncio
@@ -198,11 +198,24 @@ async def main():
 asyncio.run(main())
 ```
 
-By default the router attempts the primary and fails over to the fallback on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or straight to the fallback.
+The constructor is `Router(primary, fallback, *more_backends, health=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
 
-> **Warning:** Because a failed primary call is replayed on the fallback, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after the primary may have already partially applied it — can be **double-executed** when it is retried on the fallback. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying `primary`/`fallback` instances directly.
+By default the router attempts the primary and fails over on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
+
+`EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
+
+```python
+from tesla_fleet_api.tesla.vehicle.router import EnergySiteRouter
+
+router = EnergySiteRouter(local_energysite, teslemetry_energysite)
+await router.set_operation(...)  # local first, cloud on failure
+```
+
+`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.tesla.vehicle.router` (and from `tesla_fleet_api.tesla`).
+
+> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
-> Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with VehicleRouter(...)` does **not** manage the primary's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `vehicle.primary`.
+> Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
 
 ### Teslemetry
 
