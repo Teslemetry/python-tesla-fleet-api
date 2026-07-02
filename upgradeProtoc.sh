@@ -1,4 +1,4 @@
-PROTOC_VERSION=31.1
+PROTOC_VERSION=32.0
 
 protoc --version
 curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip
