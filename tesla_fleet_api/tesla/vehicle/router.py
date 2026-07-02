@@ -11,6 +11,7 @@ from typing import (
 )
 
 from tesla_fleet_api.const import LOGGER
+from tesla_fleet_api.exceptions import TeslaFleetError
 
 PrimaryT = TypeVar("PrimaryT")
 FallbackT = TypeVar("FallbackT")
@@ -103,7 +104,7 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
                 return await _maybe_await(fallback_attr(*args, **kwargs))
             try:
                 return await _maybe_await(primary_attr(*args, **kwargs))
-            except Exception as e:  # noqa: BLE001 - any primary failure -> fallback
+            except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any primary failure -> fallback
                 LOGGER.debug("Primary call %r failed, routing to fallback: %s", name, e)
                 return await _maybe_await(fallback_attr(*args, **kwargs))
 

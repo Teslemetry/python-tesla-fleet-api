@@ -4,21 +4,26 @@ These use plain fakes for the two composed vehicle instances so no real BLE
 hardware or network access is required.
 """
 
+import asyncio
 from unittest import IsolatedAsyncioTestCase
 
+from tesla_fleet_api.exceptions import BluetoothTimeout
 from tesla_fleet_api.tesla.vehicle.router import VehicleRouter
 
 
 class _FakePrimary:
     """A fake primary whose shared command can be made to raise on demand."""
 
-    def __init__(self, *, fail: bool = False):
+    def __init__(self, *, fail: bool = False, exc: BaseException | None = None):
         self.vin = "PRIMARY_VIN"
         self.fail = fail
+        self.exc = exc
         self.shared_calls = 0
 
     async def shared(self, value: int) -> str:
         self.shared_calls += 1
+        if self.exc is not None:
+            raise self.exc
         if self.fail:
             raise ConnectionError("BLE command failed")
         return f"primary:{value}"
@@ -83,6 +88,32 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(primary.shared_calls, 1)
         self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_primary_raises_tesla_fleet_error_falls_back(self):
+        # Tesla faults subclass BaseException (not Exception); failover must
+        # still catch them and route to the fallback.
+        primary = _FakePrimary(exc=BluetoothTimeout())
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback)
+
+        result = await router.shared(11)
+
+        self.assertEqual(result, "fallback:11")
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_primary_raises_cancelled_error_propagates(self):
+        # CancelledError is a BaseException but not a TeslaFleetError; it must
+        # propagate and never trigger fallback.
+        primary = _FakePrimary(exc=asyncio.CancelledError())
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback)
+
+        with self.assertRaises(asyncio.CancelledError):
+            await router.shared(12)
+
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 0)
 
     async def test_method_missing_on_primary_falls_through(self):
         primary = _FakePrimary()
