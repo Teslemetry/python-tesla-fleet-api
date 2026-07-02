@@ -8,7 +8,11 @@ import asyncio
 from unittest import IsolatedAsyncioTestCase
 
 from tesla_fleet_api.exceptions import BluetoothTimeout
-from tesla_fleet_api.tesla.vehicle.router import VehicleRouter
+from tesla_fleet_api.tesla.vehicle.router import (
+    EnergySiteRouter,
+    Router,
+    VehicleRouter,
+)
 
 
 class _FakePrimary:
@@ -205,3 +209,140 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
 
         self.assertIs(router.primary, primary)
         self.assertIs(router.fallback, fallback)
+
+
+class _FakeBackend:
+    """A generic ordered backend for N-way routing tests.
+
+    ``has`` controls whether the shared ``cmd`` method is present at all so a
+    backend can be skipped entirely by the router.
+    """
+
+    def __init__(self, tag: str, *, fail: bool = False, has: bool = True):
+        self.tag = tag
+        self.fail = fail
+        self.calls = 0
+        if has:
+            self.cmd = self._cmd  # type: ignore[assignment]
+
+    async def _cmd(self, value: int) -> str:
+        self.calls += 1
+        if self.fail:
+            raise ConnectionError(f"{self.tag} failed")
+        return f"{self.tag}:{value}"
+
+
+class RouterNWayTests(IsolatedAsyncioTestCase):
+    """Ordered N-backend dispatch and failover behaviour."""
+
+    async def test_three_backends_routes_to_first(self):
+        a, b, c = _FakeBackend("a"), _FakeBackend("b"), _FakeBackend("c")
+        router = Router(a, b, c)
+
+        self.assertEqual(await router.cmd(1), "a:1")
+        self.assertEqual((a.calls, b.calls, c.calls), (1, 0, 0))
+
+    async def test_skips_backend_missing_the_method(self):
+        # ``b`` lacks ``cmd`` entirely and must be skipped, not attempted.
+        a = _FakeBackend("a", fail=True)
+        b = _FakeBackend("b", has=False)
+        c = _FakeBackend("c")
+        router = Router(a, b, c)
+
+        self.assertEqual(await router.cmd(2), "c:2")
+        self.assertEqual((a.calls, b.calls, c.calls), (1, 0, 1))
+
+    async def test_fails_over_through_multiple_backends_to_last(self):
+        a = _FakeBackend("a", fail=True)
+        b = _FakeBackend("b", fail=True)
+        c = _FakeBackend("c")
+        router = Router(a, b, c)
+
+        self.assertEqual(await router.cmd(3), "c:3")
+        self.assertEqual((a.calls, b.calls, c.calls), (1, 1, 1))
+
+    async def test_all_fail_raises_last_error(self):
+        a = _FakeBackend("a", fail=True)
+        b = _FakeBackend("b", fail=True)
+        c = _FakeBackend("c", fail=True)
+        router = Router(a, b, c)
+
+        with self.assertRaises(ConnectionError) as ctx:
+            await router.cmd(4)
+
+        # The *last* backend's error propagates.
+        self.assertIn("c failed", str(ctx.exception))
+        self.assertEqual((a.calls, b.calls, c.calls), (1, 1, 1))
+
+    async def test_none_have_method_raises_attribute_error(self):
+        router = Router(
+            _FakeBackend("a", has=False),
+            _FakeBackend("b", has=False),
+            _FakeBackend("c", has=False),
+        )
+
+        with self.assertRaises(AttributeError):
+            router.cmd  # noqa: B018 - triggers __getattr__
+
+    async def test_health_false_skips_only_primary_in_chain(self):
+        # Health gates the primary only; the rest of the chain is reached via
+        # ordinary per-command failover.
+        a, b, c = _FakeBackend("a"), _FakeBackend("b", fail=True), _FakeBackend("c")
+        router = Router(a, b, c, health=False)
+
+        self.assertEqual(await router.cmd(5), "c:5")
+        # Primary skipped entirely; b attempted and failed; c succeeded.
+        self.assertEqual((a.calls, b.calls, c.calls), (0, 1, 1))
+
+    async def test_backends_property_reports_full_chain(self):
+        a, b, c = _FakeBackend("a"), _FakeBackend("b"), _FakeBackend("c")
+        router = Router(a, b, c)
+
+        self.assertEqual(router.backends, (a, b, c))
+        self.assertIs(router.primary, a)
+        self.assertIs(router.fallback, b)
+
+
+class _FakeEnergySite:
+    """A minimal EnergySite-shaped object for EnergySiteRouter tests."""
+
+    def __init__(self, tag: str, site_id: int, *, fail: bool = False):
+        self.tag = tag
+        self.energy_site_id = site_id
+        self.fail = fail
+        self.calls = 0
+
+    async def set_operation(self, mode: str) -> str:
+        self.calls += 1
+        if self.fail:
+            raise ConnectionError(f"{self.tag} unreachable")
+        return f"{self.tag}:{mode}"
+
+
+class EnergySiteRouterTests(IsolatedAsyncioTestCase):
+    """EnergySiteRouter over a local primary and a cloud fallback."""
+
+    async def test_routes_to_local_primary(self):
+        local = _FakeEnergySite("local", 1)
+        cloud = _FakeEnergySite("cloud", 2)
+        router: EnergySiteRouter[_FakeEnergySite, _FakeEnergySite] = EnergySiteRouter(
+            local, cloud
+        )
+
+        self.assertEqual(await router.set_operation("self_consumption"), "local:self_consumption")
+        self.assertEqual((local.calls, cloud.calls), (1, 0))
+
+    async def test_falls_back_to_cloud(self):
+        local = _FakeEnergySite("local", 1, fail=True)
+        cloud = _FakeEnergySite("cloud", 2)
+        router = EnergySiteRouter(local, cloud)
+
+        self.assertEqual(await router.set_operation("backup"), "cloud:backup")
+        self.assertEqual((local.calls, cloud.calls), (1, 1))
+
+    async def test_non_callable_attribute_prefers_local(self):
+        local = _FakeEnergySite("local", 111)
+        cloud = _FakeEnergySite("cloud", 222)
+        router = EnergySiteRouter(local, cloud)
+
+        self.assertEqual(router.energy_site_id, 111)

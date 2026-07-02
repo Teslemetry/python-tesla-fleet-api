@@ -18,7 +18,7 @@ FallbackT = TypeVar("FallbackT")
 
 # A health check may be a static bool, a sync callable returning bool, or an
 # async callable returning bool. When omitted the router attempts the primary
-# directly and fails over to the fallback on exception (no up-front probe).
+# directly and fails over to the next backend on exception (no up-front probe).
 HealthCheck = Union[bool, Callable[[], bool], Callable[[], Awaitable[bool]]]
 
 
@@ -29,73 +29,82 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-class VehicleRouter(Generic[PrimaryT, FallbackT]):
-    """Routes method calls to a primary instance when healthy, else a fallback.
+class Router(Generic[PrimaryT, FallbackT]):
+    """Routes method calls across an ordered list of backends, tried in order.
 
-    Composes an ordered pair of vehicle instances that share a common method
-    surface (e.g. a :class:`VehicleBluetooth` primary and a cloud
-    :class:`VehicleFleet`/``TeslemetryVehicle`` fallback). Method calls are
-    dispatched dynamically:
+    Composes two or more instances that share a common method surface (e.g. a
+    :class:`VehicleBluetooth` primary and a cloud ``TeslemetryVehicle`` fallback,
+    or a local energy site and a cloud ``TeslemetryEnergySite`` fallback). The
+    first two backends are the required *primary* and *fallback*; any number of
+    additional backends may follow and are tried, in order, after them. Method
+    calls are dispatched dynamically:
 
-    - Present and callable on *both* -> the primary is attempted (subject to an
-      explicit health check) with automatic failover to the fallback.
-    - Present only on the fallback -> the fallback is called (no health gate).
-    - Present only on the primary -> the primary is called.
-    - Present on neither -> :class:`AttributeError`.
+    - Present and callable on one or more backends -> the first such backend (in
+      order) is attempted (the first backend subject to an optional health check)
+      with automatic failover down the chain to the remaining backends that also
+      have the method.
+    - Present on no backend -> :class:`AttributeError`.
 
-    Non-callable attributes (e.g. ``vin``) resolve to the primary's value when
-    present, otherwise the fallback's.
+    Non-callable attributes (e.g. ``vin``) resolve to the value of the first
+    backend that has them.
 
-    Dispatch to a both-present callable performs *per-command* failover: the
-    primary is attempted first and, if it raises any exception (a connection
-    failure or a mid-command transport error such as a write/notify failure or a
-    disconnect), the same call is automatically retried on the fallback with the
-    same arguments. The error only propagates when the fallback also fails.
+    Dispatch to a callable performs *per-command* failover: the backends that
+    expose the method are attempted in order, and if one raises any exception (a
+    connection failure or a mid-command transport error such as a write/notify
+    failure or a disconnect), the same call is automatically retried on the next
+    backend that has it, with the same arguments. The error only propagates when
+    every applicable backend fails, in which case the last error is raised.
 
     .. warning::
 
-        Because a failed primary call is replayed on the fallback, a
+        Because a failed call is replayed on the next backend, a
         *non-idempotent* command (e.g. ``honk_horn``, ``actuate_trunk``,
-        ``door_unlock``, ``charge_start``) that fails *mid-flight* — after the
-        primary may have already partially applied it — can be **double-executed**
-        when it is retried on the fallback. This is an accepted, deliberate
-        tradeoff of per-command failover. Callers that need exactly-once
-        semantics for non-idempotent commands should gate dispatch with an
-        explicit health check (so a failing primary skips the primary entirely
-        rather than replaying on the fallback) or call the underlying
-        :attr:`primary`/:attr:`fallback` instances directly.
+        ``door_unlock``, ``charge_start``) that fails *mid-flight* — after a
+        backend may have already partially applied it — can be **double-executed**
+        (or executed more than once across a longer chain) when it is retried on
+        the next backend. This is an accepted, deliberate tradeoff of per-command
+        failover. Callers that need exactly-once semantics for non-idempotent
+        commands should gate dispatch with an explicit health check (so a failing
+        primary skips the primary entirely rather than replaying down the chain)
+        or call the underlying backends directly.
 
     The health check may be provided as a ``bool``, a sync callable, or an async
-    callable returning ``bool``. When an explicit check evaluates ``False`` the
-    primary is skipped entirely and the call routes straight to the fallback;
-    when it evaluates ``True`` the primary is attempted with the same
-    fall-back-on-exception behaviour. When omitted (the default) the primary is
-    attempted directly with fall-back-on-exception and no up-front probe.
+    callable returning ``bool``. It gates **only the first backend** (the
+    primary): when an explicit check evaluates ``False`` the primary is skipped
+    entirely and the call routes to the remaining backends; when it evaluates
+    ``True`` the primary is attempted with the same fall-through-on-exception
+    behaviour. When omitted (the default) the primary is attempted directly with
+    fall-through-on-exception and no up-front probe. Backends after the primary
+    are always reached purely through per-command failover — there is deliberately
+    no per-backend health matrix.
 
     Dispatch is implemented via :meth:`__getattr__`, which does **not** proxy
     special/dunder methods (Python looks those up on the type, not the instance).
-    In particular ``async with VehicleRouter(...)`` does *not* enter the primary's
-    async context manager, so a :class:`VehicleBluetooth` primary's BLE connection
+    In particular ``async with Router(...)`` does *not* enter a backend's async
+    context manager, so a :class:`VehicleBluetooth` primary's BLE connection
     lifecycle (``__aenter__``/``__aexit__``) is not managed by the router — its
     commands still auto-connect on send, but explicit connect/disconnect must be
-    done by reaching through :attr:`primary`.
+    done by reaching through :attr:`primary` (or :attr:`backends`).
 
-    The class is deliberately unbound over its two type parameters so the same
-    pattern can later wrap a pair of energy site classes.
+    The class is deliberately unbound over its two type parameters and
+    entity-agnostic so the same pattern can wrap vehicles or energy sites; the
+    :class:`VehicleRouter` and :class:`EnergySiteRouter` subclasses are thin
+    entity-specific names over it.
     """
 
-    _primary: PrimaryT
-    _fallback: FallbackT
+    _backends: tuple[Any, ...]
     _health: HealthCheck | None
 
     def __init__(
         self,
         primary: PrimaryT,
         fallback: FallbackT,
+        *more_backends: Any,
         health: HealthCheck | None = None,
     ):
-        self._primary = primary
-        self._fallback = fallback
+        # The two-argument ``Router(primary, fallback, health=...)`` form is
+        # preserved exactly; additional positional backends extend the chain.
+        self._backends = (primary, fallback, *more_backends)
         self._health = health
 
     async def is_healthy(self) -> bool:
@@ -115,19 +124,44 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
     def _dispatch(
         self,
         name: str,
-        primary_attr: Callable[..., Any],
-        fallback_attr: Callable[..., Any],
+        targets: list[tuple[Any, Callable[..., Any]]],
     ) -> Callable[..., Awaitable[Any]]:
-        """Build an async wrapper with per-command failover for a shared method."""
+        """Build an async wrapper with per-command failover down ``targets``.
+
+        ``targets`` is the ordered list of ``(backend, callable_attr)`` pairs for
+        every backend that exposes ``name`` as a callable.
+        """
 
         async def _routed(*args: Any, **kwargs: Any) -> Any:
-            if self._health is not None and not await self.is_healthy():
-                return await _maybe_await(fallback_attr(*args, **kwargs))
-            try:
-                return await _maybe_await(primary_attr(*args, **kwargs))
-            except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any primary failure -> fallback
-                LOGGER.debug("Primary call %r failed, routing to fallback: %s", name, e)
-                return await _maybe_await(fallback_attr(*args, **kwargs))
+            start = 0
+            # The health check gates only the primary, and only when there is
+            # another backend to route to. ``targets[0]`` is the primary iff the
+            # primary itself exposes this method.
+            if (
+                self._health is not None
+                and len(targets) > 1
+                and targets[0][0] is self._backends[0]
+                and not await self.is_healthy()
+            ):
+                start = 1
+
+            last_exc: BaseException | None = None
+            for backend, attr in targets[start:]:
+                try:
+                    return await _maybe_await(attr(*args, **kwargs))
+                except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
+                    last_exc = e
+                    LOGGER.debug(
+                        "Backend %s call %r failed, routing to next backend: %s",
+                        type(backend).__name__,
+                        name,
+                        e,
+                    )
+            # The loop always runs at least once (``start`` only advances past
+            # the primary when a later backend remains), so a failure here means
+            # every applicable backend raised.
+            assert last_exc is not None
+            raise last_exc
 
         _routed.__name__ = name
         _routed.__qualname__ = f"{type(self).__name__}.{name}"
@@ -137,44 +171,68 @@ class VehicleRouter(Generic[PrimaryT, FallbackT]):
         # __getattr__ is only reached when normal lookup fails. Guard the private
         # attributes so an access before __init__ completes raises rather than
         # recursing infinitely through this method.
-        if name in ("_primary", "_fallback", "_health"):
+        if name in ("_backends", "_health"):
             raise AttributeError(name)
 
-        primary = self._primary
-        fallback = self._fallback
-        has_primary = hasattr(primary, name)
-        has_fallback = hasattr(fallback, name)
+        backends = self._backends
+        having = [b for b in backends if hasattr(b, name)]
 
-        if not has_primary and not has_fallback:
+        if not having:
             raise AttributeError(
-                f"{type(self).__name__!r} routes to neither primary "
-                f"{type(primary).__name__!r} nor fallback "
-                f"{type(fallback).__name__!r} for {name!r}"
+                f"{type(self).__name__!r} routes to none of its "
+                f"{len(backends)} backends "
+                f"({', '.join(type(b).__name__ for b in backends)}) for {name!r}"
             )
 
-        primary_attr = getattr(primary, name) if has_primary else None
-        fallback_attr = getattr(fallback, name) if has_fallback else None
+        # Non-callable attributes resolve to the first backend that has them.
+        first_attr = getattr(having[0], name)
+        if not callable(first_attr):
+            return first_attr
 
-        if (
-            has_primary
-            and has_fallback
-            and callable(primary_attr)
-            and callable(fallback_attr)
-        ):
-            return self._dispatch(name, primary_attr, fallback_attr)
+        targets = [
+            (b, attr)
+            for b in having
+            if callable(attr := getattr(b, name))
+        ]
+        return self._dispatch(name, targets)
 
-        # Only one side has it (pure fall-through), or the shared attribute is not
-        # callable. Prefer the primary's value when present.
-        if has_primary:
-            return primary_attr
-        return fallback_attr
+    @property
+    def backends(self) -> tuple[Any, ...]:
+        """The ordered backends calls are routed across."""
+        return self._backends
 
     @property
     def primary(self) -> PrimaryT:
         """The primary instance calls are routed to when healthy."""
-        return self._primary
+        return self._backends[0]
 
     @property
     def fallback(self) -> FallbackT:
-        """The fallback instance calls are routed to when the primary is unhealthy."""
-        return self._fallback
+        """The first fallback instance, tried when the primary is unhealthy or fails."""
+        return self._backends[1]
+
+
+class VehicleRouter(Router[PrimaryT, FallbackT]):
+    """A :class:`Router` over vehicle instances.
+
+    Pairs (or chains) a local primary — typically a :class:`VehicleBluetooth` —
+    with one or more cloud fallbacks (e.g. a ``TeslemetryVehicle``), routing each
+    command to the primary first and failing over down the chain. See
+    :class:`Router` for the full dispatch, failover, and health-check semantics.
+    """
+
+
+class EnergySiteRouter(Router[PrimaryT, FallbackT]):
+    """A :class:`Router` over energy-site instances.
+
+    Pairs (or chains) a local primary — a duck-typed ``EnergySite``-shaped object
+    such as aiopowerwall's ``PowerwallEnergySite`` — with one or more cloud
+    fallbacks (e.g. a ``TeslemetryEnergySite``), routing each command to the local
+    site first and failing over down the chain. See :class:`Router` for the full
+    dispatch, failover, and health-check semantics.
+
+    Example::
+
+        router = EnergySiteRouter(local_energysite, teslemetry_energysite)
+        await router.set_operation(...)  # local first, cloud on failure
+    """
