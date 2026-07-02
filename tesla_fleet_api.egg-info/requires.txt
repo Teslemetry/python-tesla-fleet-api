@@ -2,6 +2,6 @@ aiohttp>=3
 aiofiles>=24
 aiolimiter>=1
 cryptography>=43
-protobuf>=6.31.1
+protobuf>=6.32.0
 bleak>=0.22
 bleak-retry-connector>=3.9
