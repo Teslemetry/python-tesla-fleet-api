@@ -97,4 +97,5 @@ Generated protobuf files live in `tesla/vehicle/proto/` and are excluded from ru
 - **Linting**: ruff (proto files excluded).
 - **Async**: All API methods are `async`. Uses `aiohttp` for HTTP, `aiofiles` for file I/O, `bleak` for BLE.
 - **Enums**: Custom `StrEnum`/`IntEnum` in `const.py` (not stdlib). `Region` is a `Literal["na", "eu", "cn"]`, not an enum.
+- **Seat indexing gotcha**: two distinct seat enums with different conventions. `Seat` is **0-indexed** (`FRONT_LEFT=0`) and is for the manual seat heater/cooler paths (`remote_seat_heater_request`, `remote_seat_cooler_request`). `AutoSeat` is **1-indexed** (`FRONT_LEFT=1`, `FRONT_RIGHT=2`) and is the correct type for `remote_auto_seat_climate_request` on **both** backends — its values equal Tesla's REST wire values and the proto `AutoSeatPosition_*` enum. Don't mix them; passing a `Seat` to the auto-climate command is off-by-one (issue #11).
 - **Naming**: camelCase for class instance attributes that mirror API structure (`energySites`, `createFleet`). Snake_case for method names that are API endpoints.

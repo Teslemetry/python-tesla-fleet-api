@@ -5,6 +5,7 @@ from time import time
 from typing import TYPE_CHECKING, Any, Generic, List, TypeVar
 
 from tesla_fleet_api.const import (
+    AutoSeat,
     CabinOverheatProtectionTemp,
     ClimateKeeperMode,
     Level,
@@ -235,10 +236,14 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
 
     async def remote_auto_seat_climate_request(
         self,
-        auto_seat_position: int | Seat,
+        auto_seat_position: int | AutoSeat,
         auto_climate_on: bool,
     ) -> dict[str, Any]:
-        """Sets automatic seat heating and cooling."""
+        """Sets automatic seat heating and cooling.
+
+        ``auto_seat_position`` is 1-indexed (``AutoSeat.FRONT_LEFT`` == 1),
+        matching Tesla's wire values for this endpoint.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/remote_auto_seat_climate_request",
