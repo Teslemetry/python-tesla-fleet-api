@@ -11,13 +11,13 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: aiohttp
-Requires-Dist: aiofiles
-Requires-Dist: aiolimiter
-Requires-Dist: cryptography
-Requires-Dist: protobuf
-Requires-Dist: bleak
-Requires-Dist: bleak-retry-connector
+Requires-Dist: aiohttp>=3
+Requires-Dist: aiofiles>=24
+Requires-Dist: aiolimiter>=1
+Requires-Dist: cryptography>=43
+Requires-Dist: protobuf>=6.31.1
+Requires-Dist: bleak>=0.22
+Requires-Dist: bleak-retry-connector>=3.9
 Dynamic: license-file
 
 # Tesla Fleet API
@@ -30,6 +30,7 @@ Tesla Fleet API is a Python library that provides an interface to interact with 
 - Fleet API for energy sites
 - Fleet API with signed vehicle commands
 - Bluetooth for vehicles
+- Routing and failover between vehicle transports (e.g. Bluetooth primary, cloud fallback)
 - Teslemetry integration
 - Tessie integration
 
@@ -186,6 +187,44 @@ asyncio.run(main())
 ```
 
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
+
+### Routing and Failover
+
+The `VehicleRouter` class composes a primary and a fallback vehicle instance and dispatches each method call to the primary when it is healthy, automatically failing over to the fallback on error. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
+
+```python
+import asyncio
+import aiohttp
+from tesla_fleet_api import TeslaBluetooth, Teslemetry
+from tesla_fleet_api.tesla.vehicle.router import VehicleRouter
+from tesla_fleet_api.exceptions import TeslaFleetError
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        # Primary: local Bluetooth
+        tesla_bluetooth = TeslaBluetooth()
+        await tesla_bluetooth.get_private_key("path/to/private_key.pem")
+        primary = tesla_bluetooth.vehicles.create("<vin>")
+
+        # Fallback: Teslemetry cloud
+        teslemetry = Teslemetry(access_token="<access_token>", session=session)
+        fallback = teslemetry.vehicles.create("<vin>")
+
+        vehicle = VehicleRouter(primary, fallback)
+
+        try:
+            await vehicle.wake_up()
+        except TeslaFleetError as e:
+            print(e)
+
+asyncio.run(main())
+```
+
+By default the router attempts the primary and fails over to the fallback on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or straight to the fallback.
+
+> **Warning:** Because a failed primary call is replayed on the fallback, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after the primary may have already partially applied it — can be **double-executed** when it is retried on the fallback. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying `primary`/`fallback` instances directly.
+>
+> Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with VehicleRouter(...)` does **not** manage the primary's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `vehicle.primary`.
 
 ### Teslemetry
 
