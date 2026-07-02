@@ -360,12 +360,13 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         if not session.ready:
             await self._handshake(domain)
 
-        if self._auth_method == "hmac":
-            msg = await self._commandHmac(session, command)
-        elif self._auth_method == "aes":
-            msg = await self._commandAes(session, command)
-        else:
-            raise ValueError(f"Unknown auth method: {self._auth_method}")
+        async with session.lock:
+            if self._auth_method == "hmac":
+                msg = await self._commandHmac(session, command)
+            elif self._auth_method == "aes":
+                msg = await self._commandAes(session, command)
+            else:
+                raise ValueError(f"Unknown auth method: {self._auth_method}")
 
         try:
             resp = await self._send(msg, "protobuf_message_as_bytes")
