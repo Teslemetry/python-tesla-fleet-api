@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 import struct
 from random import randbytes
-from typing import Any, TYPE_CHECKING, ClassVar, Generic, Literal, TypeVar
+from typing import Any, TYPE_CHECKING, ClassVar, Generic, Literal, TypeVar, cast
 import time
 import hmac
 import hashlib
@@ -27,6 +27,7 @@ from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 from tesla_fleet_api.const import (
     LOGGER,
+    AutoSeat,
     Trunk,
     ClimateKeeperMode,
     CabinOverheatProtectionTemp,
@@ -191,11 +192,6 @@ if TYPE_CHECKING:
 CommandParentT = TypeVar("CommandParentT", bound="Tesla")
 
 # ENUMs to convert ints to proto typed ints
-AutoSeatClimatePositions = (
-    AutoSeatClimateAction.AutoSeatPosition_FrontLeft,
-    AutoSeatClimateAction.AutoSeatPosition_FrontRight,
-)
-
 HvacSeatCoolerLevels = (
     HvacSeatCoolerActions.HvacSeatCoolerLevel_Off,
     HvacSeatCoolerActions.HvacSeatCoolerLevel_Low,
@@ -994,11 +990,18 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def remote_auto_seat_climate_request(
-        self, auto_seat_position: int, auto_climate_on: bool
+        self, auto_seat_position: int | AutoSeat, auto_climate_on: bool
     ) -> dict[str, Any]:
-        """Sets automatic seat heating and cooling."""
+        """Sets automatic seat heating and cooling.
+
+        ``auto_seat_position`` is 1-indexed (``AutoSeat.FRONT_LEFT`` == 1),
+        matching Tesla's wire values and the proto ``AutoSeatPosition_*`` enum.
+        """
         # AutoSeatPosition_FrontLeft = 1;
         # AutoSeatPosition_FrontRight = 2;
+        # AutoSeat's 1-indexed values equal the proto AutoSeatPosition_* values,
+        # so the int maps directly onto the proto enum (protobuf accepts the
+        # raw int for enum fields).
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1006,9 +1009,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                         carseat=[
                             AutoSeatClimateAction.CarSeat(
                                 on=auto_climate_on,
-                                seat_position=AutoSeatClimatePositions[
-                                    auto_seat_position
-                                ],
+                                seat_position=cast(
+                                    "AutoSeatClimateAction.AutoSeatPosition_E",
+                                    auto_seat_position,
+                                ),
                             )
                         ]
                     )
