@@ -1,14 +1,15 @@
-"""Unit tests for VehicleRouter per-command failover and fall-through.
+"""Unit tests for the Router family (Router, VehicleRouter, EnergySiteRouter).
 
-These use plain fakes for the two composed vehicle instances so no real BLE
-hardware or network access is required.
+Covers per-command failover and fall-through for vehicle routing, N-way (>2)
+backend chains, and energy-site routing. These use plain fakes for the composed
+backend instances so no real BLE hardware or network access is required.
 """
 
 import asyncio
 from unittest import IsolatedAsyncioTestCase
 
 from tesla_fleet_api.exceptions import BluetoothTimeout
-from tesla_fleet_api.tesla.vehicle.router import (
+from tesla_fleet_api.tesla.router import (
     EnergySiteRouter,
     Router,
     VehicleRouter,
