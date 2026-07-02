@@ -9,10 +9,11 @@ license = "Apache-2.0"
 description = "Tesla Fleet API library for Python"
 readme = "README.md"
 authors = [{ name = "Brett Adams", email = "hello@teslemetry.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
 dependencies = [
