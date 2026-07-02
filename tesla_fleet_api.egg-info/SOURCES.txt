@@ -54,6 +54,7 @@ tesla_fleet_api/teslemetry/vehicles.py
 tesla_fleet_api/tessie/__init__.py
 tesla_fleet_api/tessie/tessie.py
 tesla_fleet_api/tessie/vehicles.py
+tests/test_command_counter_lock.py
 tests/test_fleet_auth_refresh.py
 tests/test_router.py
 tests/test_tessie_vehicle_params.py
