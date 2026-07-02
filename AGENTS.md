@@ -59,6 +59,8 @@ Commands (vehicle/commands.py) - protobuf-based signed command implementation (A
 
 `VehicleSigned` uses multiple inheritance: `Commands` for signed command logic, `VehicleFleet` for data endpoints and fallback.
 
+`VehicleRouter` (vehicle/router.py) is a composition wrapper (not part of the inheritance chain) that pairs a primary and a fallback vehicle instance and dispatches each method call to the primary when healthy, with automatic per-command failover to the fallback on error — e.g. a `VehicleBluetooth` primary with a cloud (`TeslemetryVehicle`) fallback. The health check may be a `bool`, a sync callable, or an async callable returning `bool`; when omitted it attempts the primary and fails over on exception with no up-front probe. It is exported from `tesla/vehicle/__init__.py` but has no factory on the `Vehicles` collections.
+
 ### Vehicle Collections
 
 `Vehicles` (vehicle/vehicles.py) is a `dict[str, Vehicle]` with factory methods:
