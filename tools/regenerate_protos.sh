@@ -9,7 +9,13 @@
 # Usage:
 #   tools/regenerate_protos.sh
 #
-# Requirements: protoc (>= 3) on PATH.
+# Requirements: protoc on PATH. The protoc version determines the version
+# stamped into the generated gencode: under unified protobuf versioning,
+# protoc vX.Y emits Python gencode 6.X.Y. Because protobuf refuses to load
+# gencode newer than the installed runtime, and Home Assistant core pins
+# protobuf==6.32.0, regenerate with protoc v32.0 (-> gencode 6.32.0) and keep
+# the protobuf floor in pyproject.toml in sync with the stamped version. See
+# the "Protobuf" section of AGENTS.md for the full rationale.
 
 set -euo pipefail
 
