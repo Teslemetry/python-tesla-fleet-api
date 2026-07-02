@@ -1,5 +1,7 @@
-import aiohttp
 from typing import Any
+
+import aiohttp
+
 from tesla_fleet_api.const import LOGGER
 
 
@@ -11,7 +13,9 @@ class TeslaFleetError(BaseException):
     data: dict[str, Any] | str | None = None
     key: str | None = None
 
-    def __init__(self, data: dict[str, Any] | str | None = None, status: int | None = None):
+    def __init__(
+        self, data: dict[str, Any] | str | None = None, status: int | None = None
+    ):
         LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status
@@ -122,6 +126,14 @@ class InvalidTessieToken(InvalidToken):
     """Tessie specific error for invalid access token."""
 
     key = "Invalid access token"
+
+
+class OAuthInvalid(TeslaFleetError):
+    """The OAuth token is invalid."""
+
+    message = "The OAuth token is invalid."
+    status = 401
+    key = "invalid bearer token"
 
 
 class OAuthExpired(TeslaFleetError):
@@ -670,6 +682,7 @@ class TeslaFleetMessageFaultResponseSizeExceedsMTU(TeslaFleetMessageFault):
     message = "Client's request was received, but response size exceeded MTU"
     code = 25
 
+
 class TeslaFleetMessageFaultRepeatedCounter(TeslaFleetMessageFault):
     """The vehicle has seen this counter value before. Reset the counter and try again"""
 
@@ -723,6 +736,7 @@ MESSAGE_FAULTS = [
     TeslaFleetMessageFaultRequiresResponseEncryption,
 ]
 
+
 class SignedMessageInformationFault(TeslaFleetError):
     """Vehicle has responded with an error when sending a signed command"""
 
@@ -757,7 +771,9 @@ class SignedMessageInformationFaultInvalidToken(SignedMessageInformationFault):
     code = 4
 
 
-class SignedMessageInformationFaultTokenAndCounterInvalid(SignedMessageInformationFault):
+class SignedMessageInformationFaultTokenAndCounterInvalid(
+    SignedMessageInformationFault
+):
     """Token and counter invalid fault on signed command."""
 
     message = "Token and counter invalid fault on signed command."
@@ -820,7 +836,9 @@ class SignedMessageInformationFaultSignatureTooShort(SignedMessageInformationFau
     code = 13
 
 
-class SignedMessageInformationFaultTokenIsIncorrectLength(SignedMessageInformationFault):
+class SignedMessageInformationFaultTokenIsIncorrectLength(
+    SignedMessageInformationFault
+):
     """Token is incorrect length fault on signed command."""
 
     message = "Token is incorrect length fault on signed command."
@@ -887,116 +905,155 @@ SIGNED_MESSAGE_INFORMATION_FAULTS = [
     SignedMessageInformationFaultCouldNotHashMetadata,
 ]
 
+
 class WhitelistOperationStatus(TeslaFleetError):
     message = "Whitelist operation failed"
+
 
 class WhitelistOperationUndocumentedError(WhitelistOperationStatus):
     message = "Undocumented whitelist operation error"
     code = 1
 
+
 class WhitelistOperationNoPermissionToRemoveOneself(WhitelistOperationStatus):
     message = "No permission to remove oneself from whitelist"
     code = 2
+
 
 class WhitelistOperationKeyfobSlotsFull(WhitelistOperationStatus):
     message = "Keyfob slots are full"
     code = 3
 
+
 class WhitelistOperationWhitelistFull(WhitelistOperationStatus):
     message = "Whitelist is full"
     code = 4
+
 
 class WhitelistOperationNoPermissionToAdd(WhitelistOperationStatus):
     message = "No permission to add to whitelist"
     code = 5
 
+
 class WhitelistOperationInvalidPublicKey(WhitelistOperationStatus):
     message = "Invalid public key"
     code = 6
+
 
 class WhitelistOperationNoPermissionToRemove(WhitelistOperationStatus):
     message = "No permission to remove from whitelist"
     code = 7
 
+
 class WhitelistOperationNoPermissionToChangePermissions(WhitelistOperationStatus):
     message = "No permission to change permissions"
     code = 8
+
 
 class WhitelistOperationAttemptingToElevateOthersAboveOneself(WhitelistOperationStatus):
     message = "Attempting to elevate others above oneself"
     code = 9
 
+
 class WhitelistOperationAttemptingToDemoteSuperiorToOneself(WhitelistOperationStatus):
     message = "Attempting to demote superior to oneself"
     code = 10
+
 
 class WhitelistOperationAttemptingToRemoveOwnPermissions(WhitelistOperationStatus):
     message = "Attempting to remove own permissions"
     code = 11
 
+
 class WhitelistOperationPublicKeyNotOnWhitelist(WhitelistOperationStatus):
     message = "Public key not on whitelist"
     code = 12
+
 
 class WhitelistOperationAttemptingToAddExistingKey(WhitelistOperationStatus):
     message = "Attempting to add key that is already on the whitelist"
     code = 13
 
+
 class WhitelistOperationNotAllowedToAddUnlessOnReader(WhitelistOperationStatus):
     message = "Not allowed to add unless on reader"
     code = 14
+
 
 class WhitelistOperationFMModifyingOutsideOfFMode(WhitelistOperationStatus):
     message = "FM modifying outside of F mode"
     code = 15
 
+
 class WhitelistOperationFMAttemptingToAddPermanentKey(WhitelistOperationStatus):
     message = "FM attempting to add permanent key"
     code = 16
+
 
 class WhitelistOperationFMAttemptingToRemovePermanentKey(WhitelistOperationStatus):
     message = "FM attempting to remove permanent key"
     code = 17
 
+
 class WhitelistOperationKeychainWhileFSFull(WhitelistOperationStatus):
     message = "Keychain while FS full"
     code = 18
+
 
 class WhitelistOperationAttemptingToAddKeyWithoutRole(WhitelistOperationStatus):
     message = "Attempting to add key without role"
     code = 19
 
+
 class WhitelistOperationAttemptingToAddKeyWithServiceRole(WhitelistOperationStatus):
     message = "Attempting to add key with service role"
     code = 20
 
-class WhitelistOperationNonServiceKeyAttemptingToAddServiceTech(WhitelistOperationStatus):
+
+class WhitelistOperationNonServiceKeyAttemptingToAddServiceTech(
+    WhitelistOperationStatus
+):
     message = "Non-service key attempting to add service tech"
     code = 21
 
-class WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode(WhitelistOperationStatus):
+
+class WhitelistOperationServiceKeyAttemptingToAddServiceTechOutsideServiceMode(
+    WhitelistOperationStatus
+):
     message = "Service key attempting to add service tech outside service mode"
     code = 22
+
 
 class WhitelistOperationCouldNotStartLocalEntityAuth(WhitelistOperationStatus):
     message = "Could not start local entity authentication"
     code = 23
 
+
 class WhitelistOperationLocalEntityAuthFailedUIDenied(WhitelistOperationStatus):
     message = "Local entity authentication failed - UI denied"
     code = 24
 
-class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForTap(WhitelistOperationStatus):
+
+class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForTap(
+    WhitelistOperationStatus
+):
     message = "Authorization request timed out"
     code = 25
 
-class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForUIAck(WhitelistOperationStatus):
-    message = "Local entity authentication failed - timed out waiting for UI acknowledgement"
+
+class WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForUIAck(
+    WhitelistOperationStatus
+):
+    message = (
+        "Local entity authentication failed - timed out waiting for UI acknowledgement"
+    )
     code = 26
+
 
 class WhitelistOperationLocalEntityAuthFailedValetMode(WhitelistOperationStatus):
     message = "Local entity authentication failed - valet mode"
     code = 27
+
 
 class WhitelistOperationLocalEntityAuthFailedCancelled(WhitelistOperationStatus):
     message = "Local entity authentication failed - cancelled"
@@ -1032,7 +1089,7 @@ WHITELIST_OPERATION_STATUS = [
     WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForTap,
     WhitelistOperationLocalEntityAuthFailedTimedOutWaitingForUIAck,
     WhitelistOperationLocalEntityAuthFailedValetMode,
-    WhitelistOperationLocalEntityAuthFailedCancelled
+    WhitelistOperationLocalEntityAuthFailedCancelled,
 ]
 
 
