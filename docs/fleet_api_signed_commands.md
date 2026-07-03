@@ -244,3 +244,35 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Low Power / Keep Accessory Power Modes
+
+These are signed-only commands with no Fleet API REST equivalent. `set_low_power_mode` reduces standby power consumption while the vehicle is parked, and `set_keep_accessory_power_mode` keeps 12V accessory power available while parked. Both take a single `bool` to turn the mode on or off:
+
+```python
+import asyncio
+import aiohttp
+from tesla_fleet_api import TeslaFleetApi
+from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
+from tesla_fleet_api.exceptions import TeslaFleetError
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        api = TeslaFleetApi(
+            access_token="<access_token>",
+            session=session,
+            region="na",
+        )
+
+        try:
+            vehicle = VehicleSigned(api, "<vin>")
+            await vehicle.handshake()
+            low_power_response = await vehicle.set_low_power_mode(True)
+            print(low_power_response)
+            accessory_power_response = await vehicle.set_keep_accessory_power_mode(True)
+            print(accessory_power_response)
+        except TeslaFleetError as e:
+            print(e)
+
+asyncio.run(main())
+```
