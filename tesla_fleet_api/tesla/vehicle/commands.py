@@ -161,6 +161,9 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     NavigationGpsDestinationRequest,
     # Group 11: Admin
     VehicleControlResetPinToDriveAdminAction,
+    # Group 12: Power modes
+    SetLowPowerModeAction,
+    SetKeepAccessoryPowerModeAction,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
     VehicleData,
@@ -1289,6 +1292,28 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     setCopTempAction=SetCopTempAction(
                         copActivationTemp=CopActivationTemps[cop_temp]
                     )
+                )
+            )
+        )
+
+    async def set_keep_accessory_power_mode(self, on: bool) -> dict[str, Any]:
+        """Turns Keep Accessory Power mode on and off, keeping 12V accessory power available while the vehicle is parked."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setKeepAccessoryPowerModeAction=SetKeepAccessoryPowerModeAction(
+                        keep_accessory_power_mode=on
+                    )
+                )
+            )
+        )
+
+    async def set_low_power_mode(self, on: bool) -> dict[str, Any]:
+        """Turns Low Power mode on and off, reducing standby power consumption while the vehicle is parked."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setLowPowerModeAction=SetLowPowerModeAction(low_power_mode=on)
                 )
             )
         )
