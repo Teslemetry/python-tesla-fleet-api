@@ -137,6 +137,8 @@ message VehicleAction {
     StopLightShowAction stopLightShowAction = 116;
     StartLightShowAction startLightShowAction = 117;
     SetSuspensionLevelAction setSuspensionLevelAction = 118;
+    SetLowPowerModeAction setLowPowerModeAction = 130;
+    SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
   }
 }
 
@@ -891,4 +893,12 @@ message SetSuspensionLevelAction {
   }
 
   SuspensionLevel suspension_level = 1;
+}
+
+message SetLowPowerModeAction {
+  bool low_power_mode = 1;
+}
+
+message SetKeepAccessoryPowerModeAction {
+  bool keep_accessory_power_mode = 1;
 }
