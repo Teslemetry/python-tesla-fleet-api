@@ -7,7 +7,7 @@ import aiohttp
 from tesla_fleet_api.const import LOGGER, Method, is_valid_region
 from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.teslemetry.energysite import TeslemetryEnergySites
-from tesla_fleet_api.teslemetry.vehicles import TeslemetryVehicles
+from tesla_fleet_api.teslemetry.vehicle import TeslemetryVehicles
 
 
 class Teslemetry(TeslaFleetApi):

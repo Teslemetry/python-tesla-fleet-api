@@ -4,7 +4,7 @@ import aiohttp
 
 from tesla_fleet_api.const import Method
 from tesla_fleet_api.tesla import TeslaFleetApi
-from tesla_fleet_api.tessie.vehicles import TessieVehicles
+from tesla_fleet_api.tessie.vehicle import TessieVehicles
 
 
 class Tessie(TeslaFleetApi):

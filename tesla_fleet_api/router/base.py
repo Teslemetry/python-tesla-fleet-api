@@ -14,7 +14,7 @@ from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.exceptions import TeslaFleetError
 
 PrimaryT = TypeVar("PrimaryT")
-FallbackT = TypeVar("FallbackT")
+SecondaryT = TypeVar("SecondaryT")
 
 # A health check may be a static bool, a sync callable returning bool, or an
 # async callable returning bool. When omitted the router attempts the primary
@@ -29,13 +29,13 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
-class Router(Generic[PrimaryT, FallbackT]):
+class Router(Generic[PrimaryT, SecondaryT]):
     """Routes method calls across an ordered list of backends, tried in order.
 
     Composes two or more instances that share a common method surface (e.g. a
-    :class:`VehicleBluetooth` primary and a cloud ``TeslemetryVehicle`` fallback,
-    or a local energy site and a cloud ``TeslemetryEnergySite`` fallback). The
-    first two backends are the required *primary* and *fallback*; any number of
+    :class:`VehicleBluetooth` primary and a cloud ``TeslemetryVehicle`` secondary,
+    or a local energy site and a cloud ``TeslemetryEnergySite`` secondary). The
+    first two backends are the required *primary* and *secondary*; any number of
     additional backends may follow and are tried, in order, after them. Method
     calls are dispatched dynamically:
 
@@ -98,13 +98,13 @@ class Router(Generic[PrimaryT, FallbackT]):
     def __init__(
         self,
         primary: PrimaryT,
-        fallback: FallbackT,
+        secondary: SecondaryT,
         *more_backends: Any,
         health: HealthCheck | None = None,
     ):
-        # The two-argument ``Router(primary, fallback, health=...)`` form is
+        # The two-argument ``Router(primary, secondary, health=...)`` form is
         # preserved exactly; additional positional backends extend the chain.
-        self._backends = (primary, fallback, *more_backends)
+        self._backends = (primary, secondary, *more_backends)
         self._health = health
 
     async def is_healthy(self) -> bool:
@@ -203,32 +203,6 @@ class Router(Generic[PrimaryT, FallbackT]):
         return self._backends[0]
 
     @property
-    def fallback(self) -> FallbackT:
-        """The first fallback instance, tried when the primary is unhealthy or fails."""
+    def secondary(self) -> SecondaryT:
+        """The second backend, tried when the primary is unhealthy or fails."""
         return self._backends[1]
-
-
-class VehicleRouter(Router[PrimaryT, FallbackT]):
-    """A :class:`Router` over vehicle instances.
-
-    Pairs (or chains) a local primary — typically a :class:`VehicleBluetooth` —
-    with one or more cloud fallbacks (e.g. a ``TeslemetryVehicle``), routing each
-    command to the primary first and failing over down the chain. See
-    :class:`Router` for the full dispatch, failover, and health-check semantics.
-    """
-
-
-class EnergySiteRouter(Router[PrimaryT, FallbackT]):
-    """A :class:`Router` over energy-site instances.
-
-    Pairs (or chains) a local primary — a duck-typed ``EnergySite``-shaped object
-    such as aiopowerwall's ``PowerwallEnergySite`` — with one or more cloud
-    fallbacks (e.g. a ``TeslemetryEnergySite``), routing each command to the local
-    site first and failing over down the chain. See :class:`Router` for the full
-    dispatch, failover, and health-check semantics.
-
-    Example::
-
-        router = EnergySiteRouter(local_energysite, teslemetry_energysite)
-        await router.set_operation(...)  # local first, cloud on failure
-    """

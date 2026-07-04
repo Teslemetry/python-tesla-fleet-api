@@ -4,7 +4,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
 from tesla_fleet_api.const import Method
-from tesla_fleet_api.tessie.vehicles import TessieVehicle
+from tesla_fleet_api.tessie.vehicle import TessieVehicle
 
 
 class TessieVehicleParameterTests(IsolatedAsyncioTestCase):

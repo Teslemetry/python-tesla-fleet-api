@@ -9,7 +9,7 @@ import asyncio
 from unittest import IsolatedAsyncioTestCase
 
 from tesla_fleet_api.exceptions import BluetoothTimeout
-from tesla_fleet_api.tesla.router import (
+from tesla_fleet_api.router import (
     EnergySiteRouter,
     Router,
     VehicleRouter,
@@ -203,13 +203,13 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         self.assertEqual(await router.shared(6), "fallback:6")
         self.assertEqual(primary.shared_calls, 0)
 
-    async def test_primary_and_fallback_properties(self):
+    async def test_primary_and_secondary_properties(self):
         primary = _FakePrimary()
         fallback = _FakeFallback()
         router = VehicleRouter(primary, fallback)
 
         self.assertIs(router.primary, primary)
-        self.assertIs(router.fallback, fallback)
+        self.assertIs(router.secondary, fallback)
 
 
 class _FakeBackend:
@@ -301,7 +301,7 @@ class RouterNWayTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(router.backends, (a, b, c))
         self.assertIs(router.primary, a)
-        self.assertIs(router.fallback, b)
+        self.assertIs(router.secondary, b)
 
 
 class _FakeEnergySite:
