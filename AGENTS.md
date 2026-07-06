@@ -79,6 +79,14 @@ Each API client lazily attaches submodules in `__init__` via class attributes on
 
 Scope flags on `TeslaFleetApi.__init__` control which submodules are instantiated.
 
+### Shared Utilities
+
+`util.py` holds small, dependency-free helpers shared across the library, re-exported from the top-level package. `firmware_compare(a, b) -> int` compares dotted, numeric, week-based Tesla firmware version strings (e.g. `2025.14.3`) correctly — plain string comparison misorders them (`"2025.10" < "2025.9"`). It returns 1/-1/0, right-pads shorter versions with zeros before comparing, and treats unparseable strings (e.g. `"Unknown"`) as sorting behind any parseable version. `firmware_at_least(firmware, minimum) -> bool` is a thin wrapper (`firmware_compare(firmware, minimum) >= 0`) for the common "does this vehicle's firmware support feature X" gate — ported from Home Assistant core PR #175745, which fixed the same lexicographic bug in the `teslemetry` integration. Deliberately implemented as native tuple comparison rather than taking on an `AwesomeVersion` dependency, matching this library's narrow, purpose-built dependency list (no general-purpose version-parsing lib elsewhere).
+
+### Release Process
+
+No release-please or version-bump automation. To ship: bump `version` in `pyproject.toml` and `__version__` in `tesla_fleet_api/__init__.py` in a `Bump version to X.Y.Z` commit on `main`, then push a matching `vX.Y.Z` tag. `.github/workflows/python-publish.yml` runs on every push but only builds+publishes to PyPI (and creates a GitHub Release) when `github.ref` starts with `refs/tags/` — pushing the tag is what actually ships the release; merging to `main` alone does not.
+
 ### Error Handling
 
 `exceptions.py` maps HTTP status codes and error keys to specific exception classes. `raise_for_status()` parses responses and raises the appropriate exception. Signed command faults have separate hierarchies: `TeslaFleetInformationFault`, `TeslaFleetMessageFault`, `SignedMessageInformationFault`, `WhitelistOperationStatus`.

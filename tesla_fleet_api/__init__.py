@@ -9,6 +9,7 @@ from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 from tesla_fleet_api.tessie.tessie import Tessie
+from tesla_fleet_api.util import firmware_at_least, firmware_compare
 
 __all__ = [
     "Region",
@@ -17,5 +18,7 @@ __all__ = [
     "TeslaFleetOAuth",
     "Teslemetry",
     "Tessie",
+    "firmware_at_least",
+    "firmware_compare",
     "is_valid_region",
 ]
