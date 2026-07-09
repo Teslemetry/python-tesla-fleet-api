@@ -2,8 +2,11 @@
 
 Covers ``adjust_volume``, ``media_volume_up/down``, ``media_toggle_playback``,
 ``media_next_track``/``media_prev_track``/``media_next_fav``/``media_prev_fav``
-(all INFO, inherited from ``Commands``). All eight are live-verified against
-the test car - see AGENTS.md for the live-verify evidence summary.
+(all INFO, inherited from ``Commands``). Live-verify against the test car is
+DEFERRED - the BLE proxy rig was unreliable during the attempt (GATT
+write-response timeouts on every signed-command write; plain reads succeeded),
+so no snapshot->act->verify->restore cycle could complete. See AGENTS.md for
+the transport-instability finding.
 
 ``remote_boombox`` is CAPTAIN-PRESENT-ONLY (plays sound through the external
 speaker) - mocked-transport coverage only here, never actuated live.
