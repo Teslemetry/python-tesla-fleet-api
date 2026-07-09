@@ -35,6 +35,7 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     CommandStatus,
     FromVCSECMessage,
+    VehicleStatus,
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     OperationStatus_E as VcsecOperationStatus_E,
@@ -51,6 +52,15 @@ def vcsec_ok_reply() -> RoutableMessage:
             operationStatus=VcsecOperationStatus_E.OPERATIONSTATUS_OK
         )
     )
+    return RoutableMessage(
+        from_destination=Destination(domain=Domain.DOMAIN_VEHICLE_SECURITY),
+        protobuf_message_as_bytes=body.SerializeToString(),
+    )
+
+
+def vcsec_vehicle_status_reply(vehicle_status: VehicleStatus) -> RoutableMessage:
+    """A canned VCSEC reply carrying a ``vehicleStatus`` (as returned by an InformationRequest)."""
+    body = FromVCSECMessage(vehicleStatus=vehicle_status)
     return RoutableMessage(
         from_destination=Destination(domain=Domain.DOMAIN_VEHICLE_SECURITY),
         protobuf_message_as_bytes=body.SerializeToString(),

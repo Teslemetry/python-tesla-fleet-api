@@ -540,13 +540,44 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         return
 
     async def wake_up(self):
-        """Wake up the vehicle."""
+        """Wake up the vehicle security computer.
+
+        The infotainment computer may still need a short delay before it can
+        complete signed-command handshakes, so callers that issue INFO-domain
+        reads immediately after waking should retry ``BluetoothTimeout`` with
+        backoff.
+        """
         return await self._sendVehicleSecurity(
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
         )
 
     async def vehicle_data(self, endpoints: list[BluetoothVehicleData]) -> VehicleData:
-        """Get vehicle data."""
+        """Get vehicle data over the BLE infotainment channel.
+
+        This is a BLE-specific method, not a re-implementation of the cloud
+        one, and it diverges from ``VehicleFleet.vehicle_data()`` in ways a
+        cloud user porting to BLE should not be surprised by:
+
+        - ``endpoints`` takes ``BluetoothVehicleData`` (proto request names
+          like ``"GetChargeState"``), not the cloud ``VehicleDataEndpoint``
+          (REST names like ``"charge_state"``) - the two enums are not
+          interchangeable.
+        - The return type is the ``VehicleData`` protobuf message built from
+          the signed-command reply, not a REST JSON ``dict``. Use
+          ``tesla_fleet_api.tesla.bluetooth.toDict``/``toJson`` to convert it
+          if a dict is needed.
+        - Unlike the cloud method, ``endpoints`` has no "all endpoints"
+          default: requesting more than one sub-state in a single call risks
+          exceeding the vehicle's signed-command response-size cap, raised as
+          ``TeslaFleetMessageFaultResponseSizeExceedsMTU`` - observed live
+          with as few as two endpoints requested together. The individual
+          state readers (``charge_state()``, ``climate_state()``, etc.) each
+          issue their own single-endpoint request and are not subject to
+          this cap; prefer them, or a narrow explicit ``endpoints`` subset,
+          over a large composite call. A future enhancement could split a
+          multi-endpoint request into multiple under-the-cap round trips and
+          merge the replies, but that auto-chunking is not implemented here.
+        """
         return await self._getInfotainment(
             Action(
                 vehicleAction=VehicleAction(
