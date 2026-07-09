@@ -65,7 +65,7 @@ You can wake up a `VehicleBluetooth` instance using the `wake_up` method. Here's
 ```python
 import asyncio
 from tesla_fleet_api import TeslaBluetooth
-from tesla_fleet_api.exceptions import BluetoothTimeout
+from tesla_fleet_api.exceptions import BluetoothTimeout, TeslaFleetError
 
 async def main():
     tesla_bluetooth = TeslaBluetooth()
@@ -76,6 +76,8 @@ async def main():
         await vehicle.wake_up()
     except BluetoothTimeout:
         pass
+    except TeslaFleetError as e:
+        print(e)
     print(f"Sent wake request to VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
@@ -88,6 +90,14 @@ backoff. The infotainment computer can also take longer to become ready than
 the vehicle-security computer, so INFO-domain reads immediately after waking
 should retry `BluetoothTimeout` with backoff. Keep one BLE connection open
 across related commands when possible instead of reconnecting for each command.
+
+`VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
+subclass, when the BLE connection or GATT command write fails before a vehicle
+response can be awaited. The original `bleak.exc.BleakError` is available as
+the exception's `__cause__`. Catch `TeslaFleetError` to handle both transport
+failures and response-wait `BluetoothTimeout` failures with one library error
+hierarchy, or catch `BluetoothTransportError` separately when you need to
+distinguish a transport failure from a vehicle timeout.
 
 ## Climate Commands
 
