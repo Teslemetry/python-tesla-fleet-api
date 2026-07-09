@@ -181,6 +181,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
+    _ack_followup_timeout: float = 2
 
     def __init__(
         self,
@@ -288,8 +289,18 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
             return
 
+        queue = self._queues.get(msg.from_destination.domain)
+        if queue is None:
+            # Domain enum has values (e.g. DOMAIN_BROADCAST, DOMAIN_AUTHD) with
+            # no session/queue of our own; indexing _queues directly would
+            # raise KeyError and abort the reassembly loop mid-buffer.
+            LOGGER.debug(
+                f"Ignoring message from unhandled domain {msg.from_destination.domain}"
+            )
+            return
+
         LOGGER.debug(f"Received response: {msg}")
-        self._queues[msg.from_destination.domain].put_nowait(msg)
+        queue.put_nowait(msg)
 
     async def _send(
         self, msg: RoutableMessage, requires: str, timeout: int = 5
@@ -332,7 +343,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                                 "Received ACK for our request, waiting briefly for data follow-up"
                             )
                             try:
-                                async with asyncio.timeout(2):
+                                async with asyncio.timeout(self._ack_followup_timeout):
                                     while True:
                                         resp2 = await self._queues[domain].get()
                                         LOGGER.debug(
