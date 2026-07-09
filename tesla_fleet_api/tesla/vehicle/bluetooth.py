@@ -540,7 +540,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         return
 
     async def wake_up(self):
-        """Wake up the vehicle."""
+        """Wake up the vehicle security computer.
+
+        The infotainment computer may still need a short delay before it can
+        complete signed-command handshakes, so callers that issue INFO-domain
+        reads immediately after waking should retry ``BluetoothTimeout`` with
+        backoff.
+        """
         return await self._sendVehicleSecurity(
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
         )

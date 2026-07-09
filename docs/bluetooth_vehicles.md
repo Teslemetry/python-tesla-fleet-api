@@ -77,6 +77,11 @@ async def main():
 asyncio.run(main())
 ```
 
+`wake_up()` returns when the vehicle-security computer acknowledges the wake
+request. The infotainment computer can take longer to become ready, so
+INFO-domain reads immediately after waking, such as `charge_state()` or
+`vehicle_data()`, should retry `BluetoothTimeout` with backoff.
+
 ## Open/Close Individual Doors (Bluetooth Only)
 
 The individual door closure commands are Bluetooth-only and are not available via Fleet API signed commands.
@@ -112,20 +117,53 @@ asyncio.run(main())
 
 ## Get Vehicle Data
 
-You can get data from a `VehicleBluetooth` instance using the `vehicle_data` method. Here's a basic example to get data from a `VehicleBluetooth` instance:
+You can get data from a `VehicleBluetooth` instance using the individual state
+reader methods. Each reader sends one BLE vehicle-data request and returns the
+typed protobuf state from the signed-command reply.
 
 ```python
 import asyncio
-from tesla_fleet_api import TeslaBluetooth, BluetoothVehicleData
+from tesla_fleet_api import TeslaBluetooth
 
 async def main():
     tesla_bluetooth = TeslaBluetooth()
     device = await tesla_bluetooth.find_vehicle()
     private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
-    data = await vehicle.vehicle_data([BluetoothVehicleData.CHARGE_STATE, BluetoothVehicleData.CLIMATE_STATE])
-    print(f"Vehicle data for VIN: {vehicle.vin}")
-    print(data)
+    charge_state = await vehicle.charge_state()
+    print(f"Battery level for VIN {vehicle.vin}: {charge_state.battery_level}")
 
 asyncio.run(main())
 ```
+
+Available BLE state readers:
+
+- `vehicle_state()`
+- `charge_state()`
+- `climate_state()`
+- `drive_state()`
+- `location_state()`
+- `closures_state()`
+- `charge_schedule_state()`
+- `preconditioning_schedule_state()`
+- `tire_pressure_state()`
+- `media_state()`
+- `media_detail_state()`
+- `software_update_state()`
+- `parental_controls_state()`
+
+For explicit composite requests, use `vehicle_data(endpoints)` with
+`BluetoothVehicleData` values:
+
+```python
+from tesla_fleet_api import BluetoothVehicleData
+
+data = await vehicle.vehicle_data([BluetoothVehicleData.CHARGE_STATE])
+```
+
+Unlike `VehicleFleet.vehicle_data()`, the BLE `vehicle_data()` method requires
+an explicit `endpoints` list and returns a `VehicleData` protobuf message, not a
+REST JSON `dict`. Prefer the individual state readers, or a single explicit
+endpoint, because requesting multiple endpoints together can exceed the
+vehicle's signed-command response-size cap and raise
+`TeslaFleetMessageFaultResponseSizeExceedsMTU`.
