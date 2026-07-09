@@ -197,7 +197,8 @@ class VehicleStateTests(MockedBleTransportTestCase):
 
 
 class VehicleDataTests(MockedBleTransportTestCase):
-    """``vehicle_data`` composite reader, including the ``endpoints=None`` default-to-all behavior."""
+    """``vehicle_data`` composite reader; ``endpoints`` is required (no all-endpoints default,
+    see the response-size-cap note in its docstring)."""
 
     async def test_explicit_endpoints_requests_only_those_substates(self) -> None:
         vehicle, send = self.make_vehicle()
@@ -218,22 +219,3 @@ class VehicleDataTests(MockedBleTransportTestCase):
         get_vehicle_data = action.vehicleAction.getVehicleData
         self.assertTrue(get_vehicle_data.HasField("getChargeState"))
         self.assertFalse(get_vehicle_data.HasField("getClimateState"))
-
-    async def test_no_endpoints_defaults_to_requesting_all_substates(self) -> None:
-        vehicle, send = self.make_vehicle()
-        send.return_value = infotainment_vehicle_data_reply(VehicleData())
-
-        await vehicle.vehicle_data()
-
-        send.assert_awaited_once()
-        sent_msg = send.await_args.args[0]
-
-        plaintext = decrypt_sent_command(vehicle, sent_msg)
-        action = Action.FromString(plaintext)
-        get_vehicle_data = action.vehicleAction.getVehicleData
-        for member in BluetoothVehicleData:
-            field_name = member.value[0].lower() + member.value[1:]
-            self.assertTrue(
-                get_vehicle_data.HasField(field_name),
-                f"expected {field_name} to be requested by default",
-            )

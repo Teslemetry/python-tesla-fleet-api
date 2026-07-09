@@ -545,18 +545,12 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
         )
 
-    async def vehicle_data(
-        self, endpoints: list[BluetoothVehicleData] | None = None
-    ) -> VehicleData:
+    async def vehicle_data(self, endpoints: list[BluetoothVehicleData]) -> VehicleData:
         """Get vehicle data over the BLE infotainment channel.
 
-        ``endpoints`` defaults to every ``BluetoothVehicleData`` member (all
-        BLE-readable sub-states), mirroring the cloud ``vehicle_data()``
-        "no argument = everything" ergonomics.
-
         This is a BLE-specific method, not a re-implementation of the cloud
-        one, and it diverges from ``VehicleFleet.vehicle_data()`` in two ways
-        that a cloud user porting to BLE should not be surprised by:
+        one, and it diverges from ``VehicleFleet.vehicle_data()`` in ways a
+        cloud user porting to BLE should not be surprised by:
 
         - ``endpoints`` takes ``BluetoothVehicleData`` (proto request names
           like ``"GetChargeState"``), not the cloud ``VehicleDataEndpoint``
@@ -566,18 +560,18 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
           the signed-command reply, not a REST JSON ``dict``. Use
           ``tesla_fleet_api.tesla.bluetooth.toDict``/``toJson`` to convert it
           if a dict is needed.
-
-        Requesting more than one sub-state in a single call risks exceeding
-        the vehicle's signed-command response-size cap, raised as
-        ``TeslaFleetMessageFaultResponseSizeExceedsMTU`` - observed live with
-        as few as two endpoints, and reliably with the ``None`` default's
-        full set. The individual state readers (``charge_state()``,
-        ``climate_state()``, etc.) each issue their own single-endpoint
-        request and are not subject to this cap; prefer them, or a
-        narrow explicit ``endpoints`` subset, over the ``None`` default.
+        - Unlike the cloud method, ``endpoints`` has no "all endpoints"
+          default: requesting more than one sub-state in a single call risks
+          exceeding the vehicle's signed-command response-size cap, raised as
+          ``TeslaFleetMessageFaultResponseSizeExceedsMTU`` - observed live
+          with as few as two endpoints requested together. The individual
+          state readers (``charge_state()``, ``climate_state()``, etc.) each
+          issue their own single-endpoint request and are not subject to
+          this cap; prefer them, or a narrow explicit ``endpoints`` subset,
+          over a large composite call. A future enhancement could split a
+          multi-endpoint request into multiple under-the-cap round trips and
+          merge the replies, but that auto-chunking is not implemented here.
         """
-        if endpoints is None:
-            endpoints = list(BluetoothVehicleData)
         return await self._getInfotainment(
             Action(
                 vehicleAction=VehicleAction(
