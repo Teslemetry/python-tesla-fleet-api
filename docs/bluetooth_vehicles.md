@@ -99,6 +99,20 @@ failures and response-wait `BluetoothTimeout` failures with one library error
 hierarchy, or catch `BluetoothTransportError` separately when you need to
 distinguish a transport failure from a vehicle timeout.
 
+## Mutating Command Timeouts
+
+A `BluetoothTimeout` from a mutating BLE command is inconclusive, not proof that
+the command failed. The vehicle can apply the command even when its
+acknowledgement does not reach the client. For commands that change vehicle
+state, snapshot the relevant state before acting and verify the outcome with a
+follow-up state read after any timeout.
+
+Do not blind-retry non-idempotent commands, such as media toggles, volume steps,
+or schedule add/remove operations, on timeout alone. The signed-command retry
+inside the library can also re-send an identical command after a WAIT status or
+epoch/token fault, so verify by absolute state rather than by counting command
+attempts.
+
 ## Climate Commands
 
 Bluetooth vehicles support the same signed climate command methods as
@@ -289,10 +303,9 @@ such as `now_playing_artist`, `now_playing_title`, and the
 so track/favorite navigation is best verified by the command acknowledgement and
 paired with the inverse command when an exact state fingerprint is unavailable.
 
-If a BLE write times out, re-read the relevant state before assuming the command
-applied. A timeout while waiting for the GATT write response may mean the
-command never reached the vehicle, even when plain BLE reads on the same
-connection are succeeding.
+If a BLE write times out, re-read the relevant state before assuming whether the
+command applied. A timeout while waiting for the GATT write response is not
+enough to prove either failure or success.
 
 `remote_boombox(sound)` also uses the INFO-domain signed-command transport and
 plays through the vehicle external speaker. Use it only when someone is present
