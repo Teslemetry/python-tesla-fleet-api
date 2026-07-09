@@ -12,6 +12,9 @@ class Domain(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DOMAIN_BROADCAST: _ClassVar[Domain]
     DOMAIN_VEHICLE_SECURITY: _ClassVar[Domain]
     DOMAIN_INFOTAINMENT: _ClassVar[Domain]
+    DOMAIN_AUTHD: _ClassVar[Domain]
+    DOMAIN_ENERGY_DEVICE: _ClassVar[Domain]
+    DOMAIN_ENERGY_DEVICE_AUTH: _ClassVar[Domain]
 
 class OperationStatus_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -58,6 +61,9 @@ class Flags(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
 DOMAIN_BROADCAST: Domain
 DOMAIN_VEHICLE_SECURITY: Domain
 DOMAIN_INFOTAINMENT: Domain
+DOMAIN_AUTHD: Domain
+DOMAIN_ENERGY_DEVICE: Domain
+DOMAIN_ENERGY_DEVICE_AUTH: Domain
 OPERATIONSTATUS_OK: OperationStatus_E
 OPERATIONSTATUS_WAIT: OperationStatus_E
 OPERATIONSTATUS_ERROR: OperationStatus_E

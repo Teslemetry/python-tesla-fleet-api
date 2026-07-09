@@ -40,6 +40,7 @@ PROTOS=(
   vehicle.proto
   car_server.proto
   universal_message.proto
+  session.proto
 )
 
 # Copy the top-level .proto files into proto/tesla/, rewriting imports of our
@@ -50,7 +51,7 @@ import re, sys
 src, dst = sys.argv[1], sys.argv[2]
 own = {"common.proto","errors.proto","keys.proto","signatures.proto",
        "managed_charging.proto","vcsec.proto","vehicle.proto",
-       "car_server.proto","universal_message.proto"}
+       "car_server.proto","universal_message.proto","session.proto"}
 text = open(src).read()
 def repl(m):
     name = m.group(1)
