@@ -32,7 +32,9 @@ class DoorLockTests(MockedBleTransportTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
         send.assert_awaited_once()
-        sent_msg = send.await_args.args[0]
+        await_args = send.await_args
+        assert await_args is not None
+        sent_msg = await_args.args[0]
         self.assertEqual(sent_msg.to_destination.domain, Domain.DOMAIN_VEHICLE_SECURITY)
         self.assertTrue(sent_msg.signature_data.HasField("AES_GCM_Personalized_data"))
 
@@ -53,7 +55,9 @@ class SetTempsTests(MockedBleTransportTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
         send.assert_awaited_once()
-        sent_msg = send.await_args.args[0]
+        await_args = send.await_args
+        assert await_args is not None
+        sent_msg = await_args.args[0]
         self.assertEqual(sent_msg.to_destination.domain, Domain.DOMAIN_INFOTAINMENT)
         self.assertTrue(sent_msg.signature_data.HasField("AES_GCM_Personalized_data"))
 

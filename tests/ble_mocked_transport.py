@@ -10,7 +10,7 @@ real handshake.
 from __future__ import annotations
 
 import struct
-from typing import Any
+from typing import Any, cast
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
@@ -96,16 +96,17 @@ class MockedBleTransportTestCase(IsolatedAsyncioTestCase):
 
         # Mark both signed-command sessions ready so _command skips the
         # handshake round-trip (which would otherwise also go through _send).
-        for session in vehicle._sessions.values():
+        sessions = cast("dict[int, Any]", getattr(vehicle, "_sessions"))
+        for session in sessions.values():
             session.epoch = b"\x00" * 16
             session.hmac = b"\x00" * 32
             session.delta = 0
             session.sharedKey = b"\x00" * 16
 
         send = AsyncMock()
-        vehicle._send = send  # pyright: ignore[reportAttributeAccessIssue]
+        setattr(vehicle, "_send", send)
         # connect_if_needed would otherwise attempt a real BLE connection.
-        vehicle.connect_if_needed = AsyncMock()  # pyright: ignore[reportAttributeAccessIssue]
+        setattr(vehicle, "connect_if_needed", AsyncMock())
 
         return vehicle, send
 
@@ -118,7 +119,8 @@ def decrypt_sent_command(vehicle: VehicleBluetooth[Any], msg: RoutableMessage) -
     plaintext command proto that was actually about to be sent to the car.
     """
     domain = msg.to_destination.domain
-    session = vehicle._sessions[domain]
+    sessions = cast("dict[int, Any]", getattr(vehicle, "_sessions"))
+    session = sessions[domain]
     assert session.sharedKey is not None
     sig = msg.signature_data.AES_GCM_Personalized_data
 
