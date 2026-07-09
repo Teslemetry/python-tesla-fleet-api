@@ -949,14 +949,18 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def navigation_gps_request(
         self, lat: float, lon: float, order: int
     ) -> dict[str, Any]:
-        """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
+        """Start navigation to coordinates.
+
+        ``order`` is the Tesla/protobuf remote-nav order integer: 1 replaces
+        the trip, 2 prepends a stop, and 3 appends a stop.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
                     navigationGpsRequest=NavigationGpsRequest(
                         lat=lat,
                         lon=lon,
-                        order=NavigationGpsRequest.RemoteNavTripOrder(order),
+                        order=order,  # pyright: ignore[reportArgumentType]
                     )
                 )
             )
@@ -2166,7 +2170,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def navigation_gps_destination_request(
         self, lat: float, lon: float, destination: str, order: int
     ) -> dict[str, Any]:
-        """Navigates to a GPS destination with a named destination string."""
+        """Navigate to coordinates with a named destination string.
+
+        ``order`` is the Tesla/protobuf remote-nav order integer: 1 replaces
+        the trip, 2 prepends a stop, and 3 appends a stop.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
