@@ -12,8 +12,15 @@ the transport-instability finding.
 speaker) - mocked-transport coverage only here, never actuated live.
 """
 
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
+from typing import Any, cast
+from unittest.mock import AsyncMock
+
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action, VehicleAction
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+    Domain,
+    RoutableMessage,
+)
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,
@@ -22,8 +29,11 @@ from ble_mocked_transport import (
 )
 
 
-def _sent_vehicle_action(vehicle, send):
-    sent_msg = send.await_args.args[0]
+def _sent_vehicle_action(
+    vehicle: VehicleBluetooth[Any], send: AsyncMock
+) -> tuple[RoutableMessage, VehicleAction]:
+    assert send.await_args is not None
+    sent_msg = cast("RoutableMessage", send.await_args.args[0])
     plaintext = decrypt_sent_command(vehicle, sent_msg)
     return sent_msg, Action.FromString(plaintext).vehicleAction
 
@@ -38,7 +48,9 @@ class AdjustVolumeTests(MockedBleTransportTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         sent_msg, vehicle_action = _sent_vehicle_action(vehicle, send)
         self.assertEqual(sent_msg.to_destination.domain, Domain.DOMAIN_INFOTAINMENT)
-        self.assertAlmostEqual(vehicle_action.mediaUpdateVolume.volume_absolute_float, 5.0)
+        self.assertAlmostEqual(
+            vehicle_action.mediaUpdateVolume.volume_absolute_float, 5.0
+        )
 
 
 class MediaVolumeUpTests(MockedBleTransportTestCase):
