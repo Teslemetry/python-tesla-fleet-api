@@ -82,6 +82,21 @@ request. The infotainment computer can take longer to become ready, so
 INFO-domain reads immediately after waking, such as `charge_state()` or
 `vehicle_data()`, should retry `BluetoothTimeout` with backoff.
 
+## Climate Commands
+
+Bluetooth vehicles support the same signed climate command methods as
+`VehicleSigned`, including `auto_conditioning_start()`,
+`auto_conditioning_stop()`, `set_temps()`, `set_climate_keeper_mode()`,
+`set_cabin_overheat_protection()`, `set_cop_temp()`,
+`set_bioweapon_mode()`, `set_preconditioning_max()`,
+`set_recirculation()`, the remote seat heater/cooler methods, and the
+remote steering-wheel heat methods.
+
+Remote seat and steering-wheel comfort commands can be rejected by the vehicle
+with `cabin comfort remote settings not enabled` when
+`climate_state().remote_heater_control_enabled` is false. That field is a
+read-only vehicle setting; the library has no command to enable it.
+
 ## Open/Close Individual Doors (Bluetooth Only)
 
 The individual door closure commands are Bluetooth-only and are not available via Fleet API signed commands.

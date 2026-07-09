@@ -999,6 +999,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         ``auto_seat_position`` is 1-indexed (``AutoSeat.FRONT_LEFT`` == 1),
         matching Tesla's wire values and the proto ``AutoSeatPosition_*`` enum.
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
         """
         # AutoSeatPosition_FrontLeft = 1;
         # AutoSeatPosition_FrontRight = 2;
@@ -1026,7 +1028,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def remote_auto_steering_wheel_heat_climate_request(
         self, on: bool
     ) -> dict[str, Any]:
-        """Sets automatic steering wheel heating on/off."""
+        """Sets automatic steering wheel heating on/off.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1084,12 +1090,16 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def remote_seat_heater_request(
         self, seat_position: int, seat_heater_level: int
     ) -> dict[str, Any]:
-        """Sets seat heating."""
-        # HvacSeatCoolerLevel_Unknown = 0;
-        # HvacSeatCoolerLevel_Off = 1;
-        # HvacSeatCoolerLevel_Low = 2;
-        # HvacSeatCoolerLevel_Med = 3;
-        # HvacSeatCoolerLevel_High = 4;
+        """Sets seat heating.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
+        # Void SEAT_HEATER_UNKNOWN = 1;
+        # Void SEAT_HEATER_OFF = 2;
+        # Void SEAT_HEATER_LOW = 3;
+        # Void SEAT_HEATER_MED = 4;
+        # Void SEAT_HEATER_HIGH = 5;
         # Void CAR_SEAT_UNKNOWN = 6;
         # Void CAR_SEAT_FRONT_LEFT = 7;
         # Void CAR_SEAT_FRONT_RIGHT = 8;
@@ -1129,7 +1139,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             case 1:
                 heater_action_dict["SEAT_HEATER_LOW"] = Void()
             case 2:
-                heater_action_dict["SEAT_HEATER_MEDIUM"] = Void()
+                heater_action_dict["SEAT_HEATER_MED"] = Void()
             case 3:
                 heater_action_dict["SEAT_HEATER_HIGH"] = Void()
             case _:
@@ -1155,7 +1165,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def remote_steering_wheel_heat_level_request(
         self, level: int
     ) -> dict[str, Any]:
-        """Sets steering wheel heat level."""
+        """Sets steering wheel heat level.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1167,7 +1181,12 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def remote_steering_wheel_heater_request(self, on: bool) -> dict[str, Any]:
-        """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
+        """Sets steering wheel heating on/off.
+
+        For vehicles that do not support auto steering wheel heat. The vehicle
+        can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
