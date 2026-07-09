@@ -354,7 +354,13 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def _command(
         self, domain: Domain, command: bytes, attempt: int = 0
     ) -> dict[str, Any]:
-        """Serialize a message and send to the signed command endpoint."""
+        """Serialize a message and send to the signed command endpoint.
+
+        On a WAIT status or an epoch/token fault, this re-signs and re-sends
+        the identical command (bounded at 3 attempts) - for a non-idempotent
+        command that window can apply it twice if the first attempt actually
+        executed despite the WAIT/fault reply.
+        """
         session = self._sessions[domain]
         if not session.ready:
             await self._handshake(domain)

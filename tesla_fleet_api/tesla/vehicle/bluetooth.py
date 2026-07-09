@@ -182,6 +182,15 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     connect/write transport failures surface as ``BluetoothTransportError`` and
     a response-wait timeout as ``BluetoothTimeout``, both ``TeslaFleetError``
     subclasses with the original transport exception chained as their cause.
+
+    A ``BluetoothTimeout`` raised by a *mutating* command (RKE/closure
+    actions, HVAC/media/charging commands, ``wake_up``) is inconclusive, not
+    a failure - the vehicle can execute the command without its ack reaching
+    the client. Callers must snapshot state before acting and verify the
+    outcome with a follow-up state read after any timeout, and must never
+    blind-retry a non-idempotent command (toggles, volume steps, schedule
+    add/remove) on a timeout alone. The inherited WAIT/fault retry
+    (``Commands._command``) can also re-send an already-executed command.
     """
 
     ble_name: str

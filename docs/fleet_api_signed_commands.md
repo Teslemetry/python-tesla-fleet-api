@@ -178,6 +178,15 @@ not map to fields in the vehicle's signed-command protobuf.
 charge limit already equals `charge_limit_soc_std`, the vehicle may reject the
 command with `already_standard`.
 
+## Signed Command Retries
+
+Signed commands can be re-signed and re-sent by the library after a WAIT status
+or an epoch/token fault, up to a bounded retry limit. For non-idempotent commands,
+that retry window can apply the same command more than once if the first attempt
+actually executed despite the WAIT/fault reply. Verify commands such as media
+toggles, volume steps, and schedule add/remove operations by reading absolute
+state after the call instead of relying on the number of send attempts.
+
 ## Flash Lights
 
 You can flash the lights of a specific vehicle using its VIN:
