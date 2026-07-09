@@ -179,9 +179,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
     Callers can catch failures from this class with a single ``TeslaFleetError``:
-    connect/write transport failures surface as ``BluetoothTransportError`` and
-    a response-wait timeout as ``BluetoothTimeout``, both ``TeslaFleetError``
-    subclasses with the original transport exception chained as their cause.
+    connect/notify/write transport failures surface as
+    ``BluetoothTransportError`` and a response-wait timeout as
+    ``BluetoothTimeout``, both ``TeslaFleetError`` subclasses with the original
+    transport exception chained as their cause.
 
     A ``BluetoothTimeout`` raised by a *mutating* command (RKE/closure
     actions, HVAC/media/charging commands, ``wake_up``) is inconclusive, not

@@ -166,10 +166,11 @@ asyncio.run(main())
 
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
-BLE connect and GATT write failures from `VehicleBluetooth` raise
+BLE connect/notify and GATT write failures from `VehicleBluetooth` raise
 `BluetoothTransportError`, a `TeslaFleetError` subclass, with the original
-`bleak.exc.BleakError` chained as `__cause__`. Catch `TeslaFleetError` to
-handle Bluetooth transport failures and `BluetoothTimeout` response-wait
+transport exception chained as `__cause__`. Catch `TeslaFleetError` to handle
+Bluetooth transport failures (including `bleak.exc.BleakError` and builtin
+`TimeoutError` from ESPHome proxies) and `BluetoothTimeout` response-wait
 timeouts through the same library error hierarchy.
 
 ### Routing and Failover
