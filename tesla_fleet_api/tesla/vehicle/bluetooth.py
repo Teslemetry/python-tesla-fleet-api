@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
+from bleak.exc import BleakError
 from bleak_retry_connector import MAX_CONNECT_ATTEMPTS, establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.message import DecodeError
@@ -17,6 +18,7 @@ from tesla_fleet_api.const import LOGGER, BluetoothVehicleData
 from tesla_fleet_api.exceptions import (
     WHITELIST_OPERATION_STATUS,
     BluetoothTimeout,
+    BluetoothTransportError,
     WhitelistOperationStatus,
 )
 from tesla_fleet_api.tesla.vehicle.commands import Commands
@@ -174,7 +176,13 @@ class ReassemblingBuffer:
 
 
 class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
-    """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
+    """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
+
+    Callers can catch failures from this class with a single ``TeslaFleetError``:
+    connect/write transport failures surface as ``BluetoothTransportError`` and
+    a response-wait timeout as ``BluetoothTimeout``, both ``TeslaFleetError``
+    subclasses with the original transport exception chained as their cause.
+    """
 
     ble_name: str
     device: BLEDevice | None = None
@@ -239,15 +247,18 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         """Connect to the Tesla BLE device."""
         if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
-        self.client = await establish_connection(
-            BleakClient,
-            self.device,
-            self.vin,
-            max_attempts=max_attempts,
-            # ble_device_callback=self.get_device,
-            services=[SERVICE_UUID],
-        )
-        await self.client.start_notify(READ_UUID, self._on_notify)
+        try:
+            self.client = await establish_connection(
+                BleakClient,
+                self.device,
+                self.vin,
+                max_attempts=max_attempts,
+                # ble_device_callback=self.get_device,
+                services=[SERVICE_UUID],
+            )
+            await self.client.start_notify(READ_UUID, self._on_notify)
+        except BleakError as e:
+            raise BluetoothTransportError from e
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
@@ -322,7 +333,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
             await self.connect_if_needed()
             assert self.client is not None
-            await self.client.write_gatt_char(WRITE_UUID, payload, True)
+            try:
+                await self.client.write_gatt_char(WRITE_UUID, payload, True)
+            except BleakError as e:
+                raise BluetoothTransportError from e
 
             # Process the response
             try:

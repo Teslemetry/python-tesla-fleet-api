@@ -10,11 +10,12 @@ exercise the real wait/ACK-follow-up state machine without a BLE connection.
 from __future__ import annotations
 
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from bleak.exc import BleakError
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from tesla_fleet_api.exceptions import BluetoothTimeout
+from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothTransportError
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Destination,
@@ -158,3 +159,54 @@ class SendTimeoutTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(BluetoothTimeout):
             await vehicle._send(msg, "protobuf_message_as_bytes", timeout=0.05)
+
+
+class SendTransportErrorTests(IsolatedAsyncioTestCase):
+    async def test_mid_write_gatt_failure_raises_bluetooth_transport_error(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        msg = _outgoing()
+        underlying = BleakError("write failed")
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=underlying)
+
+        with self.assertRaises(BluetoothTransportError) as ctx:
+            await vehicle._send(msg, "protobuf_message_as_bytes")
+
+        self.assertIs(ctx.exception.__cause__, underlying)
+
+
+class ConnectTransportErrorTests(IsolatedAsyncioTestCase):
+    async def test_establish_connection_failure_raises_bluetooth_transport_error(
+        self,
+    ) -> None:
+        parent = MagicMock()
+        parent.private_key = ec.generate_private_key(ec.SECP256R1())
+        vehicle = VehicleBluetooth(parent, VIN)
+        vehicle.device = MagicMock()
+        underlying = BleakError("connect failed")
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
+            AsyncMock(side_effect=underlying),
+        ):
+            with self.assertRaises(BluetoothTransportError) as ctx:
+                await vehicle.connect()
+
+        self.assertIs(ctx.exception.__cause__, underlying)
+
+    async def test_connect_if_needed_propagates_transport_error(self) -> None:
+        parent = MagicMock()
+        parent.private_key = ec.generate_private_key(ec.SECP256R1())
+        vehicle = VehicleBluetooth(parent, VIN)
+        vehicle.device = MagicMock()
+        underlying = BleakError("connect failed")
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
+            AsyncMock(side_effect=underlying),
+        ):
+            with self.assertRaises(BluetoothTransportError) as ctx:
+                await vehicle.connect_if_needed()
+
+        self.assertIs(ctx.exception.__cause__, underlying)
