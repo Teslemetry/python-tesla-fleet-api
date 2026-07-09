@@ -245,6 +245,20 @@ async def main():
 asyncio.run(main())
 ```
 
+## Climate Commands
+
+`VehicleSigned` supports signed climate command methods including
+`auto_conditioning_start()`, `auto_conditioning_stop()`, `set_temps()`,
+`set_climate_keeper_mode()`, `set_cabin_overheat_protection()`,
+`set_cop_temp()`, `set_bioweapon_mode()`, `set_preconditioning_max()`,
+`set_recirculation()`, the remote seat heater/cooler methods, and the
+remote steering-wheel heat methods.
+
+Remote seat and steering-wheel comfort commands can be rejected by the vehicle
+with `cabin comfort remote settings not enabled` when
+`climate_state().remote_heater_control_enabled` is false. That field is a
+read-only vehicle setting; the library has no command to enable it.
+
 ## Low Power / Keep Accessory Power Modes
 
 These are signed-only commands with no Fleet API REST equivalent. `set_low_power_mode` reduces standby power consumption while the vehicle is parked, and `set_keep_accessory_power_mode` keeps 12V accessory power available while parked. Both take a single `bool` to turn the mode on or off:

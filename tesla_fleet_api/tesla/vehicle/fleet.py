@@ -243,6 +243,8 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
 
         ``auto_seat_position`` is 1-indexed (``AutoSeat.FRONT_LEFT`` == 1),
         matching Tesla's wire values for this endpoint.
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
         """
         return await self._request(
             Method.POST,
@@ -256,7 +258,11 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     async def remote_auto_steering_wheel_heat_climate_request(
         self, on: bool
     ) -> dict[str, Any]:
-        """Sets automatic steering wheel heating on/off."""
+        """Sets automatic steering wheel heating on/off.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/remote_auto_steering_wheel_heat_climate_request",
@@ -291,7 +297,11 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         seat_position: Seat | int,
         seat_heater_level: Level | int,
     ) -> dict[str, Any]:
-        """Sets seat heating."""
+        """Sets seat heating.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/remote_seat_heater_request",
@@ -310,7 +320,11 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     async def remote_steering_wheel_heat_level_request(
         self, level: Level | int
     ) -> dict[str, Any]:
-        """Sets steering wheel heat level."""
+        """Sets steering wheel heat level.
+
+        The vehicle can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/remote_steering_wheel_heat_level_request",
@@ -318,7 +332,12 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         )
 
     async def remote_steering_wheel_heater_request(self, on: bool) -> dict[str, Any]:
-        """Sets steering wheel heating on/off. For vehicles that do not support auto steering wheel heat."""
+        """Sets steering wheel heating on/off.
+
+        For vehicles that do not support auto steering wheel heat. The vehicle
+        can reject remote comfort commands when
+        ``climate_state().remote_heater_control_enabled`` is false.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/remote_steering_wheel_heater_request",
