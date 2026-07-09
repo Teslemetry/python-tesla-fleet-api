@@ -266,7 +266,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 services=[SERVICE_UUID],
             )
             await self.client.start_notify(READ_UUID, self._on_notify)
-        except BleakError as e:
+        # bleak-esphome converts an aioesphomeapi transport timeout into a
+        # builtin TimeoutError, not a BleakError, so catch both to keep every
+        # connect transport failure within TeslaFleetError.
+        except (BleakError, TimeoutError) as e:
             raise BluetoothTransportError from e
 
     async def disconnect(self) -> bool:
@@ -344,7 +347,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             assert self.client is not None
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
-            except BleakError as e:
+            # bleak-esphome converts an aioesphomeapi write timeout into a
+            # builtin TimeoutError, not a BleakError, so catch both to keep the
+            # GATT-write transport failure within TeslaFleetError.
+            except (BleakError, TimeoutError) as e:
                 raise BluetoothTransportError from e
 
             # Process the response
