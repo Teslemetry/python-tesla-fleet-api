@@ -208,6 +208,20 @@ async def main():
 asyncio.run(main())
 ```
 
+## Navigation and Dashcam Commands
+
+Signed commands include the navigation and dashcam command methods:
+
+- `navigation_request(value)`
+- `navigation_gps_request(lat, lon, order)`
+- `navigation_sc_request(order)`
+- `navigation_waypoints_request(waypoints)`
+- `navigation_gps_destination_request(lat, lon, destination, order)`
+- `dashcam_save_clip()`
+
+For the GPS navigation methods, `order` is the Tesla/protobuf remote-nav order
+integer: `1` replaces the trip, `2` prepends a stop, and `3` appends a stop.
+
 ## Honk Horn
 
 You can honk the horn of a specific vehicle using its VIN:

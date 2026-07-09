@@ -196,7 +196,11 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     async def navigation_gps_request(
         self, lat: float, lon: float, order: int | None = None
     ) -> dict[str, Any]:
-        """Start navigation to given coordinates. Order can be used to specify order of multiple stops."""
+        """Start navigation to coordinates.
+
+        ``order`` is the Tesla remote-nav order integer: 1 replaces the trip,
+        2 prepends a stop, and 3 appends a stop.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/command/navigation_gps_request",

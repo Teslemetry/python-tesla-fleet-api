@@ -542,6 +542,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     async def wake_up(self):
         """Wake up the vehicle security computer.
 
+        A ``BluetoothTimeout`` from this command can be a false negative even
+        when the vehicle wakes successfully, so callers should treat wake as
+        best-effort and confirm readiness with a retried INFO-domain read.
         The infotainment computer may still need a short delay before it can
         complete signed-command handshakes, so callers that issue INFO-domain
         reads immediately after waking should retry ``BluetoothTimeout`` with

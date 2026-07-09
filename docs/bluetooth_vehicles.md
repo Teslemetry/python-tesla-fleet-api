@@ -65,22 +65,29 @@ You can wake up a `VehicleBluetooth` instance using the `wake_up` method. Here's
 ```python
 import asyncio
 from tesla_fleet_api import TeslaBluetooth
+from tesla_fleet_api.exceptions import BluetoothTimeout
 
 async def main():
     tesla_bluetooth = TeslaBluetooth()
     device = await tesla_bluetooth.find_vehicle()
     private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
-    await vehicle.wake_up()
-    print(f"Woke up VehicleBluetooth instance for VIN: {vehicle.vin}")
+    try:
+        await vehicle.wake_up()
+    except BluetoothTimeout:
+        pass
+    print(f"Sent wake request to VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
 ```
 
-`wake_up()` returns when the vehicle-security computer acknowledges the wake
-request. The infotainment computer can take longer to become ready, so
-INFO-domain reads immediately after waking, such as `charge_state()` or
-`vehicle_data()`, should retry `BluetoothTimeout` with backoff.
+`wake_up()` is best-effort over BLE: a `BluetoothTimeout` from the wake request
+can be a false negative even when the vehicle wakes successfully. Confirm
+readiness by retrying a cheap INFO-domain read, such as `charge_state()`, with
+backoff. The infotainment computer can also take longer to become ready than
+the vehicle-security computer, so INFO-domain reads immediately after waking
+should retry `BluetoothTimeout` with backoff. Keep one BLE connection open
+across related commands when possible instead of reconnecting for each command.
 
 ## Climate Commands
 
@@ -137,6 +144,27 @@ command with `already_standard`.
 
 Avoid actuating `charge_port_door_open()` or `charge_port_door_close()` against
 a plugged-in vehicle unless someone can reseat the cable if needed.
+
+## Navigation, Dashcam, and Power Commands
+
+`VehicleBluetooth` can send the signed navigation, dashcam, and power-mode
+commands over BLE:
+
+- `navigation_request(value)`
+- `navigation_gps_request(lat, lon, order)`
+- `navigation_sc_request(order)`
+- `navigation_waypoints_request(waypoints)`
+- `navigation_gps_destination_request(lat, lon, destination, order)`
+- `dashcam_save_clip()`
+- `flash_lights()`
+- `set_keep_accessory_power_mode(on)`
+- `set_low_power_mode(on)`
+
+For the GPS navigation methods, `order` is the Tesla/protobuf remote-nav order
+integer: `1` replaces the trip, `2` prepends a stop, and `3` appends a stop.
+These commands are ACK-only over BLE; the library returns the vehicle's command
+acknowledgement, but there is no separate BLE state prover for the navigation
+destination, dashcam clip save, flash-lights action, or power-mode toggle.
 
 ## Open/Close Individual Doors (Bluetooth Only)
 
