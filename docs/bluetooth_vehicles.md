@@ -227,3 +227,35 @@ REST JSON `dict`. Prefer the individual state readers, or a single explicit
 endpoint, because requesting multiple endpoints together can exceed the
 vehicle's signed-command response-size cap and raise
 `TeslaFleetMessageFaultResponseSizeExceedsMTU`.
+
+## Media Commands
+
+`VehicleBluetooth` inherits the signed media commands from `Commands`, so media
+control methods use the same BLE signed-command transport as other INFO-domain
+commands:
+
+- `adjust_volume(volume)`
+- `media_volume_up()`
+- `media_volume_down()`
+- `media_toggle_playback()`
+- `media_next_track()`
+- `media_prev_track()`
+- `media_next_fav()`
+- `media_prev_fav()`
+
+These commands return the signed-command acknowledgement, not a media-state
+diff. For verification, prefer `media_state().audio_volume` and
+`media_state().media_playback_status` where they apply. Track identity fields
+such as `now_playing_artist`, `now_playing_title`, and the
+`media_detail_state()` now-playing fields can be empty for some media sources,
+so track/favorite navigation is best verified by the command acknowledgement and
+paired with the inverse command when an exact state fingerprint is unavailable.
+
+If a BLE write times out, re-read the relevant state before assuming the command
+applied. A timeout while waiting for the GATT write response may mean the
+command never reached the vehicle, even when plain BLE reads on the same
+connection are succeeding.
+
+`remote_boombox(sound)` also uses the INFO-domain signed-command transport and
+plays through the vehicle external speaker. Use it only when someone is present
+to confirm the sound is appropriate for the vehicle's surroundings.
