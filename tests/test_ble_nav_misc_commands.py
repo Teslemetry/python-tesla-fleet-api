@@ -1,9 +1,9 @@
 """Nav/dashcam/power-mode command group (PR-8) over the mocked BLE transport.
 
-Live-verified against the test car (VIN LRW3F7EK4NC716336, m5-btproxy),
-in a single held BLE connection using the best-effort-wake + poll-confirm
-strategy (a ``wake_up()`` ``BluetoothTimeout`` is a known false negative -
-see AGENTS.md): ``navigation_request``, ``navigation_gps_request``,
+Live-verified against a test car over a local BLE proxy in a single held BLE
+connection using the best-effort-wake + poll-confirm strategy (a ``wake_up()``
+``BluetoothTimeout`` is a known false negative - see AGENTS.md):
+``navigation_request``, ``navigation_gps_request``,
 ``navigation_sc_request``, ``navigation_waypoints_request``,
 ``navigation_gps_destination_request``, ``dashcam_save_clip``,
 ``flash_lights``, ``set_keep_accessory_power_mode`` (True then False),
