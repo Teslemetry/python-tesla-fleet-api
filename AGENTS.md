@@ -95,7 +95,7 @@ All exceptions inherit from `TeslaFleetError(BaseException)`.
 
 ### Protobuf
 
-Generated protobuf files live in `tesla/vehicle/proto/` and are excluded from ruff and pyright. Do not edit these directly — regenerate them with `tools/regenerate_protos.sh` (needs `protoc` on `PATH`).
+Source protobuf definitions live in `proto/`; generated Python files live in `tesla_fleet_api/tesla/vehicle/proto/` and are excluded from ruff and pyright. Do not edit generated `*_pb2.py`/`*_pb2.pyi` files directly — update the source `.proto`, add new files to the `PROTOS` list and import-rewrite set in `tools/regenerate_protos.sh`, then regenerate (needs `protoc` on `PATH`). If a new generated module is added, also update the hand-maintained `tesla_fleet_api/tesla/vehicle/proto/__init__.pyi` export stub.
 
 **Runtime-version pin (Home Assistant compatibility).** The gencode stamps a `ValidateProtobufRuntimeVersion(major, minor, patch, …)` call, and protobuf refuses to load gencode that is *newer* than the installed runtime (`gencode X > runtime` → `VersionError`). Home Assistant core pins `protobuf==6.32.0`, so the gencode must be stamped **≤ 6.32.0** or it breaks in HA. The generator version is the `protoc` version: under unified protobuf versioning, `protoc vX.Y` (`libprotoc X.Y`) stamps Python gencode `6.X.Y`. So to target runtime 6.32.0, regenerate with **protoc v32.0** (`protoc-32.0-linux-x86_64.zip` from the protobuf GitHub releases). The `protobuf>=6.32.0` floor in `pyproject.toml` must match the gencode version — never set it below the stamped version, or installs that resolve an older protobuf will hit `VersionError` at import.
 
