@@ -96,9 +96,12 @@ def prependLength(message: bytes) -> bytearray:
 
 class ReassemblingBuffer:
     """
-    Reassembles bytearray streams where the first two bytes indicate the length of the message.
-    Handles potential packet corruption by discarding *entire* packets and retrying.
-    Uses a callback to process parsed messages.
+    Reassembles BLE notification chunks into length-prefixed RoutableMessages.
+
+    Each message starts with a 2-byte length. One notification can contain part
+    of a message, exactly one message, or multiple messages. If a message cannot
+    be decoded, the buffer drops the current physical packet and resynchronizes
+    at the next recorded packet boundary.
     """
 
     def __init__(self, callback: Callable[[RoutableMessage], None]):
@@ -106,7 +109,6 @@ class ReassemblingBuffer:
         Initializes the buffer.
 
         Args:
-            message_type: The protobuf message type (e.g., RoutableMessage) to parse the assembled data.
             callback: A function that will be called with each parsed message.
         """
         self.buffer: bytearray = bytearray()
@@ -116,7 +118,7 @@ class ReassemblingBuffer:
 
     def receive_data(self, data: bytearray):
         """
-        Receives a chunk of bytearray data and attempts to assemble a complete message.
+        Receive one BLE notification chunk and emit any complete messages.
 
         Args:
             data: The received bytearray data.
@@ -181,6 +183,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
+    _ack_followup_timeout: float = 2
 
     def __init__(
         self,
@@ -282,14 +285,24 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         self._buffer.receive_data(data)
 
     def _on_message(self, msg: RoutableMessage) -> None:
-        """Receive messages from the Tesla BLE data."""
+        """Route addressed BLE replies into the per-domain response queue."""
 
         if msg.to_destination.routing_address != self._from_destination:
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
             return
 
+        queue = self._queues.get(msg.from_destination.domain)
+        if queue is None:
+            # Domain enum has values (e.g. DOMAIN_BROADCAST, DOMAIN_AUTHD) with
+            # no session/queue of our own; indexing _queues directly would
+            # raise KeyError and abort the reassembly loop mid-buffer.
+            LOGGER.debug(
+                f"Ignoring message from unhandled domain {msg.from_destination.domain}"
+            )
+            return
+
         LOGGER.debug(f"Received response: {msg}")
-        self._queues[msg.from_destination.domain].put_nowait(msg)
+        queue.put_nowait(msg)
 
     async def _send(
         self, msg: RoutableMessage, requires: str, timeout: int = 5
@@ -332,7 +345,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                                 "Received ACK for our request, waiting briefly for data follow-up"
                             )
                             try:
-                                async with asyncio.timeout(2):
+                                async with asyncio.timeout(self._ack_followup_timeout):
                                     while True:
                                         resp2 = await self._queues[domain].get()
                                         LOGGER.debug(
