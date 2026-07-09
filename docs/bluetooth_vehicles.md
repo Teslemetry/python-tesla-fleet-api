@@ -85,6 +85,11 @@ INFO-domain reads immediately after waking, such as `charge_state()` or
 ## Open/Close Individual Doors (Bluetooth Only)
 
 The individual door closure commands are Bluetooth-only and are not available via Fleet API signed commands.
+`open_*_door()` unlatches the selected door. `close_*_door()` only means the
+vehicle accepted the close request; on vehicles without reliable powered door
+close support, the door may remain physically ajar until someone pushes it
+shut. Do not rely on an automated open-then-close cycle without checking
+`closures_state()` or getting physical confirmation.
 
 Available commands:
 
@@ -109,7 +114,6 @@ async def main():
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     await vehicle.connect()
     await vehicle.open_front_driver_door()
-    await vehicle.close_front_driver_door()
     await vehicle.disconnect()
 
 asyncio.run(main())
