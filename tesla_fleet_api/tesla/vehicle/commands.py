@@ -1085,11 +1085,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         self, seat_position: int, seat_heater_level: int
     ) -> dict[str, Any]:
         """Sets seat heating."""
-        # HvacSeatCoolerLevel_Unknown = 0;
-        # HvacSeatCoolerLevel_Off = 1;
-        # HvacSeatCoolerLevel_Low = 2;
-        # HvacSeatCoolerLevel_Med = 3;
-        # HvacSeatCoolerLevel_High = 4;
+        # Void SEAT_HEATER_UNKNOWN = 1;
+        # Void SEAT_HEATER_OFF = 2;
+        # Void SEAT_HEATER_LOW = 3;
+        # Void SEAT_HEATER_MED = 4;
+        # Void SEAT_HEATER_HIGH = 5;
         # Void CAR_SEAT_UNKNOWN = 6;
         # Void CAR_SEAT_FRONT_LEFT = 7;
         # Void CAR_SEAT_FRONT_RIGHT = 8;
@@ -1129,7 +1129,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             case 1:
                 heater_action_dict["SEAT_HEATER_LOW"] = Void()
             case 2:
-                heater_action_dict["SEAT_HEATER_MEDIUM"] = Void()
+                heater_action_dict["SEAT_HEATER_MED"] = Void()
             case 3:
                 heater_action_dict["SEAT_HEATER_HIGH"] = Void()
             case _:
