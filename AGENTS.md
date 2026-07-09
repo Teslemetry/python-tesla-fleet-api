@@ -22,6 +22,14 @@ uv run pytest tests
 Tests live in `tests/` and use `unittest.IsolatedAsyncioTestCase` (collected and
 run natively by pytest — `pytest-asyncio` is not required).
 
+BLE command tests over a mocked transport build on `tests/ble_mocked_transport.py`
+(`MockedBleTransportTestCase`): it patches `VehicleBluetooth._send` and
+pre-marks both signed-command sessions ready, so a test drives any inherited
+`Commands` method with no real BLE/GATT connection and asserts on the signed
+`RoutableMessage` built (`decrypt_sent_command`) and on canned replies
+(`vcsec_ok_reply`/`infotainment_action_ok_reply`/`infotainment_vehicle_data_reply`).
+See `tests/test_ble_mocked_commands.py` for worked examples.
+
 ## API References
 
 - Tesla Fleet: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints
