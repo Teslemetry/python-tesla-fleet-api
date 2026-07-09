@@ -11,6 +11,9 @@ enum Domain {
     DOMAIN_BROADCAST = 0;
     DOMAIN_VEHICLE_SECURITY = 2;
     DOMAIN_INFOTAINMENT = 3;
+    DOMAIN_AUTHD = 5;
+    DOMAIN_ENERGY_DEVICE = 7;
+    DOMAIN_ENERGY_DEVICE_AUTH = 8;
 }
 
 message Destination {
