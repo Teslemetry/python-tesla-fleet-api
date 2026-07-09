@@ -261,6 +261,7 @@ class ConnectTransportErrorTests(IsolatedAsyncioTestCase):
         underlying = TimeoutError("start_notify timed out")
         client = MagicMock()
         client.start_notify = AsyncMock(side_effect=underlying)
+        client.disconnect = AsyncMock()
 
         with patch(
             "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
@@ -270,3 +271,5 @@ class ConnectTransportErrorTests(IsolatedAsyncioTestCase):
                 await vehicle.connect()
 
         self.assertIs(ctx.exception.__cause__, underlying)
+        client.disconnect.assert_awaited_once()
+        self.assertIsNone(vehicle.client)

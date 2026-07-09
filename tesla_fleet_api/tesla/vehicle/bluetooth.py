@@ -270,6 +270,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         # builtin TimeoutError, not a BleakError, so catch both to keep every
         # connect transport failure within TeslaFleetError.
         except (BleakError, TimeoutError) as e:
+            client = self.client
+            self.client = None
+            if client:
+                try:
+                    await client.disconnect()
+                except (BleakError, TimeoutError):
+                    pass
             raise BluetoothTransportError from e
 
     async def disconnect(self) -> bool:
