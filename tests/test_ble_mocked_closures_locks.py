@@ -4,6 +4,18 @@ Covers ``door_unlock``, ``auto_secure_vehicle``, ``charge_port_door_open/close``
 (all VCSEC, inherited from ``Commands``) and the 8 individual door open/close
 commands (VCSEC, defined on ``VehicleBluetooth`` - no cloud REST equivalent).
 ``door_lock`` is already covered in ``test_ble_mocked_commands.py``.
+
+Live-verify status: ``door_lock``/``door_unlock``/``auto_secure_vehicle`` are
+live-verified (full snapshot->act->verify->restore->confirm cycle against the
+test car). ``charge_port_door_open/close`` and the 8 individual door commands
+are unit-test-only here - mocked-transport coverage only, no live actuation.
+``charge_port_door_*`` is deferred because the test car had a charge cable
+physically engaged (closing over an engaged latch is unsafe to test remotely).
+The individual doors are deferred because an ``open_*_door()`` unlatches the
+door but there is no reliable powered close on this Model 3 - one live probe
+left a door physically ajar needing a human push to close (see the BLE
+individual-door powered-close gotcha in AGENTS.md). Treat these the same as
+the CAPTAIN-PRESENT group: live-verify only in a captain-present session.
 """
 
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
