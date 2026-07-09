@@ -107,3 +107,11 @@ Generated protobuf files live in `tesla/vehicle/proto/` and are excluded from ru
 - **Enums**: Custom `StrEnum`/`IntEnum` in `const.py` (not stdlib). `Region` is a `Literal["na", "eu", "cn"]`, not an enum.
 - **Seat indexing gotcha**: two distinct seat enums with different conventions. `Seat` is **0-indexed** (`FRONT_LEFT=0`) and is for the manual seat heater/cooler paths (`remote_seat_heater_request`, `remote_seat_cooler_request`). `AutoSeat` is **1-indexed** (`FRONT_LEFT=1`, `FRONT_RIGHT=2`) and is the correct type for `remote_auto_seat_climate_request` on **both** backends — its values equal Tesla's REST wire values and the proto `AutoSeatPosition_*` enum. Don't mix them; passing a `Seat` to the auto-climate command is off-by-one (issue #11).
 - **Naming**: camelCase for class instance attributes that mirror API structure (`energySites`, `createFleet`). Snake_case for method names that are API endpoints.
+- **BLE discovery gotcha**: a Tesla vehicle advertises no 128-bit service UUID pre-connect — only its VIN-derived local name (`^S[a-f0-9]{16}[CDRP]$`), and only in the scan response, not the `ADV_IND`. `SERVICE_UUID` (`tesla_fleet_api/tesla/vehicle/bluetooth.py`) exists only as a GATT service after connecting. Never pass `service_uuids=[SERVICE_UUID]` as a `BleakScanner` discovery-time filter — it hides the vehicle on a direct BlueZ adapter (an ESPHome proxy doesn't enforce that filter the same way, which can mask the bug in testing). Scan unfiltered with active scanning and match by name; keep `SERVICE_UUID` for post-connect GATT use only.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

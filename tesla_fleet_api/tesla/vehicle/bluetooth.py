@@ -208,7 +208,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         """Find the Tesla BLE device."""
 
         if scanner is None:
-            scanner = BleakScanner(service_uuids=[SERVICE_UUID])
+            # No service_uuids filter: the vehicle advertises no service UUID
+            # (SERVICE_UUID is GATT-only, post-connect); active scan is needed
+            # since the name lives in the scan response, not the advertisement.
+            scanner = BleakScanner(scanning_mode="active")
 
         if address is not None:
             device = await scanner.find_device_by_address(address)
