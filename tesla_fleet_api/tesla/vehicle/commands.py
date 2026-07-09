@@ -956,7 +956,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     navigationGpsRequest=NavigationGpsRequest(
                         lat=lat,
                         lon=lon,
-                        order=NavigationGpsRequest.RemoteNavTripOrder(order),
+                        order=order,  # pyright: ignore[reportArgumentType]
                     )
                 )
             )
