@@ -97,6 +97,47 @@ with `cabin comfort remote settings not enabled` when
 `climate_state().remote_heater_control_enabled` is false. That field is a
 read-only vehicle setting; the library has no command to enable it.
 
+## Charging Commands
+
+`VehicleBluetooth` inherits the signed-command charging surface. The following
+commands send over BLE:
+
+- `charge_start()`
+- `charge_stop()`
+- `charge_standard()`
+- `charge_max_range()`
+- `charge_port_door_open()`
+- `charge_port_door_close()`
+- `set_charge_limit(percent)`
+- `set_charging_amps(charging_amps)`
+- `set_scheduled_charging(enable, time)`
+- `set_scheduled_departure(...)`
+- `add_charge_schedule(...)`
+- `remove_charge_schedule(id)`
+- `batch_remove_charge_schedules(home, work, other)`
+- `add_precondition_schedule(...)`
+- `remove_precondition_schedule(id)`
+- `batch_remove_precondition_schedules(home, work, other)`
+
+`set_scheduled_charging()` and `set_scheduled_departure()` both update the
+vehicle's shared `scheduled_charging_mode`. Disabling one mode while the other
+is active can turn scheduled charging/departure off entirely, so callers that
+toggle either setting should read `charge_state()` first and restore the prior
+mode and fields when preserving the other schedule matters.
+
+For signed commands, `set_scheduled_departure()` sends `enable`,
+`departure_time`, weekday/all-week recurrence choices, and
+`end_off_peak_time`. Its `preconditioning_enabled` and
+`off_peak_charging_enabled` arguments are accepted for API compatibility but do
+not map to fields in the vehicle's signed-command protobuf.
+
+`charge_standard()` is not treated as a no-op by all vehicles: if the current
+charge limit already equals `charge_limit_soc_std`, the vehicle may reject the
+command with `already_standard`.
+
+Avoid actuating `charge_port_door_open()` or `charge_port_door_close()` against
+a plugged-in vehicle unless someone can reseat the cable if needed.
+
 ## Open/Close Individual Doors (Bluetooth Only)
 
 The individual door closure commands are Bluetooth-only and are not available via Fleet API signed commands.
