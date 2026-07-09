@@ -794,7 +794,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def charge_standard(self) -> dict[str, Any]:
-        """Charges in Standard mode."""
+        """Charges in Standard mode.
+
+        Some vehicles reject this command with ``already_standard`` when the
+        current charge limit already equals ``charge_limit_soc_std``.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1366,7 +1370,13 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def set_scheduled_charging(self, enable: bool, time: int) -> dict[str, Any]:
-        """Sets a time at which charging should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules charging for 2:00am vehicle local time)."""
+        """Sets the scheduled charging start time.
+
+        ``time`` is minutes after midnight in vehicle-local time. This command
+        and ``set_scheduled_departure`` both update the vehicle's shared
+        ``scheduled_charging_mode``; disabling one while the other is active can
+        turn scheduling off entirely.
+        """
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1387,7 +1397,17 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         off_peak_charging_weekdays_only: bool = False,
         end_off_peak_time: int = 0,
     ) -> dict[str, Any]:
-        """Sets a time at which departure should be completed. The time parameter is minutes after midnight (e.g: time=120 schedules departure for 2:00am vehicle local time)."""
+        """Sets the scheduled departure time.
+
+        ``departure_time`` and ``end_off_peak_time`` are minutes after midnight
+        in vehicle-local time. This command and ``set_scheduled_charging`` both
+        update the vehicle's shared ``scheduled_charging_mode``; disabling one
+        while the other is active can turn scheduling off entirely.
+
+        ``preconditioning_enabled`` and ``off_peak_charging_enabled`` are
+        accepted by the Python signature for compatibility but the signed
+        command protobuf has no fields for them, so they are not sent.
+        """
 
         if preconditioning_weekdays_only:
             preconditioning_times = PreconditioningTimes(weekdays=Void())

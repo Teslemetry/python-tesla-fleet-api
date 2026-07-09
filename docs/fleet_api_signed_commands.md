@@ -155,6 +155,29 @@ async def main():
 asyncio.run(main())
 ```
 
+## Other Charging Commands
+
+Signed commands also include `charge_standard()`, `charge_max_range()`,
+`set_charging_amps(charging_amps)`, schedule configuration, and charge-port
+door commands. These methods share the same signatures as the Fleet API vehicle
+commands, but are sent through the signed-command protocol.
+
+`set_scheduled_charging()` and `set_scheduled_departure()` both update the
+vehicle's shared `scheduled_charging_mode`. Disabling one mode while the other
+is active can turn scheduled charging/departure off entirely, so callers that
+toggle either setting should read the current `charge_state()` first and
+restore the prior mode and fields when preserving the other schedule matters.
+
+For signed commands, `set_scheduled_departure()` sends `enable`,
+`departure_time`, weekday/all-week recurrence choices, and
+`end_off_peak_time`. Its `preconditioning_enabled` and
+`off_peak_charging_enabled` arguments are accepted for API compatibility but do
+not map to fields in the vehicle's signed-command protobuf.
+
+`charge_standard()` is not treated as a no-op by all vehicles: if the current
+charge limit already equals `charge_limit_soc_std`, the vehicle may reject the
+command with `already_standard`.
+
 ## Flash Lights
 
 You can flash the lights of a specific vehicle using its VIN:
