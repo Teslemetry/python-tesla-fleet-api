@@ -28,6 +28,14 @@ class BluetoothTimeout(TeslaFleetError):
     message = "Bluetooth command timed out waiting for vehicle response."
 
 
+class BluetoothTransportError(TeslaFleetError):
+    """The Bluetooth transport (connect or GATT write) failed before a vehicle response could be awaited."""
+
+    message = (
+        "The Bluetooth transport failed before a vehicle response could be awaited."
+    )
+
+
 class ResponseError(TeslaFleetError):
     """The response from the server was not JSON."""
 
