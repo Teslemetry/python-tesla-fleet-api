@@ -359,7 +359,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         On a WAIT status or an epoch/token fault, this re-signs and re-sends
         the identical command (bounded at 3 attempts) - for a non-idempotent
         command that window can apply it twice if the first attempt actually
-        executed despite the WAIT/fault reply. See AGENTS.md.
+        executed despite the WAIT/fault reply.
         """
         session = self._sessions[domain]
         if not session.ready:
