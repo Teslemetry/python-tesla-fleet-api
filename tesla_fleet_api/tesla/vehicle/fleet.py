@@ -582,7 +582,8 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         data: dict[str, str | float] = {}
         if token:
             data["token"] = token
-        if lat and lon:
+        # Guard on None, not truthiness: lat/lon of 0.0 are valid coordinates.
+        if lat is not None and lon is not None:
             data["lat"] = lat
             data["lon"] = lon
         return await self._request(
