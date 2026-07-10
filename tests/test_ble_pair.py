@@ -27,13 +27,18 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     CommandStatus,
     FromVCSECMessage,
+    WHITELISTOPERATION_INFORMATION_NONE,
+    WHITELISTOPERATION_INFORMATION_WHITELIST_FULL,
+    WhitelistOperation_information_E,
     WhitelistOperation_status,
 )
 
 from ble_mocked_transport import MockedBleTransportTestCase
 
 
-def whitelist_reply(info: int = 0) -> RoutableMessage:
+def whitelist_reply(
+    info: WhitelistOperation_information_E = WHITELISTOPERATION_INFORMATION_NONE,
+) -> RoutableMessage:
     """A canned whitelist-op reply; ``info=0`` means success, else a fault code."""
     body = FromVCSECMessage(
         commandStatus=CommandStatus(
@@ -71,7 +76,9 @@ class PairTest(MockedBleTransportTestCase):
     async def test_reply_path_fault_raises(self) -> None:
         """A whitelist-op fault reply raises its mapped exception."""
         vehicle, send = self.make_vehicle()
-        send.return_value = whitelist_reply(info=4)
+        send.return_value = whitelist_reply(
+            info=WHITELISTOPERATION_INFORMATION_WHITELIST_FULL
+        )
 
         with self.assertRaises(WhitelistOperationWhitelistFull):
             await vehicle.pair(poll_interval=0.01, timeout=1)
@@ -93,8 +100,8 @@ class PairTest(MockedBleTransportTestCase):
         vehicle, send = self.make_vehicle()
 
         async def timeout_after_late_fault(*args: Any, **kwargs: Any) -> None:
-            vehicle._queues[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
-                whitelist_reply(info=4)
+            getattr(vehicle, "_queues")[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
+                whitelist_reply(info=WHITELISTOPERATION_INFORMATION_WHITELIST_FULL)
             )
             raise BluetoothTimeout
 
@@ -116,7 +123,7 @@ class PairTest(MockedBleTransportTestCase):
         original_sleep = asyncio.sleep
 
         async def queue_reply_then_return(delay: float) -> None:
-            vehicle._queues[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
+            getattr(vehicle, "_queues")[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
                 whitelist_reply()
             )
             await original_sleep(delay)
