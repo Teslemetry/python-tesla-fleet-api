@@ -20,6 +20,7 @@ from tesla_fleet_api.exceptions import (
     WHITELIST_OPERATION_STATUS,
     BluetoothTimeout,
     BluetoothTransportError,
+    TeslaFleetError,
     WhitelistOperationStatus,
 )
 from tesla_fleet_api.tesla.vehicle.commands import Commands
@@ -60,6 +61,7 @@ from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     PublicKey,
     RKEAction_E,
     UnsignedMessage,
+    VehicleLockState_E,
     VehicleStatus,
     WhitelistOperation,
 )
@@ -194,6 +196,78 @@ class ReassemblingBuffer:
         self.expected_length = None
 
 
+# Optional post-timeout command verification.
+#
+# A lost ack from a mutating BLE command is inconclusive: the vehicle may have
+# executed it anyway. When ``verify_commands`` is on, a timed-out mutation whose
+# outcome can be derived from its own arguments is confirmed by reading the
+# mapped state instead of surfacing the ambiguous timeout. A verify "plan" pairs
+# the state reader to call with a predicate that checks the observed state
+# against the requested value. Commands absent from these tables - true toggles,
+# relative steps, and ack-only actions whose outcome cannot be derived from the
+# request - have no plan and re-raise the timeout unchanged.
+VerifyPlan = tuple[str, Callable[[Any], bool]]
+
+
+def _vcsec_verify_plan(command: UnsignedMessage) -> VerifyPlan | None:
+    """Derive a VCSEC verify plan (read ``vehicle_state``) from a lost actuation."""
+    if command.WhichOneof("sub_message") != "RKEAction":
+        return None
+    if command.RKEAction == RKEAction_E.RKE_ACTION_LOCK:
+        return "vehicle_state", (
+            lambda s: s.vehicleLockState == VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+        )
+    if command.RKEAction == RKEAction_E.RKE_ACTION_UNLOCK:
+        return "vehicle_state", (
+            lambda s: s.vehicleLockState == VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED
+        )
+    return None
+
+
+def _plan_charge_limit(action: VehicleAction) -> VerifyPlan | None:
+    percent = action.chargingSetLimitAction.percent
+    return "charge_state", lambda s: s.charge_limit_soc == percent
+
+
+def _plan_charging_amps(action: VehicleAction) -> VerifyPlan | None:
+    amps = action.setChargingAmpsAction.charging_amps
+    return "charge_state", lambda s: s.charging_amps == amps
+
+
+def _plan_volume(action: VehicleAction) -> VerifyPlan | None:
+    # A relative volume step is not derivable without a pre-read, so only the
+    # absolute set is verifiable.
+    if action.mediaUpdateVolume.WhichOneof("media_volume") != "volume_absolute_float":
+        return None
+    target = action.mediaUpdateVolume.volume_absolute_float
+    return "media_state", lambda s: s.audio_volume == target
+
+
+def _plan_temps(action: VehicleAction) -> VerifyPlan | None:
+    driver = action.hvacTemperatureAdjustmentAction.driver_temp_celsius
+    passenger = action.hvacTemperatureAdjustmentAction.passenger_temp_celsius
+    return "climate_state", (
+        lambda s: (
+            s.driver_temp_setting == driver and s.passenger_temp_setting == passenger
+        )
+    )
+
+
+def _plan_auto_conditioning(action: VehicleAction) -> VerifyPlan | None:
+    power_on = action.hvacAutoAction.power_on
+    return "climate_state", lambda s: s.is_climate_on == power_on
+
+
+# Keyed by the ``VehicleAction`` oneof field an infotainment mutation sets.
+_INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | None]] = {
+    "chargingSetLimitAction": _plan_charge_limit,
+    "setChargingAmpsAction": _plan_charging_amps,
+    "mediaUpdateVolume": _plan_volume,
+    "hvacTemperatureAdjustmentAction": _plan_temps,
+    "hvacAutoAction": _plan_auto_conditioning,
+}
+
+
 class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
@@ -211,9 +285,19 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     blind-retry a non-idempotent command (toggles, volume steps, schedule
     add/remove) on a timeout alone. The inherited WAIT/fault retry
     (``Commands._command``) can also re-send an already-executed command.
+
+    Pass ``verify_commands=True`` to resolve that ambiguity inside this class:
+    on a timeout from a mutating command whose expected post-state is derivable
+    from its arguments, the same held connection reads the mapped prover state
+    and either returns a normal success result (the command executed) or
+    re-raises the ``BluetoothTimeout`` (it did not). Commands whose outcome
+    cannot be derived or read - true toggles, relative steps, and ack-only
+    actions - re-raise the timeout unchanged, exactly as with verification off
+    (the default).
     """
 
     ble_name: str
+    verify_commands: bool
     device: BLEDevice | None = None
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
@@ -232,8 +316,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
+        verify_commands: bool = False,
     ):
         super().__init__(parent, vin, key)
+        self.verify_commands = verify_commands
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
@@ -581,6 +667,49 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         return await super()._command(
             domain, command, attempt, expects_data=expects_data
         )
+
+    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+        """Send a VCSEC actuation, optionally resolving a lost-ack timeout by state."""
+        if not self.verify_commands:
+            return await super()._sendVehicleSecurity(command)
+        try:
+            return await super()._sendVehicleSecurity(command)
+        except BluetoothTimeout as timeout:
+            return await self._resolve_timeout(_vcsec_verify_plan(command), timeout)
+
+    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
+        """Send an infotainment command, optionally resolving a lost-ack timeout by state."""
+        if not self.verify_commands:
+            return await super()._sendInfotainment(command)
+        try:
+            return await super()._sendInfotainment(command)
+        except BluetoothTimeout as timeout:
+            resolver = _INFOTAINMENT_VERIFY_PLANS.get(
+                command.vehicleAction.WhichOneof("vehicle_action_msg")
+            )
+            plan = resolver(command.vehicleAction) if resolver else None
+            return await self._resolve_timeout(plan, timeout)
+
+    async def _resolve_timeout(
+        self, plan: VerifyPlan | None, timeout: BluetoothTimeout
+    ) -> dict[str, Any]:
+        """Confirm a timed-out mutation by state, or re-raise if unverifiable.
+
+        The prover read rides the same held connection. An INFO-domain prover
+        needs the vehicle awake; if the read cannot complete (e.g. the car is
+        asleep) it surfaces a ``TeslaFleetError`` and the original timeout is
+        re-raised rather than waking the car just to verify.
+        """
+        if plan is None:
+            raise timeout
+        reader_name, executed = plan
+        try:
+            state = await getattr(self, reader_name)()
+        except TeslaFleetError:
+            raise timeout
+        if executed(state):
+            return {"response": {"result": True, "reason": ""}}
+        raise timeout
 
     async def pair(
         self,

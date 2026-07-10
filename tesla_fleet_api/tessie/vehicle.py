@@ -1200,6 +1200,6 @@ class TessieVehicles(Vehicles["Tessie"]):
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use Fleet API directly")
 
-    def createBluetooth(self, vin: str) -> Any:
+    def createBluetooth(self, vin: str, verify_commands: bool = False) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use local Bluetooth")

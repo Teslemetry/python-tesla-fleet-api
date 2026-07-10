@@ -127,6 +127,41 @@ inside the library can also re-send an identical command after a WAIT status or
 epoch/token fault, so verify by absolute state rather than by counting command
 attempts.
 
+### Opt-in state verification (`verify_commands`)
+
+Construct a `VehicleBluetooth` with `verify_commands=True` (also accepted by
+`vehicles.create(...)` / `vehicles.createBluetooth(...)`, default off) to have
+the class resolve that ambiguity for you. Verification runs only on a timeout,
+so the normal path - which returns as soon as the terminal ack arrives - keeps
+its speed and pays no extra read; the prover read happens only in the ambiguous
+case.
+
+When a mutating command times out and its expected post-state can be derived
+from its own arguments, the same held connection reads the mapped prover state
+and either returns a normal success result (`{"response": {"result": True,
+"reason": ""}}`) when the state matches or re-raises the `BluetoothTimeout` when
+it does not. The read rides the existing connection and never wakes the vehicle;
+if an infotainment prover cannot be read because the car is asleep, the original
+timeout is re-raised.
+
+Commands whose outcome cannot be derived or read - true toggles, relative volume
+steps, and ack-only actions such as `flash_lights()` or `trigger_homelink()` -
+re-raise the timeout unchanged, exactly as with verification off. Currently
+verified commands and their provers:
+
+| Command | Prover | Confirmed when |
+| --- | --- | --- |
+| `door_lock()` / `door_unlock()` | `vehicle_state()` | lock state matches |
+| `set_charge_limit(percent)` | `charge_state()` | `charge_limit_soc` matches |
+| `set_charging_amps(amps)` | `charge_state()` | `charging_amps` matches |
+| `adjust_volume(volume)` | `media_state()` | `audio_volume` matches |
+| `set_temps(driver, passenger)` | `climate_state()` | both temp settings match |
+| `auto_conditioning_start()` / `auto_conditioning_stop()` | `climate_state()` | `is_climate_on` matches |
+
+The VCSEC lock prover is readable while the vehicle is asleep; the infotainment
+provers require the vehicle awake. This feature does not change behavior for any
+command not in the table, and it is inert unless `verify_commands=True`.
+
 ## Climate Commands
 
 Bluetooth vehicles support the same signed climate command methods as

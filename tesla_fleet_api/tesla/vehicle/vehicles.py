@@ -40,9 +40,11 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         self[vin] = vehicle
         return vehicle
 
-    def createBluetooth(self, vin: str) -> VehicleBluetooth[FleetParentT]:
+    def createBluetooth(
+        self, vin: str, verify_commands: bool = False
+    ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol."""
-        vehicle = self.Bluetooth(self._parent, vin)
+        vehicle = self.Bluetooth(self._parent, vin, verify_commands=verify_commands)
         self[vin] = vehicle
         return vehicle
 
@@ -69,17 +71,21 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
+        verify_commands: bool = False,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol."""
-        return self.createBluetooth(vin, key, device)
+        return self.createBluetooth(vin, key, device, verify_commands)
 
     def createBluetooth(
         self,
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
+        verify_commands: bool = False,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol."""
-        vehicle = self.Bluetooth(self._parent, vin, key, device)
+        vehicle = self.Bluetooth(
+            self._parent, vin, key, device, verify_commands=verify_commands
+        )
         self[vin] = vehicle
         return vehicle
