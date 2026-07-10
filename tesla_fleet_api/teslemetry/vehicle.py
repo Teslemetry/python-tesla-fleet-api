@@ -303,6 +303,11 @@ class TeslemetryVehicles(Vehicles["Teslemetry"]):
         """Creates a specific vehicle."""
         raise NotImplementedError("Teslemetry cannot use Fleet API directly")
 
-    def createBluetooth(self, vin: str, verify_commands: bool = False) -> Any:
+    def createBluetooth(
+        self,
+        vin: str,
+        verify_commands: bool = False,
+        keepalive_interval: float | None = None,
+    ) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Teslemetry cannot use local Bluetooth")

@@ -5,7 +5,10 @@ from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
-from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.bluetooth import (
+    DEFAULT_KEEPALIVE_INTERVAL,
+    VehicleBluetooth,
+)
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
@@ -41,14 +44,24 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         return vehicle
 
     def createBluetooth(
-        self, vin: str, verify_commands: bool = False
+        self,
+        vin: str,
+        verify_commands: bool = False,
+        keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
         timeouts by reading the resulting state before surfacing the timeout.
+        ``keepalive_interval`` seconds of GATT idleness triggers a passive read
+        to hold the link open (``None``/``0`` disables).
         """
-        vehicle = self.Bluetooth(self._parent, vin, verify_commands=verify_commands)
+        vehicle = self.Bluetooth(
+            self._parent,
+            vin,
+            verify_commands=verify_commands,
+            keepalive_interval=keepalive_interval,
+        )
         self[vin] = vehicle
         return vehicle
 
@@ -76,13 +89,18 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
         verify_commands: bool = False,
+        keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
         timeouts by reading the resulting state before surfacing the timeout.
+        ``keepalive_interval`` seconds of GATT idleness triggers a passive read
+        to hold the link open (``None``/``0`` disables).
         """
-        return self.createBluetooth(vin, key, device, verify_commands)
+        return self.createBluetooth(
+            vin, key, device, verify_commands, keepalive_interval
+        )
 
     def createBluetooth(
         self,
@@ -90,14 +108,22 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
         verify_commands: bool = False,
+        keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
         timeouts by reading the resulting state before surfacing the timeout.
+        ``keepalive_interval`` seconds of GATT idleness triggers a passive read
+        to hold the link open (``None``/``0`` disables).
         """
         vehicle = self.Bluetooth(
-            self._parent, vin, key, device, verify_commands=verify_commands
+            self._parent,
+            vin,
+            key,
+            device,
+            verify_commands=verify_commands,
+            keepalive_interval=keepalive_interval,
         )
         self[vin] = vehicle
         return vehicle
