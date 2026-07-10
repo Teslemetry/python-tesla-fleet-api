@@ -166,6 +166,12 @@ asyncio.run(main())
 
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
+`VehicleBluetooth` keeps a held BLE connection alive during idle periods by
+default with a passive GATT read about every 20 seconds. Pass
+`keepalive_interval=None` (or `0`) when creating the vehicle to disable it;
+leaving it enabled can keep an already-awake car awake longer, so disconnect or
+disable keepalive when vehicle sleep is preferred.
+
 BLE connect/notify and GATT write failures from `VehicleBluetooth` raise
 `BluetoothTransportError`, a `TeslaFleetError` subclass, with the original
 transport exception chained as `__cause__`. Catch `TeslaFleetError` to handle

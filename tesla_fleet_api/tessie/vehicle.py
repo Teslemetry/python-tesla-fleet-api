@@ -1205,5 +1205,5 @@ class TessieVehicles(Vehicles["Tessie"]):
         verify_commands: bool = False,
         keepalive_interval: float | None = None,
     ) -> Any:
-        """Creates a specific vehicle."""
+        """Not supported; parameters match the Fleet API Bluetooth factory."""
         raise NotImplementedError("Tessie cannot use local Bluetooth")
