@@ -662,9 +662,7 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         return await self._request(
             Method.POST,
             f"{self.vin}/command/remote_boombox",
-            params=self._command_params(
-                wait_for_completion, max_attempts, sound=sound
-            ),
+            params=self._command_params(wait_for_completion, max_attempts, sound=sound),
         )
 
     async def set_speed_limit(
@@ -1180,6 +1178,7 @@ class TessieVehicle(VehicleFleet["Tessie"]):
             payload["state"] = state
         return await self._request(Method.POST, f"{self.vin}/plate", json=payload)
 
+
 class TessieVehicles(Vehicles["Tessie"]):
     """Class containing and creating vehicles."""
 
@@ -1200,6 +1199,6 @@ class TessieVehicles(Vehicles["Tessie"]):
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use Fleet API directly")
 
-    def createBluetooth(self, vin: str) -> Any:
+    def createBluetooth(self, vin: str, verify_commands: bool = False) -> Any:
         """Creates a specific vehicle."""
         raise NotImplementedError("Tessie cannot use local Bluetooth")
