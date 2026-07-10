@@ -42,7 +42,7 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         )
 
     async def adjust_volume(self, volume: float) -> dict[str, Any]:
-        """Adjusts vehicle media playback volume."""
+        """Adjusts vehicle media playback volume from 0.0 to 11.0."""
         if volume < 0.0 or volume > 11.0:
             raise ValueError("Volume must a number from 0.0 to 11.0")
         return await self._request(
@@ -582,7 +582,8 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         data: dict[str, str | float] = {}
         if token:
             data["token"] = token
-        if lat and lon:
+        # Guard on None, not truthiness: lat/lon of 0.0 are valid coordinates.
+        if lat is not None and lon is not None:
             data["lat"] = lat
             data["lon"] = lon
         return await self._request(

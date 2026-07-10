@@ -187,6 +187,9 @@ actually executed despite the WAIT/fault reply. Verify commands such as media
 toggles, volume steps, and schedule add/remove operations by reading absolute
 state after the call instead of relying on the number of send attempts.
 
+`adjust_volume(volume)` accepts absolute volume values from `0.0` through
+`11.0`, matching the Fleet API command validation.
+
 ## Flash Lights
 
 You can flash the lights of a specific vehicle using its VIN:

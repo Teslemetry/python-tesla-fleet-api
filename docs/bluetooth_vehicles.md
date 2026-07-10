@@ -309,6 +309,9 @@ commands:
 - `media_next_fav()`
 - `media_prev_fav()`
 
+`adjust_volume(volume)` accepts absolute volume values from `0.0` through
+`11.0`, matching the Fleet API command validation.
+
 These commands return the signed-command acknowledgement, not a media-state
 diff. For verification, prefer `media_state().audio_volume` and
 `media_state().media_playback_status` where they apply. Track identity fields
