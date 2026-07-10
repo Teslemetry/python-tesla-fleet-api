@@ -776,6 +776,11 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 break
             await asyncio.sleep(min(poll_interval, remaining))
 
+        if self._consume_late_whitelist_reply():
+            return
+        if await self._pair_probe():
+            return
+
         raise BluetoothTimeout
 
     async def _pair_probe(self) -> bool:

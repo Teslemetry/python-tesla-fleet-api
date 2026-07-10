@@ -9,8 +9,9 @@ These tests drive both paths and the reconnect/deadline behaviour with the real
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
@@ -105,6 +106,29 @@ class PairTest(MockedBleTransportTestCase):
 
         self.assertEqual(send.await_count, 1)
         handshake.assert_not_awaited()
+
+    async def test_late_reply_after_final_sleep_returns(self) -> None:
+        """A reply landing in the final sleep is drained before timing out."""
+        vehicle, send = self.make_vehicle()
+        send.side_effect = BluetoothTimeout
+        handshake = self._mock_handshake(vehicle, False)
+
+        original_sleep = asyncio.sleep
+
+        async def queue_reply_then_return(delay: float) -> None:
+            vehicle._queues[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
+                whitelist_reply()
+            )
+            await original_sleep(delay)
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.asyncio.sleep",
+            new=queue_reply_then_return,
+        ):
+            await vehicle.pair(poll_interval=0.02, timeout=0.01)
+
+        self.assertEqual(send.await_count, 1)
+        self.assertEqual(handshake.await_count, 1)
 
     async def test_nonpositive_poll_interval_raises(self) -> None:
         """Invalid poll intervals are rejected before sending the whitelist op."""
