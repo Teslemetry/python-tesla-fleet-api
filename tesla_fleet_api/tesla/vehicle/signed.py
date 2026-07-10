@@ -15,9 +15,10 @@ if TYPE_CHECKING:
 SignedParentT = TypeVar("SignedParentT", bound="TeslaFleetApi")
 
 
-class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generic[SignedParentT]):  # pyright: ignore[reportIncompatibleMethodOverride]
+class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
+    Commands[SignedParentT], VehicleFleet[SignedParentT], Generic[SignedParentT]
+):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
-
 
     _auth_method = "hmac"
 
@@ -25,7 +26,6 @@ class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generi
         """Initialize the VehicleSigned class."""
         super().__init__(parent, vin)
         super(Commands, self).__init__(parent, vin)
-
 
     async def _send(
         self, msg: RoutableMessage, requires: str, expects_data: bool = True
