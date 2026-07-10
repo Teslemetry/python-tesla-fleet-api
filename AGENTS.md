@@ -76,7 +76,7 @@ Commands (vehicle/commands.py) - protobuf-based signed command implementation (A
 `Vehicles` (vehicle/vehicles.py) is a `dict[str, Vehicle]` with factory methods:
 - `createFleet(vin)` → `VehicleFleet`
 - `createSigned(vin)` → `VehicleSigned`
-- `createBluetooth(vin)` → `VehicleBluetooth`
+- `createBluetooth(vin, verify_commands=False)` → `VehicleBluetooth`
 
 Teslemetry/Tessie override `Vehicles` with their own vehicle classes (`TeslemetryVehicle`, `TessieVehicle`) extending `VehicleFleet` with service-specific commands (e.g., `closure()`, `seat_heater()` for Teslemetry; `wake()`, `lock()` for Tessie).
 

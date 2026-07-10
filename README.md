@@ -189,7 +189,7 @@ async def main():
         # Primary: local Bluetooth
         tesla_bluetooth = TeslaBluetooth()
         await tesla_bluetooth.get_private_key("path/to/private_key.pem")
-        primary = tesla_bluetooth.vehicles.create("<vin>")
+        primary = tesla_bluetooth.vehicles.create("<vin>", verify_commands=True)
 
         # Secondary (fallback): Teslemetry cloud
         teslemetry = Teslemetry(access_token="<access_token>", session=session)
@@ -220,7 +220,7 @@ await router.set_operation(...)  # local first, cloud on failure
 
 `Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
 
-> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
+> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. When the primary is `VehicleBluetooth`, pass `verify_commands=True` to resolve supported mutating command timeouts by state before failover; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
 > Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
 
