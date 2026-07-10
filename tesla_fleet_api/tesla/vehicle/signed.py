@@ -27,9 +27,12 @@ class VehicleSigned(Commands[SignedParentT], VehicleFleet[SignedParentT], Generi
         super(Commands, self).__init__(parent, vin)
 
 
-    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
+    async def _send(
+        self, msg: RoutableMessage, requires: str, expects_data: bool = True
+    ) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
-        # requires isnt used because Fleet API messages are singular
+        # requires and expects_data are unused: Fleet API replies are singular,
+        # delivered whole in one response with no separate terminal ack frame.
 
         async with self._sessions[msg.to_destination.domain].lock:
             json = await self.signed_command(

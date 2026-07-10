@@ -221,6 +221,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
     _ack_followup_timeout: float = 2
+    _default_timeout: float = 5
+    # A lost actuation ack is inconclusive; the contract is verify-by-state, so
+    # a shorter wait than a data read's before raising loses nothing.
+    _actuation_timeout: float = 2
 
     def __init__(
         self,
@@ -355,9 +359,22 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         queue.put_nowait(msg)
 
     async def _send(
-        self, msg: RoutableMessage, requires: str, timeout: int = 5
+        self,
+        msg: RoutableMessage,
+        requires: str,
+        expects_data: bool = True,
+        *,
+        timeout: float | None = None,
     ) -> RoutableMessage:
-        """Serialize a message and send to the vehicle and wait for a response."""
+        """Serialize a message and send to the vehicle and wait for a response.
+
+        When ``expects_data`` is False the reply is a single terminal ack (a
+        VCSEC actuation, no data frame follows), so the ack is returned as soon
+        as it arrives and a shorter total timeout applies.
+        """
+
+        if timeout is None:
+            timeout = self._default_timeout if expects_data else self._actuation_timeout
 
         domain = msg.to_destination.domain
         async with self._sessions[domain].lock:
@@ -397,6 +414,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                         # Some commands (e.g. RKE wake/lock) only return an ACK with no data.
                         # Wait briefly for a follow-up data response before returning the ACK.
                         if msg.uuid and resp.request_uuid == msg.uuid:
+                            if not expects_data:
+                                # A VCSEC actuation's ack is terminal; no data
+                                # frame follows, so return without the wait.
+                                return resp
                             LOGGER.debug(
                                 "Received ACK for our request, waiting briefly for data follow-up"
                             )
@@ -549,11 +570,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         return None
 
     async def _command(
-        self, domain: Domain, command: bytes, attempt: int = 0
+        self,
+        domain: Domain,
+        command: bytes,
+        attempt: int = 0,
+        expects_data: bool = True,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
         await self.connect_if_needed()
-        return await super()._command(domain, command, attempt)
+        return await super()._command(
+            domain, command, attempt, expects_data=expects_data
+        )
 
     async def pair(
         self,
@@ -577,7 +604,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             protobuf_message_as_bytes=request.SerializeToString(),
             uuid=randbytes(16),
         )
-        resp = await self._send(msg, "protobuf_message_as_bytes", timeout)
+        resp = await self._send(msg, "protobuf_message_as_bytes", timeout=timeout)
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
         if respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation:
             if (
