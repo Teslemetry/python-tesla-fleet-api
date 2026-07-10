@@ -87,6 +87,34 @@ class PairTest(MockedBleTransportTestCase):
         self.assertEqual(send.await_count, 1)
         self.assertEqual(handshake.await_count, 2)
 
+    async def test_late_reply_fault_raises_during_poll(self) -> None:
+        """A late whitelist-op fault raises its mapped exception while polling."""
+        vehicle, send = self.make_vehicle()
+
+        async def timeout_after_late_fault(*args: Any, **kwargs: Any) -> None:
+            vehicle._queues[Domain.DOMAIN_VEHICLE_SECURITY].put_nowait(
+                whitelist_reply(info=4)
+            )
+            raise BluetoothTimeout
+
+        send.side_effect = timeout_after_late_fault
+        handshake = self._mock_handshake(vehicle, True)
+
+        with self.assertRaises(WhitelistOperationWhitelistFull):
+            await vehicle.pair(poll_interval=0.01, timeout=1)
+
+        self.assertEqual(send.await_count, 1)
+        handshake.assert_not_awaited()
+
+    async def test_nonpositive_poll_interval_raises(self) -> None:
+        """Invalid poll intervals are rejected before sending the whitelist op."""
+        vehicle, send = self.make_vehicle()
+
+        with self.assertRaisesRegex(ValueError, "poll_interval must be greater than 0"):
+            await vehicle.pair(poll_interval=0)
+
+        send.assert_not_awaited()
+
     async def test_reconnect_midwait_poll_continues(self) -> None:
         """A transport failure mid-poll is 'not yet', so polling keeps going."""
         vehicle, send = self.make_vehicle()

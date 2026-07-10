@@ -732,6 +732,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         path confirms before ``timeout`` seconds elapse.
         """
 
+        if poll_interval <= 0:
+            raise ValueError("poll_interval must be greater than 0")
+
         request = UnsignedMessage(
             WhitelistOperation=WhitelistOperation(
                 addKeyToWhitelistAndAddPermissions=PermissionChange(
@@ -764,6 +767,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
         # Slow path: poll whether our key became effective on the vehicle.
         while time.monotonic() < deadline:
+            if self._consume_late_whitelist_reply():
+                return
             if await self._pair_probe():
                 return
             remaining = deadline - time.monotonic()
@@ -786,6 +791,31 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             return await self._handshake(Domain.DOMAIN_VEHICLE_SECURITY)
         except TeslaFleetError:
             return False
+
+    def _consume_late_whitelist_reply(self) -> bool:
+        queue = self._queues[Domain.DOMAIN_VEHICLE_SECURITY]
+        deferred: list[RoutableMessage] = []
+        try:
+            while True:
+                resp = queue.get_nowait()
+                try:
+                    respMsg = FromVCSECMessage.FromString(
+                        resp.protobuf_message_as_bytes
+                    )
+                except DecodeError:
+                    deferred.append(resp)
+                    continue
+                if respMsg.HasField("commandStatus") and respMsg.commandStatus.HasField(
+                    "whitelistOperationStatus"
+                ):
+                    self._raise_for_whitelist_reply(resp)
+                    return True
+                deferred.append(resp)
+        except asyncio.QueueEmpty:
+            return False
+        finally:
+            for resp in deferred:
+                queue.put_nowait(resp)
 
     def _raise_for_whitelist_reply(self, resp: RoutableMessage) -> None:
         """Raise the mapped fault if a whitelist-op reply reports one."""
