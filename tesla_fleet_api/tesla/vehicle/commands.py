@@ -331,8 +331,15 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         return hashlib.sha1(exchange).digest()[:16]
 
     @abstractmethod
-    async def _send(self, msg: RoutableMessage, requires: str) -> RoutableMessage:
-        """Transmit the message to the vehicle."""
+    async def _send(
+        self, msg: RoutableMessage, requires: str, expects_data: bool = True
+    ) -> RoutableMessage:
+        """Transmit the message to the vehicle.
+
+        ``expects_data`` is False when the reply is a single terminal ack with
+        no following data frame (a VCSEC actuation), letting a framing
+        transport return on that ack instead of waiting out a data follow-up.
+        """
         raise NotImplementedError
 
     def validate_msg(self, msg: RoutableMessage) -> None:
@@ -352,7 +359,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 raise exception
 
     async def _command(
-        self, domain: Domain, command: bytes, attempt: int = 0
+        self,
+        domain: Domain,
+        command: bytes,
+        attempt: int = 0,
+        expects_data: bool = True,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint.
 
@@ -360,6 +371,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         the identical command (bounded at 3 attempts) - for a non-idempotent
         command that window can apply it twice if the first attempt actually
         executed despite the WAIT/fault reply.
+
+        ``expects_data`` is threaded to ``_send`` and every retry; it is False
+        for a VCSEC actuation, whose reply is a bare terminal ack.
         """
         session = self._sessions[domain]
         if not session.ready:
@@ -374,7 +388,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 raise ValueError(f"Unknown auth method: {self._auth_method}")
 
         try:
-            resp = await self._send(msg, "protobuf_message_as_bytes")
+            resp = await self._send(
+                msg, "protobuf_message_as_bytes", expects_data=expects_data
+            )
         except (
             # TeslaFleetMessageFaultInvalidSignature,
             TeslaFleetMessageFaultIncorrectEpoch,
@@ -384,7 +400,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             if attempt > 3:
                 # We tried 3 times, give up, raise the error
                 raise e
-            return await self._command(domain, command, attempt)
+            return await self._command(
+                domain, command, attempt, expects_data=expects_data
+            )
 
         if (
             resp.signedMessageStatus.operation_status
@@ -396,7 +414,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 return {"response": {"result": False, "reason": "Too many retries"}}
             async with session.lock:
                 await sleep(2)
-            return await self._command(domain, command, attempt)
+            return await self._command(
+                domain, command, attempt, expects_data=expects_data
+            )
 
         if resp.HasField("protobuf_message_as_bytes"):
             # decrypt
@@ -498,7 +518,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                         }
                     async with session.lock:
                         await sleep(2)
-                    return await self._command(domain, command, attempt)
+                    return await self._command(
+                        domain, command, attempt, expects_data=expects_data
+                    )
                 elif (
                     vcsec.commandStatus.operationStatus
                     == OperationStatus_E.OPERATIONSTATUS_ERROR
@@ -652,13 +674,19 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
-        """Sign and send a message to Infotainment computer."""
+        """Sign and send an actuation to the Vehicle Security computer.
+
+        A VCSEC actuation replies with a single terminal ack and no data frame,
+        so ``expects_data=False`` lets ``_send`` return on that ack.
+        """
         return await self._command(
-            Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+            Domain.DOMAIN_VEHICLE_SECURITY,
+            command.SerializeToString(),
+            expects_data=False,
         )
 
     async def _getVehicleSecurity(self, command: UnsignedMessage) -> VehicleStatus:
-        """Sign and send a message to Infotainment computer."""
+        """Sign and send a read request to the Vehicle Security computer."""
         reply = await self._command(
             Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
         )

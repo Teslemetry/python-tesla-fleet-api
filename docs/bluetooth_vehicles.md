@@ -115,6 +115,12 @@ acknowledgement does not reach the client. For commands that change vehicle
 state, snapshot the relevant state before acting and verify the outcome with a
 follow-up state read after any timeout.
 
+VCSEC actuations, such as RKE, closure, and wake requests, return as soon as
+their terminal acknowledgement arrives because no data frame follows it. If that
+acknowledgement is lost, they use a shorter response timeout than reads; the
+timeout is still inconclusive and should be handled with the same verify-by-state
+pattern.
+
 Do not blind-retry non-idempotent commands, such as media toggles, volume steps,
 or schedule add/remove operations, on timeout alone. The signed-command retry
 inside the library can also re-send an identical command after a WAIT status or

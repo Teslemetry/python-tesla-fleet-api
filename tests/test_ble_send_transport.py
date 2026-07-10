@@ -9,6 +9,7 @@ exercise the real wait/ACK-follow-up state machine without a BLE connection.
 
 from __future__ import annotations
 
+import asyncio
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -124,6 +125,88 @@ class SendAckFollowupTests(IsolatedAsyncioTestCase):
         result = await vehicle._send(msg, "protobuf_message_as_bytes")
 
         self.assertEqual(result, data)
+
+
+class SendActuationEarlyReturnTests(IsolatedAsyncioTestCase):
+    """expects_data=False: a bare terminal actuation ack returns immediately."""
+
+    async def test_terminal_ack_returns_without_waiting_followup(self) -> None:
+        vehicle = _make_vehicle()
+        # A large follow-up window would dominate if the early return regressed;
+        # wait_for below fails fast instead of hanging the suite.
+        vehicle._ack_followup_timeout = 30
+        msg = _outgoing()
+        ack = RoutableMessage(
+            from_destination=Destination(domain=DOMAIN), request_uuid=msg.uuid
+        )
+
+        async def fake_write(_uuid, _payload, _response):
+            vehicle._queues[DOMAIN].put_nowait(ack)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=fake_write)
+
+        result = await asyncio.wait_for(
+            vehicle._send(msg, "protobuf_message_as_bytes", expects_data=False),
+            timeout=1.0,
+        )
+
+        self.assertEqual(result, ack)
+
+    async def test_read_still_waits_followup_when_expects_data(self) -> None:
+        # Contrast: with expects_data (a read), the same bare ack is NOT terminal
+        # - _send waits the follow-up window before returning it, unchanged.
+        vehicle = _make_vehicle()
+        vehicle._ack_followup_timeout = 0.05
+        msg = _outgoing()
+        ack = RoutableMessage(
+            from_destination=Destination(domain=DOMAIN), request_uuid=msg.uuid
+        )
+
+        async def fake_write(_uuid, _payload, _response):
+            vehicle._queues[DOMAIN].put_nowait(ack)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=fake_write)
+
+        result = await vehicle._send(
+            msg, "protobuf_message_as_bytes", expects_data=True
+        )
+
+        self.assertEqual(result, ack)
+
+
+class SendActuationTimeoutTests(IsolatedAsyncioTestCase):
+    """A lost actuation ack raises after the short actuation timeout, not the default."""
+
+    async def test_lost_actuation_ack_uses_short_timeout(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 0.05
+        vehicle._default_timeout = 5
+        msg = _outgoing()
+        vehicle.client.write_gatt_char = AsyncMock()  # nothing enqueued
+
+        # wait_for(1.0) would trip first (asyncio.TimeoutError) if _send wrongly
+        # waited the 5s default; BluetoothTimeout proves the short path ran.
+        with self.assertRaises(BluetoothTimeout):
+            await asyncio.wait_for(
+                vehicle._send(msg, "protobuf_message_as_bytes", expects_data=False),
+                timeout=1.0,
+            )
+
+    async def test_read_keeps_default_timeout(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 0.05
+        vehicle._default_timeout = 5
+        msg = _outgoing()
+        vehicle.client.write_gatt_char = AsyncMock()  # nothing enqueued
+
+        # A read must ignore the short actuation timeout: _send is still waiting
+        # on the default at 0.3s, so the outer wait_for fires instead of the
+        # short-path BluetoothTimeout.
+        with self.assertRaises(asyncio.TimeoutError):
+            await asyncio.wait_for(
+                vehicle._send(msg, "protobuf_message_as_bytes", expects_data=True),
+                timeout=0.3,
+            )
 
 
 class SendQueueHygieneTests(IsolatedAsyncioTestCase):
