@@ -662,9 +662,7 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         return await self._request(
             Method.POST,
             f"{self.vin}/command/remote_boombox",
-            params=self._command_params(
-                wait_for_completion, max_attempts, sound=sound
-            ),
+            params=self._command_params(wait_for_completion, max_attempts, sound=sound),
         )
 
     async def set_speed_limit(
@@ -1179,6 +1177,7 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         if state:
             payload["state"] = state
         return await self._request(Method.POST, f"{self.vin}/plate", json=payload)
+
 
 class TessieVehicles(Vehicles["Tessie"]):
     """Class containing and creating vehicles."""

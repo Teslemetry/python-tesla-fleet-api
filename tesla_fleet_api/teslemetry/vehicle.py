@@ -16,11 +16,11 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
 
     parent: Teslemetry
 
-    async def server_side_polling(
-        self, value: bool | None = None
-    ) -> bool | None:
+    async def server_side_polling(self, value: bool | None = None) -> bool | None:
         """Get or set Auto mode."""
-        LOGGER.warning("This method is deprecated and will be removed in a future release.")
+        LOGGER.warning(
+            "This method is deprecated and will be removed in a future release."
+        )
         if value is True:
             return (
                 await self._request(
