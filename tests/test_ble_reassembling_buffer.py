@@ -4,7 +4,9 @@ Exercises the length-prefixed reassembly directly (no VehicleBluetooth, no
 GATT) to lock down: a message split across multiple BLE notification
 chunks, multiple complete messages delivered in a single chunk, and
 resynchronization after a corrupted/oversized packet using the
-``packet_starts`` boundary tracking in ``discard_packet``.
+``packet_starts`` boundary tracking in ``discard_packet``. It also verifies
+that a stale partial frame is dropped after the BLE inter-chunk timeout while
+normal fast multi-chunk messages still reassemble.
 """
 
 from unittest import TestCase
