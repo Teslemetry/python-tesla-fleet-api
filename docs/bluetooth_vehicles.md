@@ -39,6 +39,35 @@ async def main():
 asyncio.run(main())
 ```
 
+## Keeping the Connection Alive (`keepalive_interval`)
+
+An idle held BLE link to the vehicle drops on its own after roughly 42 seconds
+on average. To hold it open, `VehicleBluetooth` issues a minimal passive GATT
+read (of the version characteristic - never a command, never anything signed or
+mutating) after `keepalive_interval` seconds without traffic. A single such read
+every 20 seconds keeps the link alive about ten times longer.
+
+The keepalive is idle-triggered: any real send or received frame resets the
+timer, so an active session never gets extra traffic and the read fires only
+during genuine idleness. It is bounded and best-effort - a read that cannot
+complete (for example against a sleeping car) is swallowed and never raises into
+your code or forces a reconnect, and it never wakes the vehicle or masks a
+sleeping car. Link recovery stays owned by the normal reconnect path.
+
+`keepalive_interval` defaults to about 20 seconds and is accepted by the
+constructor and by `vehicles.create(...)` / `vehicles.createBluetooth(...)`.
+Pass `None` or `0` to disable it.
+
+```python
+vehicle = tesla_bluetooth.vehicles.create("<vin>", keepalive_interval=20.0)
+# or disable it:
+vehicle = tesla_bluetooth.vehicles.create("<vin>", keepalive_interval=None)
+```
+
+Tradeoff: because these reads generate link traffic, they keep an already-awake
+car awake and defer vehicle sleep. If you want the vehicle to sleep while idle,
+disable keepalive or disconnect when you have no work for it.
+
 ## Pair Vehicle
 
 You can pair a `VehicleBluetooth` instance using the `pair` method. Here's a basic example to pair a `VehicleBluetooth` instance:

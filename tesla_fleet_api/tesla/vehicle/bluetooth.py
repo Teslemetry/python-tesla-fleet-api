@@ -88,6 +88,10 @@ VERSION_UUID = "00000214-b2d1-43f0-9b88-960cebf8b91e"
 NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb"
 APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 
+# An idle held BLE link to the vehicle drops at ~42s mean; a trivial GATT read
+# every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
+DEFAULT_KEEPALIVE_INTERVAL = 20.0
+
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
 
@@ -294,10 +298,22 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     cannot be derived or read - true toggles, relative steps, and ack-only
     actions - re-raise the timeout unchanged, exactly as with verification off
     (the default).
+
+    ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
+    otherwise idle held connection from dropping: after that many seconds with
+    no real GATT traffic, a minimal passive characteristic read is issued to
+    reset the link supervision timer. It is idle-triggered - any real send or
+    received frame resets the timer, so an active session pays nothing - and it
+    is bounded and best-effort: a failed read (e.g. against a sleeping car) is
+    swallowed and never raises into caller code or forces a reconnect; the
+    existing reconnect machinery owns link recovery. Note the tradeoff: these
+    reads keep an *awake* car awake and so defer vehicle sleep. Callers that
+    want the car to sleep should disable keepalive or disconnect when idle.
     """
 
     ble_name: str
     verify_commands: bool
+    keepalive_interval: float | None
     device: BLEDevice | None = None
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
@@ -309,6 +325,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     # A lost actuation ack is inconclusive; the contract is verify-by-state, so
     # a shorter wait than a data read's before raising loses nothing.
     _actuation_timeout: float = 2
+    # Bounded so a keepalive read against a sleeping car can never hang the loop.
+    _keepalive_timeout: float = 2
+    _keepalive_task: asyncio.Task[None] | None = None
+    _last_activity: float = 0.0
 
     def __init__(
         self,
@@ -317,9 +337,11 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
         verify_commands: bool = False,
+        keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
     ):
         super().__init__(parent, vin, key)
         self.verify_commands = verify_commands
+        self.keepalive_interval = keepalive_interval
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
@@ -376,6 +398,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 services=[SERVICE_UUID],
             )
             await self.client.start_notify(READ_UUID, self._on_notify)
+            await self._start_keepalive()
         # bleak-esphome converts an aioesphomeapi transport timeout into a
         # builtin TimeoutError, not a BleakError, so catch both to keep every
         # connect transport failure within TeslaFleetError.
@@ -391,6 +414,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
+        await self._stop_keepalive()
         if not self.client:
             return False
         await self.client.disconnect()
@@ -402,6 +426,55 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             if not self.client or not self.client.is_connected:
                 LOGGER.info(f"Reconnecting to {self.ble_name}")
                 await self.connect(max_attempts=max_attempts)
+
+    async def _start_keepalive(self) -> None:
+        """Start the idle keepalive task for this connection, if enabled."""
+        await self._stop_keepalive()
+        if not self.keepalive_interval:
+            return
+        self._last_activity = time.monotonic()
+        self._keepalive_task = asyncio.ensure_future(self._keepalive_loop())
+
+    async def _stop_keepalive(self) -> None:
+        """Cancel and await the keepalive task so it never outlives the link."""
+        task = self._keepalive_task
+        self._keepalive_task = None
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    async def _keepalive_loop(self) -> None:
+        """Read a trivial characteristic after each span of GATT idleness."""
+        assert self.keepalive_interval is not None
+        while True:
+            idle_for = time.monotonic() - self._last_activity
+            wait = self.keepalive_interval - idle_for
+            if wait > 0:
+                await asyncio.sleep(wait)
+                continue
+            await self._keepalive_read()
+            # The read itself is activity, so the next span starts from now.
+            self._last_activity = time.monotonic()
+
+    async def _keepalive_read(self) -> None:
+        """Issue one bounded passive read; swallow every failure.
+
+        A keepalive failure must never surface to callers or trigger reconnects
+        - link recovery is owned by ``connect_if_needed`` - and a sleeping car
+        must stay detectable, so a read that cannot complete is simply dropped.
+        """
+        client = self.client
+        if client is None or not client.is_connected:
+            return
+        try:
+            async with asyncio.timeout(self._keepalive_timeout):
+                await client.read_gatt_char(VERSION_UUID)
+        except Exception as e:
+            LOGGER.debug(f"Keepalive read failed: {e}")
 
     async def __aenter__(self) -> VehicleBluetooth[BluetoothParentT]:
         """Enter the async context."""
@@ -422,6 +495,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         if sender.uuid != READ_UUID:
             LOGGER.error(f"Unexpected sender: {sender}")
             return
+        self._last_activity = time.monotonic()
         self._buffer.receive_data(data)
 
     def _on_message(self, msg: RoutableMessage) -> None:
@@ -477,6 +551,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             assert self.client is not None
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
+                self._last_activity = time.monotonic()
             # bleak-esphome converts an aioesphomeapi write timeout into a
             # builtin TimeoutError, not a BleakError, so catch both to keep the
             # GATT-write transport failure within TeslaFleetError.
