@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import struct
+import time
 from random import randbytes
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
@@ -96,6 +97,11 @@ def prependLength(message: bytes) -> bytearray:
     return bytearray([len(message) >> 8, len(message) & 0xFF]) + message
 
 
+# A chunk arriving after this much silence means the prior partial frame was
+# abandoned mid-flight, not merely delayed.
+STALE_CHUNK_TIMEOUT = 1.0
+
+
 class ReassemblingBuffer:
     """
     Reassembles BLE notification chunks into length-prefixed RoutableMessages.
@@ -103,7 +109,8 @@ class ReassemblingBuffer:
     Each message starts with a 2-byte length. One notification can contain part
     of a message, exactly one message, or multiple messages. If a message cannot
     be decoded, the buffer drops the current physical packet and resynchronizes
-    at the next recorded packet boundary.
+    at the next recorded packet boundary. A partial message is also discarded if
+    the next chunk doesn't arrive within ``STALE_CHUNK_TIMEOUT``.
     """
 
     def __init__(self, callback: Callable[[RoutableMessage], None]):
@@ -117,6 +124,7 @@ class ReassemblingBuffer:
         self.expected_length: int | None = None
         self.packet_starts: list[int] = []
         self.callback = callback
+        self._last_chunk_time: float | None = None
 
     def receive_data(self, data: bytearray):
         """
@@ -125,6 +133,17 @@ class ReassemblingBuffer:
         Args:
             data: The received bytearray data.
         """
+        now = time.monotonic()
+        if (
+            self.buffer
+            and self._last_chunk_time is not None
+            and now - self._last_chunk_time > STALE_CHUNK_TIMEOUT
+        ):
+            self.buffer = bytearray()
+            self.expected_length = None
+            self.packet_starts = []
+        self._last_chunk_time = now
+
         self.packet_starts.append(len(self.buffer))
         self.buffer.extend(data)
 

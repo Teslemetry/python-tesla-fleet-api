@@ -101,6 +101,12 @@ failures and response-wait `BluetoothTimeout` failures with one library error
 hierarchy, or catch `BluetoothTransportError` separately when you need to
 distinguish a transport failure from a vehicle timeout.
 
+BLE response chunks are reassembled with the same stale-frame behavior as
+Tesla's vehicle-command BLE connector: if a partial frame sits idle for more
+than one second before the next chunk arrives, the partial frame is discarded
+before processing the new chunk. This prevents a dropped chunk from corrupting
+the next response, but it does not change command acknowledgement timeouts.
+
 ## Mutating Command Timeouts
 
 A `BluetoothTimeout` from a mutating BLE command is inconclusive, not proof that
