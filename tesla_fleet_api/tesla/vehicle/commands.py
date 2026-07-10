@@ -757,6 +757,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
     async def adjust_volume(self, volume: float) -> dict[str, Any]:
         """Adjusts vehicle media playback volume."""
+        if volume < 0.0 or volume > 11.0:
+            raise ValueError("Volume must a number from 0.0 to 11.0")
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(

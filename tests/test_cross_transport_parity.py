@@ -88,3 +88,37 @@ class TriggerHomelinkParityTests(MockedBleTransportTestCase):
         action = _sent_vehicle_action(ble, send).vehicleControlTriggerHomelinkAction
         # No location submessage set when coordinates are omitted.
         self.assertFalse(action.HasField("location"))
+
+
+class AdjustVolumeParityTests(MockedBleTransportTestCase):
+    """``adjust_volume`` must reject the same out-of-range values on both
+    transports.
+
+    Regression: the cloud path validated ``0.0 <= volume <= 11.0`` and raised
+    ``ValueError``; the BLE path forwarded any float to the car unchecked - a
+    parameter-validation divergence.
+    """
+
+    async def test_out_of_range_rejected_on_both_transports(self) -> None:
+        for bad in (-1.0, 11.5):
+            cloud, request = _make_fleet_vehicle(self.VIN)
+            with self.assertRaises(ValueError):
+                await cloud.adjust_volume(bad)
+            request.assert_not_awaited()
+
+            ble, send = self.make_vehicle()
+            with self.assertRaises(ValueError):
+                await ble.adjust_volume(bad)
+            send.assert_not_awaited()
+
+    async def test_in_range_sends_absolute_volume_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.adjust_volume(5.0)
+        assert request.await_args is not None
+        self.assertEqual(request.await_args.kwargs["json"], {"volume": 5.0})
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.adjust_volume(5.0)
+        action = _sent_vehicle_action(ble, send)
+        self.assertAlmostEqual(action.mediaUpdateVolume.volume_absolute_float, 5.0)
