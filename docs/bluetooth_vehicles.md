@@ -58,6 +58,13 @@ async def main():
 asyncio.run(main())
 ```
 
+`pair()` waits for the tap-to-approve on the vehicle: it returns as soon as the
+whitelist success reply arrives, but also polls whether the key became effective
+(every `poll_interval` seconds, default 5) up to an overall `timeout` (default
+300 seconds), so it still completes if that one-shot reply is lost to a BLE
+reconnect while you walk to the car. It raises `BluetoothTimeout` if neither
+confirms in time.
+
 ## Wake Up Vehicle
 
 You can wake up a `VehicleBluetooth` instance using the `wake_up` method. Here's a basic example to wake up a `VehicleBluetooth` instance:

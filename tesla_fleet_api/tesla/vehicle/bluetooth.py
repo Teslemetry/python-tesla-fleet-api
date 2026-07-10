@@ -715,9 +715,22 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         self,
         role: Role = Role.ROLE_OWNER,
         form: KeyFormFactor = KeyFormFactor.KEY_FORM_FACTOR_CLOUD_KEY,
-        timeout: int = 60,
+        timeout: float = 300,
+        poll_interval: float = 5,
     ):
-        """Pair the key."""
+        """Pair the key, confirming completion by reply or by key-state polling.
+
+        The whitelist-operation success is a single VCSEC frame. If the BLE
+        session cycles while the user walks to the vehicle to approve, that
+        frame can land on a dead session and be lost, hanging a plain one-shot
+        wait. The reply stays the fast path when it survives, but completion is
+        also confirmed by polling whether our public key is now whitelisted - a
+        VCSEC handshake with our own key succeeds only once it is. The whitelist
+        op is written exactly once; it is never re-sent, which would re-prompt
+        the user, and the poll re-handshakes on a fresh connection so it
+        survives mid-wait reconnects. Raises ``BluetoothTimeout`` if neither
+        path confirms before ``timeout`` seconds elapse.
+        """
 
         request = UnsignedMessage(
             WhitelistOperation=WhitelistOperation(
@@ -733,23 +746,63 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             protobuf_message_as_bytes=request.SerializeToString(),
             uuid=randbytes(16),
         )
-        resp = await self._send(msg, "protobuf_message_as_bytes", timeout=timeout)
+
+        deadline = time.monotonic() + timeout
+
+        # Fast path: write the op once and wait one interval for its one-shot
+        # reply. A lost reply falls through to polling rather than re-sending.
+        try:
+            resp = await self._send(
+                msg,
+                "protobuf_message_as_bytes",
+                timeout=max(0.0, min(poll_interval, deadline - time.monotonic())),
+            )
+            self._raise_for_whitelist_reply(resp)
+            return
+        except BluetoothTimeout:
+            pass
+
+        # Slow path: poll whether our key became effective on the vehicle.
+        while time.monotonic() < deadline:
+            if await self._pair_probe():
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(poll_interval, remaining))
+
+        raise BluetoothTimeout
+
+    async def _pair_probe(self) -> bool:
+        """Return True once our public key is whitelisted on the vehicle.
+
+        A VCSEC handshake with our own public key completes only when that key
+        is on the vehicle's whitelist; until pairing is approved it faults with
+        ``NotOnWhitelistFault``. Any transport failure mid-poll (a dropped
+        session) is treated as 'not yet' so polling keeps running across
+        reconnects rather than aborting.
+        """
+        try:
+            return await self._handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        except TeslaFleetError:
+            return False
+
+    def _raise_for_whitelist_reply(self, resp: RoutableMessage) -> None:
+        """Raise the mapped fault if a whitelist-op reply reports one."""
         respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
-        if respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation:
-            if (
-                respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation
-                < len(WHITELIST_OPERATION_STATUS)
-            ):
-                exception = WHITELIST_OPERATION_STATUS[
-                    respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation
-                ]
-                if exception:
-                    raise exception
-            else:
-                raise WhitelistOperationStatus(
-                    f"Unknown whitelist operation failure: {respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation}"
-                )
-        return
+        info = (
+            respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation
+        )
+        if not info:
+            return
+        if info < len(WHITELIST_OPERATION_STATUS):
+            exception = WHITELIST_OPERATION_STATUS[info]
+            if exception:
+                raise exception
+        else:
+            raise WhitelistOperationStatus(
+                f"Unknown whitelist operation failure: {info}"
+            )
 
     async def wake_up(self):
         """Wake up the vehicle security computer.
