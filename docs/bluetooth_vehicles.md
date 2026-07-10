@@ -92,9 +92,11 @@ should retry `BluetoothTimeout` with backoff. Keep one BLE connection open
 across related commands when possible instead of reconnecting for each command.
 
 `VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
-subclass, when the BLE connection or GATT command write fails before a vehicle
-response can be awaited. The original `bleak.exc.BleakError` is available as
-the exception's `__cause__`. Catch `TeslaFleetError` to handle both transport
+subclass, when the BLE connection, notification setup, or GATT command write
+fails before a vehicle response can be awaited. The original transport
+exception is available as the exception's `__cause__`; this includes
+`bleak.exc.BleakError` and builtin `TimeoutError` from ESPHome proxy connect,
+notify, or write timeouts. Catch `TeslaFleetError` to handle both transport
 failures and response-wait `BluetoothTimeout` failures with one library error
 hierarchy, or catch `BluetoothTransportError` separately when you need to
 distinguish a transport failure from a vehicle timeout.

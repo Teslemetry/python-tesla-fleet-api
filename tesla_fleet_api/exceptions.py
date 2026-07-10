@@ -29,7 +29,7 @@ class BluetoothTimeout(TeslaFleetError):
 
 
 class BluetoothTransportError(TeslaFleetError):
-    """The Bluetooth transport (connect or GATT write) failed before a vehicle response could be awaited."""
+    """The Bluetooth transport (connect, notify, or GATT write) failed before a vehicle response could be awaited."""
 
     message = (
         "The Bluetooth transport failed before a vehicle response could be awaited."

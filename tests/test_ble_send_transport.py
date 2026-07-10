@@ -175,6 +175,24 @@ class SendTransportErrorTests(IsolatedAsyncioTestCase):
 
         self.assertIs(ctx.exception.__cause__, underlying)
 
+    async def test_write_gatt_timeout_raises_bluetooth_transport_error(
+        self,
+    ) -> None:
+        # bleak-esphome surfaces an aioesphomeapi GATT-write timeout as a
+        # builtin TimeoutError (not a BleakError); it must still reach callers
+        # as a TeslaFleetError, not a bare TimeoutError.
+        vehicle = _make_vehicle()
+        msg = _outgoing()
+        underlying = TimeoutError(
+            "Timeout waiting for BluetoothGATTWriteResponse after 30.0s"
+        )
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=underlying)
+
+        with self.assertRaises(BluetoothTransportError) as ctx:
+            await vehicle._send(msg, "protobuf_message_as_bytes")
+
+        self.assertIs(ctx.exception.__cause__, underlying)
+
 
 class ConnectTransportErrorTests(IsolatedAsyncioTestCase):
     async def test_establish_connection_failure_raises_bluetooth_transport_error(
@@ -210,3 +228,48 @@ class ConnectTransportErrorTests(IsolatedAsyncioTestCase):
                 await vehicle.connect_if_needed()
 
         self.assertIs(ctx.exception.__cause__, underlying)
+
+    async def test_establish_connection_timeout_raises_bluetooth_transport_error(
+        self,
+    ) -> None:
+        # bleak-esphome surfaces an aioesphomeapi connect timeout as a builtin
+        # TimeoutError; the connect path must wrap it in BluetoothTransportError.
+        parent = MagicMock()
+        parent.private_key = ec.generate_private_key(ec.SECP256R1())
+        vehicle = VehicleBluetooth(parent, VIN)
+        vehicle.device = MagicMock()
+        underlying = TimeoutError("connect timed out")
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
+            AsyncMock(side_effect=underlying),
+        ):
+            with self.assertRaises(BluetoothTransportError) as ctx:
+                await vehicle.connect()
+
+        self.assertIs(ctx.exception.__cause__, underlying)
+
+    async def test_start_notify_timeout_raises_bluetooth_transport_error(
+        self,
+    ) -> None:
+        # start_notify is likewise decorated by bleak-esphome and can raise a
+        # builtin TimeoutError after the link is established.
+        parent = MagicMock()
+        parent.private_key = ec.generate_private_key(ec.SECP256R1())
+        vehicle = VehicleBluetooth(parent, VIN)
+        vehicle.device = MagicMock()
+        underlying = TimeoutError("start_notify timed out")
+        client = MagicMock()
+        client.start_notify = AsyncMock(side_effect=underlying)
+        client.disconnect = AsyncMock()
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
+            AsyncMock(return_value=client),
+        ):
+            with self.assertRaises(BluetoothTransportError) as ctx:
+                await vehicle.connect()
+
+        self.assertIs(ctx.exception.__cause__, underlying)
+        client.disconnect.assert_awaited_once()
+        self.assertIsNone(vehicle.client)

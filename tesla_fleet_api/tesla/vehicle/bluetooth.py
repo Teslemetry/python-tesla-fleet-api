@@ -179,9 +179,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
     Callers can catch failures from this class with a single ``TeslaFleetError``:
-    connect/write transport failures surface as ``BluetoothTransportError`` and
-    a response-wait timeout as ``BluetoothTimeout``, both ``TeslaFleetError``
-    subclasses with the original transport exception chained as their cause.
+    connect/notify/write transport failures surface as
+    ``BluetoothTransportError`` and a response-wait timeout as
+    ``BluetoothTimeout``, both ``TeslaFleetError`` subclasses with the original
+    transport exception chained as their cause.
 
     A ``BluetoothTimeout`` raised by a *mutating* command (RKE/closure
     actions, HVAC/media/charging commands, ``wake_up``) is inconclusive, not
@@ -266,7 +267,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 services=[SERVICE_UUID],
             )
             await self.client.start_notify(READ_UUID, self._on_notify)
-        except BleakError as e:
+        # bleak-esphome converts an aioesphomeapi transport timeout into a
+        # builtin TimeoutError, not a BleakError, so catch both to keep every
+        # connect transport failure within TeslaFleetError.
+        except (BleakError, TimeoutError) as e:
+            client = self.client
+            self.client = None
+            if client:
+                try:
+                    await client.disconnect()
+                except (BleakError, TimeoutError):
+                    pass
             raise BluetoothTransportError from e
 
     async def disconnect(self) -> bool:
@@ -344,7 +355,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             assert self.client is not None
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
-            except BleakError as e:
+            # bleak-esphome converts an aioesphomeapi write timeout into a
+            # builtin TimeoutError, not a BleakError, so catch both to keep the
+            # GATT-write transport failure within TeslaFleetError.
+            except (BleakError, TimeoutError) as e:
                 raise BluetoothTransportError from e
 
             # Process the response
