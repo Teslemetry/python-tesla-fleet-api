@@ -1609,7 +1609,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         lat: float | None = None,
         lon: float | None = None,
     ) -> dict[str, Any]:
-        """Turns on HomeLink; coordinates of 0.0 are treated as valid."""
+        """Turns on HomeLink (used to open and close garage doors)."""
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(

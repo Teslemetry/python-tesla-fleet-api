@@ -578,7 +578,7 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         lat: float | None = None,
         lon: float | None = None,
     ) -> dict[str, Any]:
-        """Turns on HomeLink; coordinates of 0.0 are treated as valid."""
+        """Turns on HomeLink (used to open and close garage doors)."""
         data: dict[str, str | float] = {}
         if token:
             data["token"] = token
