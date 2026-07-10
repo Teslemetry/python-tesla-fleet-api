@@ -686,7 +686,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def _getVehicleSecurity(self, command: UnsignedMessage) -> VehicleStatus:
-        """Sign and send a message to Infotainment computer."""
+        """Sign and send a read request to the Vehicle Security computer."""
         reply = await self._command(
             Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
         )
