@@ -131,7 +131,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
     """REST commands (Fleet/Teslemetry/Tessie) log endpoint name, transport, outcome."""
 
     async def test_fleet_success_logs_command_transport_and_result(self) -> None:
-        resp = _fake_response(json_body={"response": {"result": True}})
+        resp = _fake_response(json_body={"response": {"result": True, "reason": ""}})
         api = TeslaFleetApi(
             session=_make_session(resp),
             access_token="token",
@@ -144,6 +144,60 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=door_lock" in line
+                and "transport=fleet" in line
+                and "result=True" in line
+                and "reason=" in line
+                for line in captured.output
+            ),
+            captured.output,
+        )
+
+    async def test_fleet_command_rejection_logs_response_result(self) -> None:
+        resp = _fake_response(
+            json_body={
+                "response": {
+                    "result": False,
+                    "reason": "cabin comfort remote settings not enabled",
+                }
+            }
+        )
+        api = TeslaFleetApi(
+            session=_make_session(resp),
+            access_token="token",
+            server="https://fleet.example.com",
+        )
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await api._request(
+                Method.POST,
+                "api/1/vehicles/VIN123/command/remote_seat_heater_request",
+            )
+
+        self.assertTrue(
+            any(
+                "command=remote_seat_heater_request" in line
+                and "transport=fleet" in line
+                and "result=False" in line
+                and "reason=cabin comfort remote settings not enabled" in line
+                for line in captured.output
+            ),
+            captured.output,
+        )
+
+    async def test_fleet_non_command_json_logs_transport_success(self) -> None:
+        resp = _fake_response(json_body={"response": {"vehicle_id": 123}})
+        api = TeslaFleetApi(
+            session=_make_session(resp),
+            access_token="token",
+            server="https://fleet.example.com",
+        )
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await api._request(Method.GET, "api/1/vehicles/VIN123/vehicle_data")
+
+        self.assertTrue(
+            any(
+                "command=vehicle_data" in line
                 and "transport=fleet" in line
                 and "result=success" in line
                 for line in captured.output

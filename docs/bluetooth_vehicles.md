@@ -414,7 +414,7 @@ Each command logs one terse, grep-friendly line:
 
 ```
 command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
-command=set_charge_limit transport=teslemetry result=success
+command=set_charge_limit transport=teslemetry result=True reason=
 command=mediaPlayAction transport=bluetooth result=error error=BluetoothTimeout: Bluetooth command timed out waiting for vehicle response.
 ```
 

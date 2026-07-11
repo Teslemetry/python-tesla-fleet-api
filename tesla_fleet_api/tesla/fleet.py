@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from json import dumps
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import aiohttp
 
@@ -31,6 +31,21 @@ def _normalize_query_value(value: Any) -> Any:
     if isinstance(value, bool):
         return str(value).lower()
     return value
+
+
+def _log_request_result(command: str, transport: str, data: dict[str, Any]) -> None:
+    response = data.get("response")
+    if isinstance(response, dict) and "result" in response:
+        response_dict = cast("dict[str, Any]", response)
+        LOGGER.debug(
+            "command=%s transport=%s result=%s reason=%s",
+            command,
+            transport,
+            response_dict.get("result"),
+            response_dict.get("reason"),
+        )
+    else:
+        LOGGER.debug("command=%s transport=%s result=success", command, transport)
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
@@ -191,9 +206,7 @@ class TeslaFleetApi(Tesla):
                 e,
             )
             raise
-        LOGGER.debug(
-            "command=%s transport=%s result=success", command, self._transport_name
-        )
+        _log_request_result(command, self._transport_name, data)
         return data
 
     async def status(self) -> str:
