@@ -243,7 +243,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         )
 
     async def test_tessie_success_logs_transport_tessie(self) -> None:
-        resp = _fake_response(json_body={"response": {"result": True}})
+        resp = _fake_response(json_body={"result": True})
         api = Tessie(session=_make_session(resp), access_token="token")
 
         with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
@@ -251,6 +251,24 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
 
         self.assertTrue(
             any("transport=tessie" in line for line in captured.output),
+            captured.output,
+        )
+
+    async def test_tessie_command_rejection_logs_top_level_result(self) -> None:
+        resp = _fake_response(json_body={"result": False, "reason": "already_locked"})
+        api = Tessie(session=_make_session(resp), access_token="token")
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await api._request(Method.POST, "vehicles/VIN123/command/door_lock")
+
+        self.assertTrue(
+            any(
+                "command=door_lock" in line
+                and "transport=tessie" in line
+                and "result=False" in line
+                and "reason=already_locked" in line
+                for line in captured.output
+            ),
             captured.output,
         )
 

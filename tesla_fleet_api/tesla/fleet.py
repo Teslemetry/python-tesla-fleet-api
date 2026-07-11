@@ -36,16 +36,20 @@ def _normalize_query_value(value: Any) -> Any:
 def _log_request_result(command: str, transport: str, data: dict[str, Any]) -> None:
     response = data.get("response")
     if isinstance(response, dict) and "result" in response:
-        response_dict = cast("dict[str, Any]", response)
-        LOGGER.debug(
-            "command=%s transport=%s result=%s reason=%s",
-            command,
-            transport,
-            response_dict.get("result"),
-            response_dict.get("reason"),
-        )
+        result_data = cast("dict[str, Any]", response)
+    elif "result" in data:
+        result_data = data
     else:
         LOGGER.debug("command=%s transport=%s result=success", command, transport)
+        return
+
+    LOGGER.debug(
+        "command=%s transport=%s result=%s reason=%s",
+        command,
+        transport,
+        result_data.get("result"),
+        result_data.get("reason"),
+    )
 
 
 # Based on https://developer.tesla.com/docs/fleet-api
