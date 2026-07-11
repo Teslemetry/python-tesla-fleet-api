@@ -54,6 +54,8 @@ class Router(Generic[PrimaryT, SecondaryT]):
     failure or a disconnect), the same call is automatically retried on the next
     backend that has it, with the same arguments. The error only propagates when
     every applicable backend fails, in which case the last error is raised.
+    Each attempted backend emits a ``DEBUG`` log line with the routed command
+    name, backend class, and success/error result.
 
     .. warning::
 

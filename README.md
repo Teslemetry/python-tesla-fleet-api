@@ -226,9 +226,29 @@ await router.set_operation(...)  # local first, cloud on failure
 
 `Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
 
+Enable `DEBUG` logging for `tesla_fleet_api` to see which backend served a routed call and why failover happened.
+
 > **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. When the primary is `VehicleBluetooth`, pass `verify_commands=True` to resolve supported mutating command timeouts by state before failover; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
 > Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
+
+### Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to see each command's command
+name, transport/backend, and result. In standalone scripts, configure a handler
+first:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
+Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
+Routers also emit `backend=<ClassName>` lines for each backend tried. See
+[Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
+for examples and the signed-command naming details.
 
 ### Teslemetry
 

@@ -407,6 +407,7 @@ transport served it and how it ended:
 ```python
 import logging
 
+logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
