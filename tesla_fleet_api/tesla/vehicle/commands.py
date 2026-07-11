@@ -17,6 +17,7 @@ from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
     NotOnWhitelistFault,
+    TeslaFleetError,
     # TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
@@ -227,6 +228,46 @@ StwHeatLevels = (
 )
 
 
+def vcsec_command_name(command: UnsignedMessage) -> str:
+    """Derive a short debug-log command name from a VCSEC UnsignedMessage's populated field."""
+    field = command.WhichOneof("sub_message")
+    if field == "RKEAction":
+        return RKEAction_E.Name(command.RKEAction)
+    return field or "unknown"
+
+
+def infotainment_command_name(command: Action) -> str:
+    """Derive a short debug-log command name from an infotainment Action's populated field."""
+    return command.vehicleAction.WhichOneof("vehicle_action_msg") or "unknown"
+
+
+def _log_command_result(name: str, transport: str, result: dict[str, Any]) -> None:
+    """Log the terminal outcome of one signed command at debug level."""
+    response = result.get("response")
+    if isinstance(response, dict):
+        response_dict = cast("dict[str, Any]", response)
+        LOGGER.debug(
+            "command=%s transport=%s result=%s reason=%s",
+            name,
+            transport,
+            response_dict.get("result"),
+            response_dict.get("reason"),
+        )
+    else:
+        LOGGER.debug("command=%s transport=%s result=success", name, transport)
+
+
+def _log_command_error(name: str, transport: str, exc: BaseException) -> None:
+    """Log a signed command failure at debug level; the exception type carries the ack-vs-timeout distinction."""
+    LOGGER.debug(
+        "command=%s transport=%s result=error error=%s: %s",
+        name,
+        transport,
+        type(exc).__name__,
+        exc,
+    )
+
+
 class Session(Generic[CommandParentT]):
     """A connect to a domain"""
 
@@ -293,6 +334,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     _from_destination: bytes
     _sessions: dict[int, Session[CommandParentT]]
     _auth_method: ClassVar[Literal["hmac", "aes"]]
+    # Transport identity for debug logging; set per concrete subclass.
+    _transport_name: ClassVar[str]
 
     def __init__(
         self,
@@ -679,30 +722,56 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         A VCSEC actuation replies with a single terminal ack and no data frame,
         so ``expects_data=False`` lets ``_send`` return on that ack.
         """
-        return await self._command(
-            Domain.DOMAIN_VEHICLE_SECURITY,
-            command.SerializeToString(),
-            expects_data=False,
-        )
+        name = vcsec_command_name(command)
+        try:
+            result = await self._command(
+                Domain.DOMAIN_VEHICLE_SECURITY,
+                command.SerializeToString(),
+                expects_data=False,
+            )
+        except (Exception, TeslaFleetError) as e:
+            _log_command_error(name, self._transport_name, e)
+            raise
+        _log_command_result(name, self._transport_name, result)
+        return result
 
     async def _getVehicleSecurity(self, command: UnsignedMessage) -> VehicleStatus:
         """Sign and send a read request to the Vehicle Security computer."""
-        reply = await self._command(
-            Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
-        )
+        name = vcsec_command_name(command)
+        try:
+            reply = await self._command(
+                Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+            )
+        except (Exception, TeslaFleetError) as e:
+            _log_command_error(name, self._transport_name, e)
+            raise
+        _log_command_result(name, self._transport_name, reply)
         return reply["response"]
 
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
-        return await self._command(
-            Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
-        )
+        name = infotainment_command_name(command)
+        try:
+            result = await self._command(
+                Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+            )
+        except (Exception, TeslaFleetError) as e:
+            _log_command_error(name, self._transport_name, e)
+            raise
+        _log_command_result(name, self._transport_name, result)
+        return result
 
     async def _getInfotainment(self, command: Action) -> VehicleData:
         """Sign and send a message to Infotainment computer."""
-        reply = await self._command(
-            Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
-        )
+        name = infotainment_command_name(command)
+        try:
+            reply = await self._command(
+                Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+            )
+        except (Exception, TeslaFleetError) as e:
+            _log_command_error(name, self._transport_name, e)
+            raise
+        _log_command_result(name, self._transport_name, reply)
         return reply["response"]
 
     async def handshakeVehicleSecurity(self) -> None:

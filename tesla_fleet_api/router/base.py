@@ -148,15 +148,21 @@ class Router(Generic[PrimaryT, SecondaryT]):
             last_exc: BaseException | None = None
             for backend, attr in targets[start:]:
                 try:
-                    return await _maybe_await(attr(*args, **kwargs))
+                    result = await _maybe_await(attr(*args, **kwargs))
                 except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
                     last_exc = e
                     LOGGER.debug(
-                        "Backend %s call %r failed, routing to next backend: %s",
-                        type(backend).__name__,
+                        "command=%s backend=%s result=error error=%s: %s",
                         name,
+                        type(backend).__name__,
+                        type(e).__name__,
                         e,
                     )
+                    continue
+                LOGGER.debug(
+                    "command=%s backend=%s result=success", name, type(backend).__name__
+                )
+                return result
             # The loop always runs at least once (``start`` only advances past
             # the primary when a later backend remains), so a failure here means
             # every applicable backend raised.

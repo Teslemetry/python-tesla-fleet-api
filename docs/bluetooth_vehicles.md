@@ -398,3 +398,32 @@ enough to prove either failure or success.
 `remote_boombox(sound)` also uses the INFO-domain signed-command transport and
 plays through the vehicle external speaker. Use it only when someone is present
 to confirm the sound is appropriate for the vehicle's surroundings.
+
+## Troubleshooting: Enable Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to see, for every command, which
+transport served it and how it ended:
+
+```python
+import logging
+
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
+Each command logs one terse, grep-friendly line:
+
+```
+command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
+command=set_charge_limit transport=teslemetry result=success
+command=mediaPlayAction transport=bluetooth result=error error=BluetoothTimeout: Bluetooth command timed out waiting for vehicle response.
+```
+
+`transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
+commands, `command` is the underlying VCSEC/infotainment field name (e.g.
+`RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
+REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
+For BLE commands run with `verify_commands=True`, a resolved timeout logs a
+second line with `verify_commands=resolved` and the confirmed result. `Router`
+additionally logs `command=... backend=<ClassName> result=...` for each
+backend it tries, so a BLE-primary/cloud-fallback setup shows exactly which
+backend served each call and why a failover happened.
