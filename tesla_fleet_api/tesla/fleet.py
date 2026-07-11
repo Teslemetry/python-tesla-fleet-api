@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from json import dumps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import aiohttp
 
@@ -13,6 +13,7 @@ from tesla_fleet_api.exceptions import (
     LibraryError,
     MissingToken,
     ResponseError,
+    TeslaFleetError,
     raise_for_status,
 )
 from tesla_fleet_api.tesla.tesla import Tesla
@@ -32,6 +33,25 @@ def _normalize_query_value(value: Any) -> Any:
     return value
 
 
+def _log_request_result(command: str, transport: str, data: dict[str, Any]) -> None:
+    response = data.get("response")
+    if isinstance(response, dict) and "result" in response:
+        result_data = cast("dict[str, Any]", response)
+    elif "result" in data:
+        result_data = data
+    else:
+        LOGGER.debug("command=%s transport=%s result=success", command, transport)
+        return
+
+    LOGGER.debug(
+        "command=%s transport=%s result=%s reason=%s",
+        command,
+        transport,
+        result_data.get("result"),
+        result_data.get("reason"),
+    )
+
+
 # Based on https://developer.tesla.com/docs/fleet-api
 class TeslaFleetApi(Tesla):
     """Class describing the Tesla Fleet API."""
@@ -45,6 +65,8 @@ class TeslaFleetApi(Tesla):
     user: "User"
     partner: "Partner"
     vehicles: "Vehicles[TeslaFleetApi]"
+    # Transport identity for debug logging; Teslemetry/Tessie override this.
+    _transport_name: ClassVar[str] = "fleet"
 
     def __init__(
         self,
@@ -119,57 +141,77 @@ class TeslaFleetApi(Tesla):
     ) -> dict[str, Any]:
         """Send a request to the Tesla Fleet API."""
 
-        if not self.server:
-            raise ValueError("Server was not set at init. Call find_server() first.")
+        # Trailing path segment (e.g. "door_lock", "vehicle_data") as the
+        # debug-log command name; the full path (with VIN) is already logged
+        # below via resp.url, so this adds no new exposure.
+        command = path.rsplit("/", 1)[-1]
 
-        if method == Method.GET:
-            json = None
-
-        access_token = await self.access_token()
-
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "X-Library": f"python tesla_fleet_api {VERSION}",
-        }
-
-        # Remove None values from params and json
-        if params:
-            params = {
-                k: _normalize_query_value(v) for k, v in params.items() if v is not None
-            }
-            LOGGER.debug("Parameters: %s", params)
-        if json:
-            json = {k: v for k, v in json.items() if v is not None}
-            LOGGER.debug("Body: %s", dumps(json))
-            headers["Content-Type"] = "application/json"
-
-        async with self.session.request(
-            method,
-            f"{self.server}/{path}",
-            headers=headers,
-            json=json,
-            params=params,
-        ) as resp:
-            LOGGER.debug("Status %s from %s", resp.status, resp.url)
-            if "x-txid" in resp.headers:
-                LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
-            if "RateLimit-Reset" in resp.headers:
-                LOGGER.debug(
-                    "Rate limit reset: %s", resp.headers.get("RateLimit-Reset")
+        try:
+            if not self.server:
+                raise ValueError(
+                    "Server was not set at init. Call find_server() first."
                 )
-            if "Retry-After" in resp.headers:
-                LOGGER.debug("Retry after: %s", resp.headers.get("Retry-After"))
 
-            if not resp.ok:
-                await raise_for_status(resp)
+            if method == Method.GET:
+                json = None
 
-            if not resp.content_type.lower().startswith("application/json"):
-                LOGGER.debug("Response type is: %s", resp.content_type)
-                raise ResponseError(status=resp.status, data=await resp.text())
+            access_token = await self.access_token()
 
-            data = await resp.json()
-            LOGGER.debug("Response JSON: %s", data)
-            return data
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Library": f"python tesla_fleet_api {VERSION}",
+            }
+
+            # Remove None values from params and json
+            if params:
+                params = {
+                    k: _normalize_query_value(v)
+                    for k, v in params.items()
+                    if v is not None
+                }
+                LOGGER.debug("Parameters: %s", params)
+            if json:
+                json = {k: v for k, v in json.items() if v is not None}
+                LOGGER.debug("Body: %s", dumps(json))
+                headers["Content-Type"] = "application/json"
+
+            async with self.session.request(
+                method,
+                f"{self.server}/{path}",
+                headers=headers,
+                json=json,
+                params=params,
+            ) as resp:
+                LOGGER.debug("Status %s from %s", resp.status, resp.url)
+                if "x-txid" in resp.headers:
+                    LOGGER.debug("Response TXID: %s", resp.headers["x-txid"])
+                if "RateLimit-Reset" in resp.headers:
+                    LOGGER.debug(
+                        "Rate limit reset: %s", resp.headers.get("RateLimit-Reset")
+                    )
+                if "Retry-After" in resp.headers:
+                    LOGGER.debug("Retry after: %s", resp.headers.get("Retry-After"))
+
+                if not resp.ok:
+                    await raise_for_status(resp)
+
+                if not resp.content_type.lower().startswith("application/json"):
+                    LOGGER.debug("Response type is: %s", resp.content_type)
+                    raise ResponseError(status=resp.status, data=await resp.text())
+
+                data = await resp.json()
+                LOGGER.debug("Response JSON: %s", data)
+        except (Exception, TeslaFleetError) as e:
+            LOGGER.debug(
+                "command=%s transport=%s result=error error=%s: %s",
+                command,
+                self._transport_name,
+                type(e).__name__,
+                e,
+            )
+            raise
+        _log_request_result(command, self._transport_name, data)
+        return data
 
     async def status(self) -> str:
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""

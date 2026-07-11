@@ -14,6 +14,7 @@ class Teslemetry(TeslaFleetApi):
     vehicles: TeslemetryVehicles
     Vehicles = TeslemetryVehicles
     EnergySites = TeslemetryEnergySites
+    _transport_name = "teslemetry"
 
     def __init__(
         self,

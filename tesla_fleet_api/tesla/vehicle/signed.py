@@ -21,6 +21,7 @@ class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
     _auth_method = "hmac"
+    _transport_name = "fleet"
 
     def __init__(self, parent: SignedParentT, vin: str):
         """Initialize the VehicleSigned class."""

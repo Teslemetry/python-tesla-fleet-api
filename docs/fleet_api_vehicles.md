@@ -29,6 +29,25 @@ async def main():
 asyncio.run(main())
 ```
 
+## Troubleshooting: Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to log each Fleet API request's
+final path segment, `transport=fleet`, and result:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
+Example command lines:
+
+```
+command=vehicle_data transport=fleet result=success
+command=set_charge_limit transport=fleet result=True reason=
+```
+
 ## Create a Vehicle
 
 You can create a `VehicleFleet` instance for a specific vehicle using its VIN:

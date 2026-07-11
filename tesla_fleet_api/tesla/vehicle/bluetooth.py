@@ -23,7 +23,11 @@ from tesla_fleet_api.exceptions import (
     TeslaFleetError,
     WhitelistOperationStatus,
 )
-from tesla_fleet_api.tesla.vehicle.commands import Commands
+from tesla_fleet_api.tesla.vehicle.commands import (
+    Commands,
+    infotainment_command_name,
+    vcsec_command_name,
+)
 
 # Protocol
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
@@ -320,6 +324,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
+    _transport_name = "bluetooth"
     _ack_followup_timeout: float = 2
     _default_timeout: float = 5
     # A lost actuation ack is inconclusive; the contract is verify-by-state, so
@@ -750,7 +755,25 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         try:
             return await super()._sendVehicleSecurity(command)
         except BluetoothTimeout as timeout:
-            return await self._resolve_timeout(_vcsec_verify_plan(command), timeout)
+            name = vcsec_command_name(command)
+            try:
+                result = await self._resolve_timeout(
+                    _vcsec_verify_plan(command), timeout
+                )
+            except BluetoothTimeout:
+                LOGGER.debug(
+                    "command=%s transport=%s verify_commands=unresolved",
+                    name,
+                    self._transport_name,
+                )
+                raise
+            LOGGER.debug(
+                "command=%s transport=%s verify_commands=resolved result=%s",
+                name,
+                self._transport_name,
+                result.get("response", {}).get("result"),
+            )
+            return result
 
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
         """Send an infotainment command, optionally resolving a lost-ack timeout by state."""
@@ -759,11 +782,27 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         try:
             return await super()._sendInfotainment(command)
         except BluetoothTimeout as timeout:
+            name = infotainment_command_name(command)
             resolver = _INFOTAINMENT_VERIFY_PLANS.get(
                 command.vehicleAction.WhichOneof("vehicle_action_msg")
             )
             plan = resolver(command.vehicleAction) if resolver else None
-            return await self._resolve_timeout(plan, timeout)
+            try:
+                result = await self._resolve_timeout(plan, timeout)
+            except BluetoothTimeout:
+                LOGGER.debug(
+                    "command=%s transport=%s verify_commands=unresolved",
+                    name,
+                    self._transport_name,
+                )
+                raise
+            LOGGER.debug(
+                "command=%s transport=%s verify_commands=resolved result=%s",
+                name,
+                self._transport_name,
+                result.get("response", {}).get("result"),
+            )
+            return result
 
     async def _resolve_timeout(
         self, plan: VerifyPlan | None, timeout: BluetoothTimeout

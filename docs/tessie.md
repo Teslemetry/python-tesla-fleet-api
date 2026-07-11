@@ -28,6 +28,18 @@ async def main():
 asyncio.run(main())
 ```
 
+## Troubleshooting: Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to log each Tessie request's
+final path segment, `transport=tessie`, and result:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
 ## Top-Level Client Methods
 
 These methods exist on `Tessie` itself.

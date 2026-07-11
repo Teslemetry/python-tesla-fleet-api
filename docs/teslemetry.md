@@ -21,6 +21,18 @@ async def main():
 asyncio.run(main())
 ```
 
+## Troubleshooting: Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to log each Teslemetry request's
+final path segment, `transport=teslemetry`, and result:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
 ## Ping
 
 The `ping` method sends a ping request to the Teslemetry server.

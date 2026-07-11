@@ -190,6 +190,22 @@ state after the call instead of relying on the number of send attempts.
 `adjust_volume(volume)` accepts absolute volume values from `0.0` through
 `11.0`, matching the Fleet API command validation.
 
+## Troubleshooting: Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to log each signed command's
+protobuf command name, `transport=fleet`, and result:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
+For signed commands, `command` is the underlying VCSEC or infotainment field
+name (for example `RKE_ACTION_LOCK` or `chargingSetLimitAction`), not the Python
+method name.
+
 ## Flash Lights
 
 You can flash the lights of a specific vehicle using its VIN:
