@@ -20,6 +20,7 @@ from tesla_fleet_api.exceptions import (
     WHITELIST_OPERATION_STATUS,
     BluetoothTimeout,
     BluetoothTransportError,
+    BluetoothUnconfirmedCommand,
     TeslaFleetError,
     WhitelistOperationStatus,
 )
@@ -279,29 +280,34 @@ _INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | Non
 class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
-    Callers can catch failures from this class with a single ``TeslaFleetError``:
-    connect/notify/write transport failures surface as
-    ``BluetoothTransportError`` and a response-wait timeout as
-    ``BluetoothTimeout``, both ``TeslaFleetError`` subclasses with the original
-    transport exception chained as their cause.
+    Callers can catch failures from this class with a single ``TeslaFleetError``,
+    but three distinct outcomes hide behind that base: a connect/notify/write
+    transport failure before any command reached the vehicle
+    (``BluetoothTransportError``), an ack-wait timeout for a *mutating*
+    command that was already written to the vehicle (``BluetoothUnconfirmedCommand``),
+    and a plain response-wait timeout for anything else, e.g. a state read
+    (``BluetoothTimeout``). All three chain the original transport exception
+    as their cause.
 
-    A ``BluetoothTimeout`` raised by a *mutating* command (RKE/closure
-    actions, HVAC/media/charging commands, ``wake_up``) is inconclusive, not
-    a failure - the vehicle can execute the command without its ack reaching
-    the client. Callers must snapshot state before acting and verify the
-    outcome with a follow-up state read after any timeout, and must never
-    blind-retry a non-idempotent command (toggles, volume steps, schedule
-    add/remove) on a timeout alone. The inherited WAIT/fault retry
-    (``Commands._command``) can also re-send an already-executed command.
+    A ``BluetoothUnconfirmedCommand`` (RKE/closure actions, HVAC/media/charging
+    commands, ``wake_up``) means the vehicle can have executed the command
+    without its ack reaching the client - it is unconfirmed, not failed.
+    Callers must snapshot state before acting and verify the outcome with a
+    follow-up state read after any such timeout, and must never blind-retry a
+    non-idempotent command (toggles, volume steps, schedule add/remove) on a
+    timeout alone, nor replay it on a fallback transport. The inherited
+    WAIT/fault retry (``Commands._command``) can also re-send an
+    already-executed command. Because it subclasses ``BluetoothTimeout``,
+    existing ``except BluetoothTimeout`` handling still catches it.
 
     Pass ``verify_commands=True`` to resolve that ambiguity inside this class:
     on a timeout from a mutating command whose expected post-state is derivable
     from its arguments, the same held connection reads the mapped prover state
     and either returns a normal success result (the command executed) or
-    re-raises the ``BluetoothTimeout`` (it did not). Commands whose outcome
-    cannot be derived or read - true toggles, relative steps, and ack-only
-    actions - re-raise the timeout unchanged, exactly as with verification off
-    (the default).
+    re-raises the ``BluetoothUnconfirmedCommand`` (it could not be confirmed).
+    Commands whose outcome cannot be derived or read - true toggles, relative
+    steps, and ack-only actions - re-raise the timeout unchanged, exactly as
+    with verification off (the default).
 
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
@@ -749,16 +755,24 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         )
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
-        """Send a VCSEC actuation, optionally resolving a lost-ack timeout by state."""
-        if not self.verify_commands:
-            return await super()._sendVehicleSecurity(command)
+        """Send a VCSEC actuation.
+
+        A lost ack after the write reached the vehicle is unconfirmed, not
+        failed, so a timed-out wait raises ``BluetoothUnconfirmedCommand``
+        rather than plain ``BluetoothTimeout`` - see that exception's
+        docstring. With ``verify_commands`` on, that ambiguity is resolved by
+        reading back state before it can reach the caller.
+        """
         try:
             return await super()._sendVehicleSecurity(command)
         except BluetoothTimeout as timeout:
+            unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
+            if not self.verify_commands:
+                raise unconfirmed from timeout
             name = vcsec_command_name(command)
             try:
                 result = await self._resolve_timeout(
-                    _vcsec_verify_plan(command), timeout
+                    _vcsec_verify_plan(command), unconfirmed
                 )
             except BluetoothTimeout:
                 LOGGER.debug(
@@ -776,19 +790,23 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             return result
 
     async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
-        """Send an infotainment command, optionally resolving a lost-ack timeout by state."""
-        if not self.verify_commands:
-            return await super()._sendInfotainment(command)
+        """Send an infotainment command.
+
+        Same unconfirmed-ack semantics as ``_sendVehicleSecurity`` - see there.
+        """
         try:
             return await super()._sendInfotainment(command)
         except BluetoothTimeout as timeout:
+            unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
+            if not self.verify_commands:
+                raise unconfirmed from timeout
             name = infotainment_command_name(command)
             resolver = _INFOTAINMENT_VERIFY_PLANS.get(
                 command.vehicleAction.WhichOneof("vehicle_action_msg")
             )
             plan = resolver(command.vehicleAction) if resolver else None
             try:
-                result = await self._resolve_timeout(plan, timeout)
+                result = await self._resolve_timeout(plan, unconfirmed)
             except BluetoothTimeout:
                 LOGGER.debug(
                     "command=%s transport=%s verify_commands=unresolved",

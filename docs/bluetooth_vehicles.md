@@ -133,9 +133,19 @@ fails before a vehicle response can be awaited. The original transport
 exception is available as the exception's `__cause__`; this includes
 `bleak.exc.BleakError` and builtin `TimeoutError` from ESPHome proxy connect,
 notify, or write timeouts. Catch `TeslaFleetError` to handle both transport
-failures and response-wait `BluetoothTimeout` failures with one library error
+failures and response-wait timeout failures with one library error
 hierarchy, or catch `BluetoothTransportError` separately when you need to
-distinguish a transport failure from a vehicle timeout.
+distinguish a transport failure - the command never reached the vehicle - from
+a vehicle timeout, where it did.
+
+A response-wait timeout for a *mutating* command (RKE/closure actions,
+HVAC/media/charging commands, `wake_up()`) raises `BluetoothUnconfirmedCommand`
+instead of plain `BluetoothTimeout` - see "Mutating Command Timeouts" below. A
+response-wait timeout for anything else (a state read) still raises plain
+`BluetoothTimeout`. `BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`,
+so existing `except BluetoothTimeout` handling keeps working; catch
+`BluetoothUnconfirmedCommand` separately when you need to tell "the command may
+have executed" apart from "nothing happened."
 
 BLE response chunks are reassembled with the same stale-frame behavior as
 Tesla's vehicle-command BLE connector: if a partial frame sits idle for more
@@ -145,11 +155,15 @@ the next response, but it does not change command acknowledgement timeouts.
 
 ## Mutating Command Timeouts
 
-A `BluetoothTimeout` from a mutating BLE command is inconclusive, not proof that
-the command failed. The vehicle can apply the command even when its
-acknowledgement does not reach the client. For commands that change vehicle
-state, snapshot the relevant state before acting and verify the outcome with a
-follow-up state read after any timeout.
+A `BluetoothUnconfirmedCommand` from a mutating BLE command is unconfirmed, not
+proof that the command failed. The vehicle can apply the command even when its
+acknowledgement does not reach the client - `door_lock()`/`door_unlock()` have
+both been observed to execute despite this exception. For commands that change
+vehicle state, snapshot the relevant state before acting and verify the outcome
+with a follow-up state read after any timeout. Never blind-retry the same
+command, and never replay it on a fallback transport (e.g. a BLE-primary/cloud
+fallback router) - the safe response to an unconfirmed outcome is to verify, not
+to retry.
 
 VCSEC actuations, such as RKE, closure, and wake requests, return as soon as
 their terminal acknowledgement arrives because no data frame follows it. If that
@@ -175,8 +189,9 @@ case.
 When a mutating command times out and its expected post-state can be derived
 from its own arguments, the same held connection reads the mapped prover state
 and either returns a normal success result (`{"response": {"result": True,
-"reason": ""}}`) when the state matches or re-raises the `BluetoothTimeout` when
-it does not. The read rides the existing connection and never wakes the vehicle;
+"reason": ""}}`) when the state matches or re-raises the
+`BluetoothUnconfirmedCommand` when it does not. The read rides the existing
+connection and never wakes the vehicle;
 if an infotainment prover cannot be read because the car is asleep, the original
 timeout is re-raised.
 
