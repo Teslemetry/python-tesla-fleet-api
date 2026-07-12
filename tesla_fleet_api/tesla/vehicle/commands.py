@@ -748,7 +748,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         _log_command_result(name, self._transport_name, reply)
         return reply["response"]
 
-    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
+    async def _sendInfotainment(
+        self, command: Action, *, mutating: bool = True
+    ) -> dict[str, Any]:
         """Sign and send a message to Infotainment computer."""
         name = infotainment_command_name(command)
         try:
@@ -801,7 +803,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def ping(self) -> dict[str, Any]:
         """Ping the vehicle."""
         return await self._sendInfotainment(
-            Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
+            Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0))),
+            mutating=False,
         )
 
     async def actuate_trunk(self, which_trunk: Trunk | str) -> dict[str, Any]:
@@ -1735,7 +1738,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             action.include_meta_data = detail
 
         return await self._sendInfotainment(
-            Action(vehicleAction=VehicleAction(getNearbyChargingSites=action))
+            Action(vehicleAction=VehicleAction(getNearbyChargingSites=action)),
+            mutating=False,
         )
 
     # options doesnt require signing
@@ -2267,7 +2271,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 vehicleAction=VehicleAction(
                     getChargeOnSolarFeatureRequest=GetChargeOnSolarFeatureRequest()
                 )
-            )
+            ),
+            mutating=False,
         )
 
     # Group 10: Navigation

@@ -796,7 +796,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             )
             return result
 
-    async def _sendInfotainment(self, command: Action) -> dict[str, Any]:
+    async def _sendInfotainment(
+        self, command: Action, *, mutating: bool = True
+    ) -> dict[str, Any]:
         """Send an infotainment command.
 
         Same unconfirmed-ack semantics as ``_sendVehicleSecurity`` - see there.
@@ -805,6 +807,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         try:
             return await super()._sendInfotainment(command)
         except BluetoothTimeout as timeout:
+            if not mutating:
+                raise
             unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
             if not self.verify_commands:
                 raise unconfirmed from timeout

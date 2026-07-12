@@ -56,6 +56,17 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
         with self.assertRaises(BluetoothUnconfirmedCommand):
             await vehicle.honk_horn()
 
+    async def test_non_mutating_infotainment_timeout_raises_plain_timeout(
+        self,
+    ) -> None:
+        vehicle, send = self.make_vehicle()
+        send.side_effect = BluetoothTimeout()
+
+        with self.assertRaises(BluetoothTimeout) as ctx:
+            await vehicle.ping()
+
+        self.assertNotIsInstance(ctx.exception, BluetoothUnconfirmedCommand)
+
     async def test_unconfirmed_is_still_a_bluetooth_timeout(self) -> None:
         # Existing `except BluetoothTimeout` handling (verify_commands,
         # pair()'s fast path) must keep working unchanged.
