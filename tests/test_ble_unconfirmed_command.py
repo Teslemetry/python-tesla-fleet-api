@@ -24,6 +24,10 @@ from tesla_fleet_api.exceptions import (
     BluetoothUnconfirmedCommand,
 )
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+    Destination,
+    RoutableMessage,
+)
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
@@ -97,6 +101,29 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
             await vehicle.door_lock()
 
         self.assertNotIsInstance(ctx.exception, BluetoothUnconfirmedCommand)
+
+    async def test_ack_only_handshake_raises_plain_bluetooth_timeout(self) -> None:
+        vehicle, send = self.make_vehicle()
+        sessions = cast("dict[int, Any]", getattr(vehicle, "_sessions"))
+        sessions[Domain.DOMAIN_VEHICLE_SECURITY].epoch = None
+
+        async def ack_only(
+            msg: RoutableMessage, _requires: str, **_kwargs: Any
+        ) -> RoutableMessage:
+            return RoutableMessage(
+                from_destination=Destination(
+                    domain=Domain.DOMAIN_VEHICLE_SECURITY
+                ),
+                request_uuid=msg.uuid,
+            )
+
+        send.side_effect = ack_only
+
+        with self.assertRaises(BluetoothTimeout) as ctx:
+            await vehicle.door_lock()
+
+        self.assertNotIsInstance(ctx.exception, BluetoothUnconfirmedCommand)
+        send.assert_awaited_once()
 
 
 class ReadTimeoutTests(MockedBleTransportTestCase):

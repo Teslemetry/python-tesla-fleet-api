@@ -757,6 +757,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     async def _ensure_handshake(self, domain: Domain) -> None:
         if not self._sessions[domain].ready:
             await self._handshake(domain)
+        if not self._sessions[domain].ready:
+            raise BluetoothTimeout()
 
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Send a VCSEC actuation.
