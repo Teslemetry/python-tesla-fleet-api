@@ -98,12 +98,15 @@ class BleCommandLoggingTests(MockedBleTransportTestCase):
         )
 
 
+_UNSET = object()
+
+
 def _fake_response(
     *,
     status: int = 200,
     ok: bool = True,
     content_type: str = "application/json",
-    json_body: object = None,
+    json_body: object = _UNSET,
 ):
     resp = MagicMock()
     resp.status = status
@@ -111,7 +114,7 @@ def _fake_response(
     resp.content_type = content_type
     resp.url = "https://example.com/x"
     resp.headers = {}
-    resp.json = AsyncMock(return_value=json_body if json_body is not None else {})
+    resp.json = AsyncMock(return_value={} if json_body is _UNSET else json_body)
     resp.text = AsyncMock(return_value="")
     return resp
 
@@ -229,6 +232,54 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
             ),
             captured.output,
         )
+
+    async def test_null_json_body_returns_none_without_raising(self) -> None:
+        resp = _fake_response(json_body=None)
+        api = TeslaFleetApi(
+            session=_make_session(resp),
+            access_token="token",
+            server="https://fleet.example.com",
+        )
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            result = await api._request(
+                Method.GET, "api/1/vehicles/VIN123/list_authorized_clients"
+            )
+
+        self.assertIsNone(result)
+        self.assertTrue(
+            any(
+                "command=list_authorized_clients" in line
+                and "transport=fleet" in line
+                and "result=success" in line
+                for line in captured.output
+            ),
+            captured.output,
+        )
+
+    async def test_list_json_body_returns_list_without_raising(self) -> None:
+        resp = _fake_response(json_body=[{"id": 1}])
+        api = TeslaFleetApi(
+            session=_make_session(resp),
+            access_token="token",
+            server="https://fleet.example.com",
+        )
+
+        result = await api._request(Method.GET, "api/1/vehicles/VIN123/clients")
+
+        self.assertEqual(result, [{"id": 1}])
+
+    async def test_scalar_json_body_returns_scalar_without_raising(self) -> None:
+        resp = _fake_response(json_body=True)
+        api = TeslaFleetApi(
+            session=_make_session(resp),
+            access_token="token",
+            server="https://fleet.example.com",
+        )
+
+        result = await api._request(Method.GET, "api/1/vehicles/VIN123/flag")
+
+        self.assertEqual(result, True)
 
     async def test_teslemetry_success_logs_transport_teslemetry(self) -> None:
         resp = _fake_response(json_body={"response": {"result": True}})

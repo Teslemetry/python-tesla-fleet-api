@@ -68,6 +68,9 @@ class TeslemetryEnergySite(EnergySite):
     async def list_authorized_clients(self) -> dict[str, Any]:
         """List authorized clients on the energy gateway via the Teslemetry
         custom endpoint.
+
+        Teslemetry may return JSON ``null`` when no authorized-client payload
+        is available; that value is returned unchanged.
         """
         return await self._request(
             Method.GET,

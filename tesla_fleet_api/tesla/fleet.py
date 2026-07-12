@@ -33,7 +33,13 @@ def _normalize_query_value(value: Any) -> Any:
     return value
 
 
-def _log_request_result(command: str, transport: str, data: dict[str, Any]) -> None:
+def _log_request_result(command: str, transport: str, data: Any) -> None:
+    """Log the outcome of a completed request; a logging convenience that must
+    never raise, since the request it describes has already succeeded."""
+    if not isinstance(data, dict):
+        LOGGER.debug("command=%s transport=%s result=success", command, transport)
+        return
+    data = cast("dict[str, Any]", data)
     response = data.get("response")
     if isinstance(response, dict) and "result" in response:
         result_data = cast("dict[str, Any]", response)
@@ -139,7 +145,11 @@ class TeslaFleetApi(Tesla):
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = {},
     ) -> dict[str, Any]:
-        """Send a request to the Tesla Fleet API."""
+        """Send a request to the Tesla Fleet API.
+
+        Returns the decoded JSON body as provided by the service, including
+        JSON-legal non-object bodies such as ``null``, lists, or scalars.
+        """
 
         # Trailing path segment (e.g. "door_lock", "vehicle_data") as the
         # debug-log command name; the full path (with VIN) is already logged
