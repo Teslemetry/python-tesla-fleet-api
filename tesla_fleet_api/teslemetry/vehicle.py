@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from tesla_fleet_api.const import Method, ClosureState, SeatHeaterLevel
+from tesla_fleet_api.const import (
+    BluetoothConfirmation,
+    Method,
+    ClosureState,
+    SeatHeaterLevel,
+)
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.const import LOGGER
@@ -306,10 +311,12 @@ class TeslemetryVehicles(Vehicles["Teslemetry"]):
     def createBluetooth(
         self,
         vin: str,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation = "ack",
         keepalive_interval: float | None = None,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
+        optimistic: bool | None = None,
     ) -> Any:
         """Not supported; parameters match the Fleet API Bluetooth factory."""
         raise NotImplementedError("Teslemetry cannot use local Bluetooth")

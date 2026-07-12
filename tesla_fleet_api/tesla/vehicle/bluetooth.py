@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import struct
 import time
+import warnings
 from random import randbytes
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
@@ -15,9 +16,10 @@ from bleak_retry_connector import MAX_CONNECT_ATTEMPTS, establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.message import DecodeError
 
-from tesla_fleet_api.const import LOGGER, BluetoothVehicleData
+from tesla_fleet_api.const import BluetoothConfirmation, BluetoothVehicleData, LOGGER
 from tesla_fleet_api.exceptions import (
     WHITELIST_OPERATION_STATUS,
+    BluetoothCommandFailed,
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
@@ -218,6 +220,23 @@ class ReassemblingBuffer:
 VerifyPlan = tuple[str, Callable[[Any], bool]]
 
 
+def _decode_vcsec_status(msg: RoutableMessage) -> VehicleStatus | None:
+    """Decode a broadcast frame's VCSEC status payload, if it carries one.
+
+    Broadcasts are unsigned - they have no ``signature_data`` and need no
+    session decrypt, unlike an addressed reply to our own signed request.
+    """
+    if not msg.HasField("protobuf_message_as_bytes"):
+        return None
+    try:
+        vcsec = FromVCSECMessage.FromString(msg.protobuf_message_as_bytes)
+    except DecodeError:
+        return None
+    if vcsec.HasField("vehicleStatus"):
+        return vcsec.vehicleStatus
+    return None
+
+
 def _vcsec_verify_plan(command: UnsignedMessage) -> VerifyPlan | None:
     """Derive a VCSEC verify plan (read ``vehicle_state``) from a lost actuation."""
     if command.WhichOneof("sub_message") != "RKEAction":
@@ -281,11 +300,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
     Callers can catch failures from this class with a single ``TeslaFleetError``,
-    but three distinct outcomes hide behind that base: a connect/notify/write
+    but distinct outcomes hide behind that base: a connect/notify/write
     transport failure before any command reached the vehicle
     (``BluetoothTransportError``), an ack-wait timeout for a *mutating*
-    command that was already written to the vehicle (``BluetoothUnconfirmedCommand``),
-    and a plain response-wait timeout for anything else, e.g. a state read
+    command that was already written to the vehicle and whose outcome is
+    genuinely unresolved (``BluetoothUnconfirmedCommand``), a mutating command
+    *proven* not to have taken effect (``BluetoothCommandFailed``), and a
+    plain response-wait timeout for anything else, e.g. a state read
     (``BluetoothTimeout``). Each preserves the underlying failure in its cause
     chain when one exists.
 
@@ -299,37 +320,61 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     WAIT/fault retry (``Commands._command``) can also re-send an
     already-executed command. Because it subclasses ``BluetoothTimeout``,
     existing ``except BluetoothTimeout`` handling still catches it.
+    ``BluetoothCommandFailed`` deliberately does *not* subclass either - it
+    means a state check actively contradicted the request, not that the
+    outcome is unknown, so replaying the command on a fallback transport is
+    safe and a router fails over on it normally (see below).
 
-    Pass ``verify_commands=True`` to resolve that ambiguity inside this class:
-    on a timeout from a mutating command whose expected post-state is derivable
-    from its arguments, the same held connection reads the mapped prover state
-    and either returns a normal success result (the command executed) or
-    re-raises the ``BluetoothUnconfirmedCommand`` (it could not be confirmed).
-    Commands whose outcome cannot be derived or read - true toggles, relative
-    steps, and ack-only actions - raise the unconfirmed timeout, exactly as with
-    verification off (the default).
+    ``confirmation`` sets how hard a mutating command tries to confirm itself
+    before returning; it is a single ladder-depth choice, not an independent
+    flag per rung:
 
-    Two more knobs shape that same ladder (write -> ack wait -> ``verify_commands``
-    -> unconfirmed outcome):
+    - ``"optimistic"``: return success as soon as the GATT write is confirmed,
+      consulting nothing else. Only a write/transport failure
+      (``BluetoothTransportError``) still raises. Pure speed mode - the caller
+      owns any state verification it wants afterward.
+    - ``"ack"`` (default): wait for the addressed ack. For a VCSEC actuation
+      with a derivable expected end state (currently lock/unlock only), the
+      wait also races a matching status broadcast against the ack: the vehicle
+      keeps emitting unsolicited VCSEC status broadcasts on the same
+      notification subscription even when it emits no addressed ack for the
+      actuation, so a broadcast already showing the requested state confirms
+      success without waiting out the ack timeout. A broadcast that shows a
+      different state does not fail fast - it may simply predate the vehicle
+      finishing the actuation, and a later broadcast in the same window could
+      still confirm success - but if the whole window elapses with such a
+      mismatch as the last word and nothing else confirming, that is
+      now-final proof the command did not apply, raising
+      ``BluetoothCommandFailed`` rather than the ambiguous timeout. An
+      addressed ack, if it arrives first, still wins and still raises a real
+      car-side rejection. A command with no derivable end state - true
+      toggles, relative steps, and ack-only actions - has no broadcast to
+      race and simply waits for the ack, raising ``BluetoothUnconfirmedCommand``
+      on timeout.
+    - ``"verify"``: same as ``"ack"``, plus one more rung - an ack/broadcast
+      timeout for a command whose expected post-state is derivable from its
+      arguments reads the mapped prover state over the same held connection
+      and either returns a normal success result (the command executed),
+      raises ``BluetoothCommandFailed`` (the read proves it did not), or
+      re-raises ``BluetoothUnconfirmedCommand`` (the read itself could not be
+      attempted, e.g. an INFO-domain prover needs the car awake). Commands
+      with no derivable prover raise the unconfirmed timeout exactly as under
+      ``"ack"``.
 
-    - ``optimistic`` (default ``False``): a mutating command returns success as
-      soon as its GATT write is confirmed, skipping the ack wait and
-      ``verify_commands`` entirely. Only a write/transport failure
-      (``BluetoothTransportError``) still raises. This is pure speed mode - the
-      caller owns any state verification it wants afterward - and it overrides
-      ``verify_commands`` and ``raise_unconfirmed`` for every mutating send.
-    - ``raise_unconfirmed`` (default ``True``, current behavior): when ``False``,
-      an exhausted ladder - the ack wait expired and ``verify_commands`` is off,
-      has no plan for this command, or could not complete its read - resolves as
-      a best-effort success instead of raising ``BluetoothUnconfirmedCommand``.
-      A car-side rejection carried in an ack, a ``verify_commands`` state
-      mismatch (the read completed and does not show the requested value), and
-      write failures are unaffected and always raise - this flag only converts
-      the "could not determine what happened" outcome. Commands with no
-      ``verify_commands`` plan (true toggles, relative steps, and ack-only
-      actions - see the table in ``docs/bluetooth_vehicles.md``) are always
-      resolved best-effort under this flag, since there is nothing to mismatch
-      against.
+    Both rungs above derive their expected-end-state predicate from the same
+    per-command table (one source of truth), just applied to a broadcast frame
+    or a follow-up read respectively.
+
+    ``raise_unconfirmed`` (default ``False``) is the orthogonal question of what
+    to do once a ladder genuinely cannot resolve - the ack/broadcast wait
+    (and, under ``"verify"``, the prover read) neither confirmed nor
+    contradicted the request. Default ``False`` resolves that case as a
+    best-effort success; ``True`` raises ``BluetoothUnconfirmedCommand``
+    instead. It is moot under ``confirmation="optimistic"``, which is never
+    inconclusive. A car-side rejection carried in an ack, any proven
+    non-application (``BluetoothCommandFailed``), and write failures are
+    unaffected by this flag and always raise - it only converts the "could not
+    determine what happened" outcome.
 
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
@@ -344,13 +389,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """
 
     ble_name: str
-    verify_commands: bool
-    optimistic: bool
+    confirmation: BluetoothConfirmation
     raise_unconfirmed: bool
     keepalive_interval: float | None
     device: BLEDevice | None = None
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
+    _broadcast_watchers: dict[Domain, Callable[[RoutableMessage], None]]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -371,24 +416,61 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
+        optimistic: bool | None = None,
     ):
+        """Initialize a BLE-connected vehicle.
+
+        ``verify_commands`` and ``optimistic`` are deprecated keyword-only
+        aliases for ``confirmation="verify"``/``confirmation="optimistic"``
+        respectively; passing either emits a ``DeprecationWarning`` and maps
+        onto ``confirmation``, overriding any value passed there (a ``True``
+        ``optimistic`` wins over a ``True`` ``verify_commands`` if both are
+        somehow passed, matching the old dominance order).
+        """
         super().__init__(parent, vin, key)
-        self.verify_commands = verify_commands
+        if verify_commands is not None:
+            warnings.warn(
+                'verify_commands is deprecated; pass confirmation="verify" instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if verify_commands:
+                confirmation = "verify"
+        if optimistic is not None:
+            warnings.warn(
+                'optimistic is deprecated; pass confirmation="optimistic" instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if optimistic:
+                confirmation = "optimistic"
+        self.confirmation = confirmation
         self.keepalive_interval = keepalive_interval
-        self.optimistic = optimistic
         self.raise_unconfirmed = raise_unconfirmed
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
+        self._broadcast_watchers = {}
         self.device = device
         self._connect_lock = asyncio.Lock()
         self._buffer = ReassemblingBuffer(self._on_message)
+
+    @property
+    def optimistic(self) -> bool:
+        """Deprecated read-only view of ``confirmation == "optimistic"``."""
+        return self.confirmation == "optimistic"
+
+    @property
+    def verify_commands(self) -> bool:
+        """Deprecated read-only view of ``confirmation == "verify"``."""
+        return self.confirmation == "verify"
 
     async def find_vehicle(
         self,
@@ -542,6 +624,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
         if msg.to_destination.routing_address != self._from_destination:
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
+            watcher = self._broadcast_watchers.get(msg.from_destination.domain)
+            if watcher is not None:
+                watcher(msg)
             return
 
         queue = self._queues.get(msg.from_destination.domain)
@@ -565,6 +650,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         *,
         timeout: float | None = None,
         optimistic: bool = False,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
     ) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response.
 
@@ -572,7 +658,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         VCSEC actuation, no data frame follows), so the ack is returned as soon
         as it arrives and a shorter total timeout applies. ``optimistic`` skips
         waiting for any reply at all - once the GATT write is confirmed, an
-        empty ``RoutableMessage`` is returned immediately.
+        empty ``RoutableMessage`` is returned immediately. ``confirm_broadcast``
+        races the addressed-reply wait against a matching unsolicited state
+        broadcast on the same domain, returning on whichever arrives first.
         """
 
         if timeout is None:
@@ -603,51 +691,149 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             if optimistic:
                 return RoutableMessage()
 
-            # Process the response
-            try:
-                async with asyncio.timeout(timeout):
-                    LOGGER.debug(f"Waiting for response with {requires}")
-                    while True:
-                        resp = await self._queues[domain].get()
-                        LOGGER.debug(f"Received message {resp}")
+            if confirm_broadcast is None:
+                return await self._await_response(
+                    domain, msg, requires, expects_data, timeout
+                )
+            return await self._await_response_or_broadcast(
+                domain, msg, requires, expects_data, timeout, confirm_broadcast
+            )
 
-                        self.validate_msg(resp)
+    async def _await_response(
+        self,
+        domain: Domain,
+        msg: RoutableMessage,
+        requires: str,
+        expects_data: bool,
+        timeout: float,
+    ) -> RoutableMessage:
+        """Wait for the addressed reply carrying ``requires`` or our ack."""
+        try:
+            async with asyncio.timeout(timeout):
+                LOGGER.debug(f"Waiting for response with {requires}")
+                while True:
+                    resp = await self._queues[domain].get()
+                    LOGGER.debug(f"Received message {resp}")
 
-                        if resp.HasField(requires):
+                    self.validate_msg(resp)
+
+                    if resp.HasField(requires):
+                        return resp
+
+                    # ACK response: has our request_uuid but not the required field.
+                    # Some commands (e.g. RKE wake/lock) only return an ACK with no data.
+                    # Wait briefly for a follow-up data response before returning the ACK.
+                    if msg.uuid and resp.request_uuid == msg.uuid:
+                        if not expects_data:
+                            # A VCSEC actuation's ack is terminal; no data
+                            # frame follows, so return without the wait.
+                            return resp
+                        LOGGER.debug(
+                            "Received ACK for our request, waiting briefly for data follow-up"
+                        )
+                        try:
+                            async with asyncio.timeout(self._ack_followup_timeout):
+                                while True:
+                                    resp2 = await self._queues[domain].get()
+                                    LOGGER.debug(f"Received follow-up message {resp2}")
+                                    self.validate_msg(resp2)
+                                    if resp2.HasField(requires):
+                                        return resp2
+                        except TimeoutError:
+                            LOGGER.debug("No data follow-up, returning ACK response")
                             return resp
 
-                        # ACK response: has our request_uuid but not the required field.
-                        # Some commands (e.g. RKE wake/lock) only return an ACK with no data.
-                        # Wait briefly for a follow-up data response before returning the ACK.
-                        if msg.uuid and resp.request_uuid == msg.uuid:
-                            if not expects_data:
-                                # A VCSEC actuation's ack is terminal; no data
-                                # frame follows, so return without the wait.
-                                return resp
-                            LOGGER.debug(
-                                "Received ACK for our request, waiting briefly for data follow-up"
-                            )
-                            try:
-                                async with asyncio.timeout(self._ack_followup_timeout):
-                                    while True:
-                                        resp2 = await self._queues[domain].get()
-                                        LOGGER.debug(
-                                            f"Received follow-up message {resp2}"
-                                        )
-                                        self.validate_msg(resp2)
-                                        if resp2.HasField(requires):
-                                            return resp2
-                            except TimeoutError:
-                                LOGGER.debug(
-                                    "No data follow-up, returning ACK response"
-                                )
-                                return resp
+                    LOGGER.debug(f"Ignoring message without required field {requires}")
+        except TimeoutError as e:
+            raise BluetoothTimeout from e
 
-                        LOGGER.debug(
-                            f"Ignoring message without required field {requires}"
-                        )
-            except TimeoutError as e:
-                raise BluetoothTimeout from e
+    async def _await_response_or_broadcast(
+        self,
+        domain: Domain,
+        msg: RoutableMessage,
+        requires: str,
+        expects_data: bool,
+        timeout: float,
+        confirm_broadcast: Callable[[VehicleStatus], bool],
+    ) -> RoutableMessage:
+        """Race the addressed reply against a matching state broadcast.
+
+        A broadcast that decodes but does not satisfy ``confirm_broadcast`` is
+        tracked, not treated as an immediate failure - it may simply predate
+        the vehicle finishing the actuation, and a later broadcast in the same
+        window could still confirm success. Only the addressed-reply path can
+        raise a rejection while the race is live. If the whole window elapses
+        with neither an ack nor a confirming broadcast, but at least one
+        mismatching broadcast was observed, that mismatch is now-final proof
+        the command did not reach the requested state:
+        ``BluetoothCommandFailed`` is raised instead of the ambiguous
+        ``BluetoothTimeout``/``BluetoothUnconfirmedCommand``, so a fallback
+        transport can fail over safely instead of risking a double-apply on a
+        genuinely unresolved ack.
+        """
+        mismatches: list[VehicleStatus] = []
+        response_task = asyncio.ensure_future(
+            self._await_response(domain, msg, requires, expects_data, timeout)
+        )
+        broadcast_task = asyncio.ensure_future(
+            self._await_broadcast_confirmation(domain, confirm_broadcast, mismatches)
+        )
+        try:
+            done, _ = await asyncio.wait(
+                {response_task, broadcast_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if response_task in done:
+                return response_task.result()
+            return broadcast_task.result()
+        except BluetoothTimeout as timeout_exc:
+            if mismatches:
+                raise BluetoothCommandFailed(
+                    timeout_exc.data, timeout_exc.status
+                ) from timeout_exc
+            raise
+        finally:
+            for task in (response_task, broadcast_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(response_task, broadcast_task, return_exceptions=True)
+
+    async def _await_broadcast_confirmation(
+        self,
+        domain: Domain,
+        confirm_broadcast: Callable[[VehicleStatus], bool],
+        mismatches: list[VehicleStatus],
+    ) -> RoutableMessage:
+        """Wait for a broadcast whose decoded VCSEC status satisfies ``confirm_broadcast``.
+
+        Live-verified: a VCSEC actuation's addressed ack can be lost while the
+        vehicle keeps emitting its status broadcast on the same notification
+        subscription, carrying the very state change the actuation caused. A
+        broadcast that decodes but doesn't match is appended to ``mismatches``
+        instead of resolving anything here - the caller only treats it as
+        proof of failure once the whole wait window elapses with nothing else
+        confirming.
+        """
+        future: asyncio.Future[RoutableMessage] = (
+            asyncio.get_running_loop().create_future()
+        )
+
+        def on_broadcast(broadcast: RoutableMessage) -> None:
+            if future.done():
+                return
+            status = _decode_vcsec_status(broadcast)
+            if status is None:
+                return
+            if confirm_broadcast(status):
+                future.set_result(broadcast)
+            else:
+                mismatches.append(status)
+
+        self._broadcast_watchers[domain] = on_broadcast
+        try:
+            return await future
+        finally:
+            if self._broadcast_watchers.get(domain) is on_broadcast:
+                del self._broadcast_watchers[domain]
 
     # Group 12: VCSEC closures (Bluetooth-only for individual doors)
 
@@ -781,11 +967,16 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         command: bytes,
         attempt: int = 0,
         expects_data: bool = True,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
         await self.connect_if_needed()
         return await super()._command(
-            domain, command, attempt, expects_data=expects_data
+            domain,
+            command,
+            attempt,
+            expects_data=expects_data,
+            confirm_broadcast=confirm_broadcast,
         )
 
     async def _ensure_handshake(self, domain: Domain) -> None:
@@ -820,9 +1011,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
         Reached only once nothing could determine what happened - verification
         is off, has no plan for this command, or its read could not complete.
-        A verify mismatch (the read completed and does not show the requested
-        value) is unambiguous negative evidence and is raised by the caller
-        directly, never routed through here.
+        Proven non-application - a verify-read mismatch, or a mismatching
+        broadcast still standing once the whole wait window elapsed - is
+        unambiguous negative evidence and raises ``BluetoothCommandFailed``
+        directly from the caller, never routed through here.
         """
         if self.raise_unconfirmed:
             raise unconfirmed from cause
@@ -833,33 +1025,54 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         )
         return {"response": {"result": True, "reason": ""}}
 
-    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+    async def _sendVehicleSecurity(
+        self,
+        command: UnsignedMessage,
+        *,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+    ) -> dict[str, Any]:
         """Send a VCSEC actuation.
+
+        ``confirm_broadcast`` is accepted only for signature compatibility
+        with ``Commands._sendVehicleSecurity``; this override always derives
+        its own predicate from ``command`` (see ``plan`` below) and ignores
+        any value passed here.
 
         A lost ack after the write reached the vehicle is unconfirmed, not
         failed, so a timed-out wait raises ``BluetoothUnconfirmedCommand``
         rather than plain ``BluetoothTimeout`` - see that exception's
-        docstring. With ``verify_commands`` on, that ambiguity is resolved by
-        reading back state before it can reach the caller. With
-        ``optimistic`` on, the write itself is the whole outcome and none of
-        this ladder runs. With ``raise_unconfirmed`` off, an exhausted ladder
-        resolves as a best-effort success instead of raising - see the class
-        docstring.
+        docstring. For a command with a verify plan (lock/unlock), the same
+        wait window also races a matching VCSEC status broadcast against the
+        ack - live-verified, the vehicle keeps broadcasting status on the same
+        subscription even when it emits no addressed ack, so a broadcast
+        showing the requested end state confirms success before the ack
+        timeout is ever reached. If the window instead elapses with a
+        mismatching broadcast as the last word (see
+        ``_await_response_or_broadcast``) or, with ``confirmation="verify"``, a
+        post-timeout read that contradicts the request, that is proven
+        non-application and raises ``BluetoothCommandFailed`` - not the
+        ambiguous ``BluetoothUnconfirmedCommand`` - since a fallback router
+        can safely fail over on a command proven not to have applied. With
+        ``confirmation="optimistic"``, the write itself is the whole outcome
+        and none of this ladder runs. With ``raise_unconfirmed`` off, only a
+        ladder that is still genuinely unresolved resolves as a best-effort
+        success instead of raising - see the class docstring.
         """
         await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
-        if self.optimistic:
+        if self.confirmation == "optimistic":
             return await self._send_optimistic(
                 Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
             )
+        plan = _vcsec_verify_plan(command)
         try:
-            return await super()._sendVehicleSecurity(command)
+            return await super()._sendVehicleSecurity(
+                command, confirm_broadcast=plan[1] if plan else None
+            )
         except BluetoothTimeout as timeout:
             unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
             name = vcsec_command_name(command)
-            if self.verify_commands:
-                result = await self._resolve_timeout(
-                    _vcsec_verify_plan(command), unconfirmed
-                )
+            if self.confirmation == "verify":
+                result = await self._resolve_timeout(plan, unconfirmed)
                 if result is not None:
                     LOGGER.debug(
                         "command=%s transport=%s verify_commands=resolved result=%s",
@@ -880,13 +1093,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     ) -> dict[str, Any]:
         """Send an infotainment command.
 
-        Same unconfirmed-ack, ``optimistic``, and ``raise_unconfirmed``
+        Same unconfirmed-ack, ``confirmation``, and ``raise_unconfirmed``
         semantics as ``_sendVehicleSecurity`` - see there. ``mutating=False``
         (``ping()`` only) is exempt from all three: it always waits for its
         real reply.
         """
         await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
-        if self.optimistic and mutating:
+        if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
                 Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
             )
@@ -897,7 +1110,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 raise
             unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
             name = infotainment_command_name(command)
-            if self.verify_commands:
+            if self.confirmation == "verify":
                 resolver = _INFOTAINMENT_VERIFY_PLANS.get(
                     command.vehicleAction.WhichOneof("vehicle_action_msg")
                 )
@@ -929,8 +1142,11 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         ``TeslaFleetError`` from a sleeping car is not woken just to verify).
         ``None`` leaves the caller to resolve the outcome via
         ``raise_unconfirmed``. A verify mismatch - the read completed and does
-        not show the requested value - is unambiguous negative evidence and
-        raises ``timeout`` directly instead, regardless of that setting.
+        not show the requested value - is unambiguous proof the command did
+        not apply, so it raises ``BluetoothCommandFailed`` instead of the
+        ambiguous ``timeout``, regardless of ``raise_unconfirmed``: a fallback
+        router may safely fail over on proven non-application, unlike on an
+        unresolved timeout where a replay could double-execute the command.
         """
         if plan is None:
             return None
@@ -941,7 +1157,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             return None
         if executed(state):
             return {"response": {"result": True, "reason": ""}}
-        raise timeout
+        raise BluetoothCommandFailed(timeout.data, timeout.status) from timeout
 
     async def pair(
         self,

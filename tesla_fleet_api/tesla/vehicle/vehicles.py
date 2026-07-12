@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from tesla_fleet_api.const import BluetoothConfirmation
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.bluetooth import (
     DEFAULT_KEEPALIVE_INTERVAL,
@@ -46,32 +47,35 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
     def createBluetooth(
         self,
         vin: str,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
+        optimistic: bool | None = None,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
-        Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing an unconfirmed
-        command timeout.
+        ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
+        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
+        matching state broadcast, ``"verify"`` additionally reads back state
+        on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
-        ``optimistic`` returns success as soon as a mutating command's GATT
-        write is confirmed, skipping the ack wait and ``verify_commands``.
-        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
-        as a best-effort success instead of raising
-        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
-        for the full ladder and what each flag does and does not affect.
+        ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
+        instead of resolving a still-inconclusive ladder as a best-effort
+        success. ``verify_commands``/``optimistic`` are deprecated aliases for
+        ``confirmation="verify"``/``confirmation="optimistic"``. See
+        ``VehicleBluetooth``'s docstring for the full ladder.
         """
         vehicle = self.Bluetooth(
             self._parent,
             vin,
-            verify_commands=verify_commands,
+            confirmation=confirmation,
             keepalive_interval=keepalive_interval,
-            optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
+            verify_commands=verify_commands,
+            optimistic=optimistic,
         )
         self[vin] = vehicle
         return vehicle
@@ -99,33 +103,36 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
+        optimistic: bool | None = None,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
-        Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing an unconfirmed
-        command timeout.
+        ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
+        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
+        matching state broadcast, ``"verify"`` additionally reads back state
+        on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
-        ``optimistic`` returns success as soon as a mutating command's GATT
-        write is confirmed, skipping the ack wait and ``verify_commands``.
-        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
-        as a best-effort success instead of raising
-        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
-        for the full ladder and what each flag does and does not affect.
+        ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
+        instead of resolving a still-inconclusive ladder as a best-effort
+        success. ``verify_commands``/``optimistic`` are deprecated aliases for
+        ``confirmation="verify"``/``confirmation="optimistic"``. See
+        ``VehicleBluetooth``'s docstring for the full ladder.
         """
         return self.createBluetooth(
             vin,
             key,
             device,
-            verify_commands,
+            confirmation,
             keepalive_interval,
-            optimistic,
             raise_unconfirmed,
+            verify_commands=verify_commands,
+            optimistic=optimistic,
         )
 
     def createBluetooth(
@@ -133,32 +140,35 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
+        optimistic: bool | None = None,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
-        Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing an unconfirmed
-        command timeout.
+        ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
+        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
+        matching state broadcast, ``"verify"`` additionally reads back state
+        on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
-        ``optimistic`` returns success as soon as a mutating command's GATT
-        write is confirmed, skipping the ack wait and ``verify_commands``.
-        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
-        as a best-effort success instead of raising
-        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
-        for the full ladder and what each flag does and does not affect.
+        ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
+        instead of resolving a still-inconclusive ladder as a best-effort
+        success. ``verify_commands``/``optimistic`` are deprecated aliases for
+        ``confirmation="verify"``/``confirmation="optimistic"``. See
+        ``VehicleBluetooth``'s docstring for the full ladder.
         """
         vehicle = self.Bluetooth(
             self._parent,
             vin,
             key,
             device,
-            verify_commands=verify_commands,
+            confirmation=confirmation,
             keepalive_interval=keepalive_interval,
+            verify_commands=verify_commands,
             optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
         )

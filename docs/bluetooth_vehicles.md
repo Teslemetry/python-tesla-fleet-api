@@ -139,16 +139,20 @@ or catch `BluetoothTransportError` separately when you need to distinguish a
 transport failure - the command never reached the vehicle - from a vehicle
 timeout after the command or request was written.
 
-By default, a response-wait timeout for a *mutating* command (RKE/closure
-actions, HVAC/media/charging commands, `wake_up()`) raises
-`BluetoothUnconfirmedCommand` instead of plain `BluetoothTimeout` - see
-"Mutating Command Timeouts" below for the `verify_commands`, `optimistic`, and
-`raise_unconfirmed` knobs that can change that outcome. A response-wait timeout
-for anything else (a state read) still raises plain `BluetoothTimeout`.
+A response-wait timeout for a *mutating* command (RKE/closure actions,
+HVAC/media/charging commands, `wake_up()`) that stays genuinely unresolved
+raises `BluetoothUnconfirmedCommand` instead of plain `BluetoothTimeout` - see
+"Mutating Command Timeouts" below for the `confirmation` and
+`raise_unconfirmed` knobs that shape that outcome. A response-wait timeout for
+anything else (a state read) still raises plain `BluetoothTimeout`.
 `BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`, so existing
 `except BluetoothTimeout` handling keeps working; catch
 `BluetoothUnconfirmedCommand` separately when you need to tell "the command may
-have executed" apart from "nothing happened."
+have executed" apart from "nothing happened." A mutating command *proven* not
+to have taken effect - a `confirmation="verify"` read or a mismatching
+broadcast that stood at the end of the wait window - raises
+`BluetoothCommandFailed` instead, a distinct type a fallback router fails over
+on normally (see below).
 
 BLE response chunks are reassembled with the same stale-frame behavior as
 Tesla's vehicle-command BLE connector: if a partial frame sits idle for more
@@ -161,18 +165,15 @@ the next response, but it does not change command acknowledgement timeouts.
 A `BluetoothUnconfirmedCommand` from a mutating BLE command is unconfirmed, not
 proof that the command failed. The vehicle can apply the command even when its
 acknowledgement does not reach the client - `door_lock()`/`door_unlock()` have
-both been observed to execute despite this exception. For commands that change
-vehicle state, snapshot the relevant state before acting and verify the outcome
-with a follow-up state read after any timeout. Never blind-retry the same
-command, and never replay it on a fallback transport (e.g. a BLE-primary/cloud
-fallback router) - the safe response to an unconfirmed outcome is to verify, not
-to retry.
+both been observed to execute despite this exception. Never blind-retry the
+same command, and never replay it on a fallback transport (e.g. a
+BLE-primary/cloud fallback router) on this exception alone - see "The
+confirmation ladder" below for how the library resolves this for you, and
+"Skipping the wait" for the constructor knobs that control how hard it tries.
 
 VCSEC actuations, such as RKE, closure, and wake requests, return as soon as
-their terminal acknowledgement arrives because no data frame follows it. If that
-acknowledgement is lost, they use a shorter response timeout than reads; the
-timeout is still inconclusive and should be handled with the same verify-by-state
-pattern.
+their terminal acknowledgement arrives because no data frame follows it. If
+that acknowledgement is lost, they use a shorter response timeout than reads.
 
 Do not blind-retry non-idempotent commands, such as media toggles, volume steps,
 or schedule add/remove operations, on timeout alone. The signed-command retry
@@ -180,29 +181,40 @@ inside the library can also re-send an identical command after a WAIT status or
 epoch/token fault, so verify by absolute state rather than by counting command
 attempts.
 
-### Opt-in state verification (`verify_commands`)
+### The confirmation ladder
 
-Construct a `VehicleBluetooth` with `verify_commands=True` (also accepted by
-`vehicles.create(...)` / `vehicles.createBluetooth(...)`, default off) to have
-the class resolve that ambiguity for you. Verification runs only on a timeout,
-so the normal path - which returns as soon as the terminal ack arrives - keeps
-its speed and pays no extra read; the prover read happens only in the ambiguous
-case.
+A mutating BLE command tries to confirm itself in up to four steps: write the
+GATT characteristic, wait for the addressed ack (racing a matching state
+broadcast for lock/unlock), fall back to a state read, then decide the final
+outcome. `confirmation` (constructor/factory arg, default `"ack"`) picks how
+many of those steps run; `raise_unconfirmed` (default `False`) picks what the
+last step does when nothing above it settled the question.
 
-When a mutating command times out and its expected post-state can be derived
-from its own arguments, the same held connection reads the mapped prover state
-and either returns a normal success result (`{"response": {"result": True,
-"reason": ""}}`) when the state matches or raises
-`BluetoothUnconfirmedCommand` when a completed read does not match. The read
+**Broadcast confirmation (lock/unlock, `"ack"` and `"verify"`).** The vehicle
+keeps emitting unsolicited VCSEC status broadcasts on the same notification
+subscription even when it emits no addressed ack for a lock/unlock actuation.
+`VehicleBluetooth` races the ack wait against a matching broadcast and returns
+success as soon as either confirms - so most ack losses for lock/unlock now
+resolve to a real confirmed success well before the ack-wait ceiling, with no
+extra read. A broadcast showing a different state does not fail fast (a later
+broadcast in the same window could still confirm success), but if the whole
+window elapses with such a mismatch as the last word and nothing else
+confirming, that is proof the command did not apply and raises
+`BluetoothCommandFailed` rather than the ambiguous timeout.
+
+**State-read verification (`confirmation="verify"`).** When a mutating command
+still hasn't resolved after the ack/broadcast wait and its expected post-state
+can be derived from its own arguments, the same held connection reads the
+mapped prover state and either returns a normal success result
+(`{"response": {"result": True, "reason": ""}}`) when the state matches or
+raises `BluetoothCommandFailed` when a completed read does not match. The read
 rides the existing connection and never wakes the vehicle; if an infotainment
 prover cannot be read because the car is asleep, the outcome stays unresolved
-and falls through to the `raise_unconfirmed` setting.
+and falls through to `raise_unconfirmed`. This runs only under
+`confirmation="verify"` and only on a still-unresolved wait, so the normal
+path - which returns as soon as something confirms - keeps its speed.
 
-With the default `raise_unconfirmed=True`, commands whose outcome cannot be
-derived or read - true toggles, relative volume steps, and ack-only actions such
-as `flash_lights()` or `trigger_homelink()` - raise
-`BluetoothUnconfirmedCommand`, exactly as with verification off. Currently
-verified commands and their provers:
+Verified commands and their provers:
 
 | Command | Prover | Confirmed when |
 | --- | --- | --- |
@@ -214,50 +226,50 @@ verified commands and their provers:
 | `auto_conditioning_start()` / `auto_conditioning_stop()` | `climate_state()` | `is_climate_on` matches |
 
 The VCSEC lock prover is readable while the vehicle is asleep; the infotainment
-provers require the vehicle awake. This feature does not change behavior for any
-command not in the table, and it is inert unless `verify_commands=True`.
+provers require the vehicle awake. Broadcast confirmation covers only
+`door_lock()`/`door_unlock()` - the only commands with an observed status
+broadcast; every other command in the table is reliably confirmed only under
+`confirmation="verify"`. Commands not in the table - true toggles, relative
+volume steps, and ack-only actions such as `flash_lights()` or
+`trigger_homelink()` - are the documented best-effort set: they have no
+broadcast and no prover to confirm against, so a still-unresolved wait always
+falls through to `raise_unconfirmed` regardless of `confirmation`.
 
-### Skipping the wait (`optimistic`) and defaulting to success (`raise_unconfirmed`)
+### Skipping the wait (`confirmation="optimistic"`) and defaulting to success (`raise_unconfirmed`)
 
-The full confirmation ladder for a mutating BLE command is: write the GATT
-characteristic, wait for the ack, resolve via `verify_commands` on a timeout,
-then decide the final outcome. Two more constructor/factory knobs (default off
-and default on, respectively - both preserve today's behavior unless set)
-shape that last step:
-
-- `optimistic=True` returns success as soon as the GATT write is confirmed,
-  skipping the ack wait and `verify_commands` entirely for every mutating
-  command. This is pure speed mode: the caller owns any state verification it
-  wants afterward. Only a write/transport failure (`BluetoothTransportError`)
-  still raises. `ping()` (the one non-mutating infotainment send) is exempt
-  and always waits for its real reply.
-- `raise_unconfirmed=False` changes what happens only when the ladder is
-  exhausted without a definite answer - `verify_commands` is off, has no plan
-  for this command, or its prover read itself could not complete (e.g. the
-  car is asleep). Instead of raising `BluetoothUnconfirmedCommand`, that
-  ambiguous case resolves as a best-effort success
-  (`{"response": {"result": True, "reason": ""}}`). A car-side rejection
-  carried in an ack, a `verify_commands` state mismatch (the prover read
-  completed and does not show the requested value), and write failures are
-  unchanged and always raise - this flag converts only the "could not
-  determine what happened" outcome.
-
-Commands with no `verify_commands` plan - true toggles, relative volume steps,
-and ack-only actions such as `flash_lights()` or `trigger_homelink()` (every
-command not in the table above) - have nothing to mismatch against, so under
-`raise_unconfirmed=False` a timeout on any of them always resolves best-effort.
-Treat those commands as best-effort by design; rely on `verify_commands`'s
-table for a reliable, state-backed confirmation on the commands it covers.
+- `confirmation="optimistic"` returns success as soon as the GATT write is
+  confirmed, consulting nothing else for every mutating command. This is pure
+  speed mode: the caller owns any state verification it wants afterward. Only
+  a write/transport failure (`BluetoothTransportError`) still raises. `ping()`
+  (the one non-mutating infotainment send) is exempt and always waits for its
+  real reply.
+- `raise_unconfirmed=True` changes what happens only when the whole ladder is
+  exhausted without a definite answer - the ack/broadcast wait timed out and,
+  under `confirmation="verify"`, the prover read itself could not complete
+  (e.g. the car is asleep). Instead of the default best-effort success
+  (`{"response": {"result": True, "reason": ""}}`), that ambiguous case raises
+  `BluetoothUnconfirmedCommand`. A car-side rejection carried in an ack, any
+  proven non-application (`BluetoothCommandFailed`), and write failures are
+  unaffected and always raise - this flag converts only the "could not
+  determine what happened" outcome. It is moot under
+  `confirmation="optimistic"`, which is never inconclusive.
 
 ```python
 vehicle = tesla_bluetooth.vehicles.create(
-    "<vin>", optimistic=True
+    "<vin>", confirmation="optimistic"
 )
-# or, to keep waiting for an ack but never raise on an inconclusive outcome:
+# or, to confirm as hard as possible but still never raise on a genuinely
+# inconclusive outcome:
 vehicle = tesla_bluetooth.vehicles.create(
-    "<vin>", verify_commands=True, raise_unconfirmed=False
+    "<vin>", confirmation="verify", raise_unconfirmed=False  # raise_unconfirmed=False is also the default
 )
 ```
+
+`verify_commands`/`optimistic` booleans are still accepted as deprecated
+keyword-only constructor/factory aliases for
+`confirmation="verify"`/`confirmation="optimistic"` - passing either emits a
+`DeprecationWarning` and maps onto `confirmation`. Prefer `confirmation`
+directly in new code.
 
 ## Climate Commands
 
@@ -484,12 +496,14 @@ command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfir
 commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 `RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
-For BLE commands run with `verify_commands=True`, a resolved timeout logs a
+For BLE commands run with `confirmation="verify"`, a resolved state-read logs a
 second line with `verify_commands=resolved` and the confirmed result; an
-unresolved timeout logs `verify_commands=unresolved` before the
-`BluetoothUnconfirmedCommand` propagates. With `raise_unconfirmed=False`, an
-exhausted ladder logs `raise_unconfirmed=False result=success (best-effort)`
-instead of propagating that exception. `Router` additionally logs
+unresolved read logs `verify_commands=unresolved` before the exception
+propagates (`BluetoothCommandFailed` on a proven mismatch,
+`BluetoothUnconfirmedCommand` if the read itself couldn't complete). With
+`raise_unconfirmed=False` (the default), an exhausted ladder logs
+`raise_unconfirmed=False result=success (best-effort)` instead of raising
+`BluetoothUnconfirmedCommand`. `Router` additionally logs
 `command=... backend=<ClassName> result=...` for each backend it tries, or
 `result=unconfirmed` when it stops instead of failing over, so a
 BLE-primary/cloud-fallback setup shows exactly which backend served each call

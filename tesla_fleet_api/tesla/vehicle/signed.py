@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.commands import Commands
@@ -29,11 +29,17 @@ class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
         super(Commands, self).__init__(parent, vin)
 
     async def _send(
-        self, msg: RoutableMessage, requires: str, expects_data: bool = True
+        self,
+        msg: RoutableMessage,
+        requires: str,
+        expects_data: bool = True,
+        *,
+        confirm_broadcast: Callable[[Any], bool] | None = None,
     ) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
-        # requires and expects_data are unused: Fleet API replies are singular,
-        # delivered whole in one response with no separate terminal ack frame.
+        # requires, expects_data, and confirm_broadcast are unused: Fleet API
+        # replies are singular, delivered whole in one response with no
+        # separate terminal ack frame and no broadcast side channel.
 
         async with self._sessions[msg.to_destination.domain].lock:
             json = await self.signed_command(
