@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: tesla_fleet_api
-Version: 1.5.2
+Version: 1.6.4
 Summary: Tesla Fleet API library for Python
 Author-email: Brett Adams <hello@teslemetry.com>
 License-Expression: Apache-2.0
@@ -189,21 +189,31 @@ asyncio.run(main())
 
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
-BLE connect and GATT write failures from `VehicleBluetooth` raise
+`VehicleBluetooth` keeps a held BLE connection alive during idle periods by
+default with a passive GATT read about every 20 seconds. Pass
+`keepalive_interval=None` (or `0`) when creating the vehicle to disable it;
+leaving it enabled can keep an already-awake car awake longer, so disconnect or
+disable keepalive when vehicle sleep is preferred.
+
+BLE connect/notify and GATT write failures from `VehicleBluetooth` raise
 `BluetoothTransportError`, a `TeslaFleetError` subclass, with the original
-`bleak.exc.BleakError` chained as `__cause__`. Catch `TeslaFleetError` to
-handle Bluetooth transport failures and `BluetoothTimeout` response-wait
-timeouts through the same library error hierarchy.
+transport exception chained as `__cause__`. A response-wait timeout from a
+mutating BLE command raises `BluetoothUnconfirmedCommand`, a
+`BluetoothTimeout` subclass, because the vehicle may have executed it despite a
+lost acknowledgement. Catch `TeslaFleetError` to handle Bluetooth transport
+failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
+ESPHome proxies) and response-wait timeouts through the same library error
+hierarchy.
 
 ### Routing and Failover
 
-The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on error. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
+The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on most errors. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
 
 ```python
 import asyncio
 import aiohttp
 from tesla_fleet_api import TeslaBluetooth, Teslemetry
-from tesla_fleet_api.tesla.router import VehicleRouter
+from tesla_fleet_api.router import VehicleRouter
 from tesla_fleet_api.exceptions import TeslaFleetError
 
 async def main():
@@ -211,13 +221,13 @@ async def main():
         # Primary: local Bluetooth
         tesla_bluetooth = TeslaBluetooth()
         await tesla_bluetooth.get_private_key("path/to/private_key.pem")
-        primary = tesla_bluetooth.vehicles.create("<vin>")
+        primary = tesla_bluetooth.vehicles.create("<vin>", verify_commands=True)
 
-        # Fallback: Teslemetry cloud
+        # Secondary (fallback): Teslemetry cloud
         teslemetry = Teslemetry(access_token="<access_token>", session=session)
-        fallback = teslemetry.vehicles.create("<vin>")
+        secondary = teslemetry.vehicles.create("<vin>")
 
-        vehicle = VehicleRouter(primary, fallback)
+        vehicle = VehicleRouter(primary, secondary)
 
         try:
             await vehicle.wake_up()
@@ -227,24 +237,44 @@ async def main():
 asyncio.run(main())
 ```
 
-The constructor is `Router(primary, fallback, *more_backends, health=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
+The constructor is `Router(primary, secondary, *more_backends, health=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
 
 By default the router attempts the primary and fails over on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
 
 `EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
 
 ```python
-from tesla_fleet_api.tesla.router import EnergySiteRouter
+from tesla_fleet_api.router import EnergySiteRouter
 
 router = EnergySiteRouter(local_energysite, teslemetry_energysite)
 await router.set_operation(...)  # local first, cloud on failure
 ```
 
-`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.tesla.router` (and from `tesla_fleet_api.tesla`).
+`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
 
-> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. Callers needing exactly-once semantics for such commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
+Enable `DEBUG` logging for `tesla_fleet_api` to see which backend served a routed call and why failover happened.
+
+> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. `BluetoothUnconfirmedCommand` is the exception: it propagates without failover because the BLE command may already have executed. When the primary is `VehicleBluetooth`, pass `verify_commands=True` to resolve supported mutating command timeouts by state before they reach the router; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
 > Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
+
+### Debug Logging
+
+Enable the `tesla_fleet_api` logger at `DEBUG` to see each command's command
+name, transport/backend, and result. In standalone scripts, configure a handler
+first:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
+```
+
+Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
+Routers also emit `backend=<ClassName>` lines for each backend tried. See
+[Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
+for examples and the signed-command naming details.
 
 ### Teslemetry
 

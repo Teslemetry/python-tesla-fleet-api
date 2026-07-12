@@ -8,7 +8,7 @@ backend instances so no real BLE hardware or network access is required.
 import asyncio
 from unittest import IsolatedAsyncioTestCase
 
-from tesla_fleet_api.exceptions import BluetoothTimeout
+from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothUnconfirmedCommand
 from tesla_fleet_api.router import (
     EnergySiteRouter,
     Router,
@@ -106,6 +106,20 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         self.assertEqual(result, "fallback:11")
         self.assertEqual(primary.shared_calls, 1)
         self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_primary_raises_unconfirmed_command_does_not_fall_back(self):
+        # Unlike a plain BluetoothTimeout, an unconfirmed mutating command may
+        # have already executed on the primary - failing over would risk
+        # double-executing it, so it must propagate instead of falling back.
+        primary = _FakePrimary(exc=BluetoothUnconfirmedCommand())
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback)
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await router.shared(10)
+
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 0)
 
     async def test_primary_raises_cancelled_error_propagates(self):
         # CancelledError is a BaseException but not a TeslaFleetError; it must
@@ -219,15 +233,25 @@ class _FakeBackend:
     backend can be skipped entirely by the router.
     """
 
-    def __init__(self, tag: str, *, fail: bool = False, has: bool = True):
+    def __init__(
+        self,
+        tag: str,
+        *,
+        fail: bool = False,
+        has: bool = True,
+        exc: BaseException | None = None,
+    ):
         self.tag = tag
         self.fail = fail
+        self.exc = exc
         self.calls = 0
         if has:
             self.cmd = self._cmd  # type: ignore[assignment]
 
     async def _cmd(self, value: int) -> str:
         self.calls += 1
+        if self.exc is not None:
+            raise self.exc
         if self.fail:
             raise ConnectionError(f"{self.tag} failed")
         return f"{self.tag}:{value}"
@@ -252,6 +276,19 @@ class RouterNWayTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(await router.cmd(2), "c:2")
         self.assertEqual((a.calls, b.calls, c.calls), (1, 0, 1))
+
+    async def test_unconfirmed_command_from_middle_backend_stops_chain(self):
+        # b's mutating command may have already executed; c must never be
+        # tried, since that would risk double-executing it there too.
+        a = _FakeBackend("a", fail=True)
+        b = _FakeBackend("b", exc=BluetoothUnconfirmedCommand())
+        c = _FakeBackend("c")
+        router = Router(a, b, c)
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await router.cmd(9)
+
+        self.assertEqual((a.calls, b.calls, c.calls), (1, 1, 0))
 
     async def test_fails_over_through_multiple_backends_to_last(self):
         a = _FakeBackend("a", fail=True)

@@ -28,6 +28,29 @@ class BluetoothTimeout(TeslaFleetError):
     message = "Bluetooth command timed out waiting for vehicle response."
 
 
+class BluetoothUnconfirmedCommand(BluetoothTimeout):
+    """A mutating Bluetooth command timed out after it was written to the vehicle.
+
+    The write succeeded, so the vehicle may have executed the command even
+    though its ack was lost - lock/unlock have both been observed to execute
+    despite this exception. Treat the outcome as unknown, not failed: verify
+    by reading state back when possible, and never blind-retry or re-issue
+    the same command on another transport, since it may already have run.
+
+    Subclasses ``BluetoothTimeout`` so existing ``except BluetoothTimeout``
+    handling still catches it, while remaining distinguishable from it (and
+    from ``BluetoothTransportError``, the genuine pre-write transport
+    failure) for callers that want to react to the ambiguity specifically -
+    e.g. a BLE-primary/cloud-fallback router should not fail over on this
+    exception, since failing over risks double-executing the command.
+    """
+
+    message = (
+        "Bluetooth command timed out waiting for an ack after being written to "
+        "the vehicle; it may have executed anyway."
+    )
+
+
 class BluetoothTransportError(TeslaFleetError):
     """The Bluetooth transport (connect, notify, or GATT write) failed before a vehicle response could be awaited."""
 

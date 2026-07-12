@@ -119,13 +119,14 @@ async def main():
 asyncio.run(main())
 ```
 
-`wake_up()` is best-effort over BLE: a `BluetoothTimeout` from the wake request
-can be a false negative even when the vehicle wakes successfully. Confirm
-readiness by retrying a cheap INFO-domain read, such as `charge_state()`, with
-backoff. The infotainment computer can also take longer to become ready than
-the vehicle-security computer, so INFO-domain reads immediately after waking
-should retry `BluetoothTimeout` with backoff. Keep one BLE connection open
-across related commands when possible instead of reconnecting for each command.
+`wake_up()` is best-effort over BLE: a `BluetoothUnconfirmedCommand` from the
+wake request can be a false negative even when the vehicle wakes successfully
+(and still matches `except BluetoothTimeout`). Confirm readiness by retrying a
+cheap INFO-domain read, such as `charge_state()`, with backoff. The
+infotainment computer can also take longer to become ready than the
+vehicle-security computer, so INFO-domain reads immediately after waking should
+retry `BluetoothTimeout` with backoff. Keep one BLE connection open across
+related commands when possible instead of reconnecting for each command.
 
 `VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
 subclass, when the BLE connection, notification setup, or GATT command write
@@ -133,9 +134,19 @@ fails before a vehicle response can be awaited. The original transport
 exception is available as the exception's `__cause__`; this includes
 `bleak.exc.BleakError` and builtin `TimeoutError` from ESPHome proxy connect,
 notify, or write timeouts. Catch `TeslaFleetError` to handle both transport
-failures and response-wait `BluetoothTimeout` failures with one library error
-hierarchy, or catch `BluetoothTransportError` separately when you need to
-distinguish a transport failure from a vehicle timeout.
+failures and response-wait timeout failures with one library error hierarchy,
+or catch `BluetoothTransportError` separately when you need to distinguish a
+transport failure - the command never reached the vehicle - from a vehicle
+timeout after the command or request was written.
+
+A response-wait timeout for a *mutating* command (RKE/closure actions,
+HVAC/media/charging commands, `wake_up()`) raises `BluetoothUnconfirmedCommand`
+instead of plain `BluetoothTimeout` - see "Mutating Command Timeouts" below. A
+response-wait timeout for anything else (a state read) still raises plain
+`BluetoothTimeout`. `BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`,
+so existing `except BluetoothTimeout` handling keeps working; catch
+`BluetoothUnconfirmedCommand` separately when you need to tell "the command may
+have executed" apart from "nothing happened."
 
 BLE response chunks are reassembled with the same stale-frame behavior as
 Tesla's vehicle-command BLE connector: if a partial frame sits idle for more
@@ -145,11 +156,15 @@ the next response, but it does not change command acknowledgement timeouts.
 
 ## Mutating Command Timeouts
 
-A `BluetoothTimeout` from a mutating BLE command is inconclusive, not proof that
-the command failed. The vehicle can apply the command even when its
-acknowledgement does not reach the client. For commands that change vehicle
-state, snapshot the relevant state before acting and verify the outcome with a
-follow-up state read after any timeout.
+A `BluetoothUnconfirmedCommand` from a mutating BLE command is unconfirmed, not
+proof that the command failed. The vehicle can apply the command even when its
+acknowledgement does not reach the client - `door_lock()`/`door_unlock()` have
+both been observed to execute despite this exception. For commands that change
+vehicle state, snapshot the relevant state before acting and verify the outcome
+with a follow-up state read after any timeout. Never blind-retry the same
+command, and never replay it on a fallback transport (e.g. a BLE-primary/cloud
+fallback router) - the safe response to an unconfirmed outcome is to verify, not
+to retry.
 
 VCSEC actuations, such as RKE, closure, and wake requests, return as soon as
 their terminal acknowledgement arrives because no data frame follows it. If that
@@ -175,14 +190,14 @@ case.
 When a mutating command times out and its expected post-state can be derived
 from its own arguments, the same held connection reads the mapped prover state
 and either returns a normal success result (`{"response": {"result": True,
-"reason": ""}}`) when the state matches or re-raises the `BluetoothTimeout` when
-it does not. The read rides the existing connection and never wakes the vehicle;
-if an infotainment prover cannot be read because the car is asleep, the original
-timeout is re-raised.
+"reason": ""}}`) when the state matches or re-raises the
+`BluetoothUnconfirmedCommand` when it does not. The read rides the existing
+connection and never wakes the vehicle; if an infotainment prover cannot be
+read because the car is asleep, the unconfirmed command timeout is re-raised.
 
 Commands whose outcome cannot be derived or read - true toggles, relative volume
 steps, and ack-only actions such as `flash_lights()` or `trigger_homelink()` -
-re-raise the timeout unchanged, exactly as with verification off. Currently
+raise `BluetoothUnconfirmedCommand`, exactly as with verification off. Currently
 verified commands and their provers:
 
 | Command | Prover | Confirmed when |
@@ -391,8 +406,8 @@ such as `now_playing_artist`, `now_playing_title`, and the
 so track/favorite navigation is best verified by the command acknowledgement and
 paired with the inverse command when an exact state fingerprint is unavailable.
 
-If a BLE write times out, re-read the relevant state before assuming whether the
-command applied. A timeout while waiting for the GATT write response is not
+If a BLE command times out after the write, re-read the relevant state before
+assuming whether the command applied. A `BluetoothUnconfirmedCommand` is not
 enough to prove either failure or success.
 
 `remote_boombox(sound)` also uses the INFO-domain signed-command transport and
@@ -416,7 +431,7 @@ Each command logs one terse, grep-friendly line:
 ```
 command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
 command=set_charge_limit transport=teslemetry result=True reason=
-command=mediaPlayAction transport=bluetooth result=error error=BluetoothTimeout: Bluetooth command timed out waiting for vehicle response.
+command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command timed out waiting for an ack after being written to the vehicle; it may have executed anyway.
 ```
 
 `transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
@@ -424,7 +439,10 @@ commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 `RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
 For BLE commands run with `verify_commands=True`, a resolved timeout logs a
-second line with `verify_commands=resolved` and the confirmed result. `Router`
-additionally logs `command=... backend=<ClassName> result=...` for each
-backend it tries, so a BLE-primary/cloud-fallback setup shows exactly which
-backend served each call and why a failover happened.
+second line with `verify_commands=resolved` and the confirmed result; an
+unresolved timeout logs `verify_commands=unresolved` before the
+`BluetoothUnconfirmedCommand` propagates. `Router` additionally logs
+`command=... backend=<ClassName> result=...` for each backend it tries, or
+`result=unconfirmed` when it stops instead of failing over, so a
+BLE-primary/cloud-fallback setup shows exactly which backend served each call
+and why a failover happened.

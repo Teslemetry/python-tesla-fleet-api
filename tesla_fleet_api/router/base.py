@@ -11,7 +11,7 @@ from typing import (
 )
 
 from tesla_fleet_api.const import LOGGER
-from tesla_fleet_api.exceptions import TeslaFleetError
+from tesla_fleet_api.exceptions import BluetoothUnconfirmedCommand, TeslaFleetError
 
 PrimaryT = TypeVar("PrimaryT")
 SecondaryT = TypeVar("SecondaryT")
@@ -49,13 +49,14 @@ class Router(Generic[PrimaryT, SecondaryT]):
     backend that has them.
 
     Dispatch to a callable performs *per-command* failover: the backends that
-    expose the method are attempted in order, and if one raises any exception (a
-    connection failure or a mid-command transport error such as a write/notify
-    failure or a disconnect), the same call is automatically retried on the next
-    backend that has it, with the same arguments. The error only propagates when
-    every applicable backend fails, in which case the last error is raised.
-    Each attempted backend emits a ``DEBUG`` log line with the routed command
-    name, backend class, and success/error result.
+    expose the method are attempted in order, and if one raises any exception
+    other than ``BluetoothUnconfirmedCommand`` (a connection failure or a
+    mid-command transport error such as a write/notify failure or a disconnect),
+    the same call is automatically retried on the next backend that has it, with
+    the same arguments. The error only propagates when every applicable backend
+    fails, in which case the last error is raised. Each attempted backend emits
+    a ``DEBUG`` log line with the routed command name, backend class, and
+    success/error result.
 
     .. warning::
 
@@ -69,6 +70,13 @@ class Router(Generic[PrimaryT, SecondaryT]):
         commands should gate dispatch with an explicit health check (so a failing
         primary skips the primary entirely rather than replaying down the chain)
         or call the underlying backends directly.
+
+    ``BluetoothUnconfirmedCommand`` (a lost ack for a mutating BLE command
+    already written to the vehicle - see that exception's docstring) is the
+    one exception per-command failover deliberately does **not** replay: the
+    command may already have executed, so trying the next backend would risk
+    double-executing it. It propagates to the caller unchanged instead of
+    triggering failover, on any backend in the chain.
 
     The health check may be provided as a ``bool``, a sync callable, or an async
     callable returning ``bool``. It gates **only the first backend** (the
@@ -151,6 +159,18 @@ class Router(Generic[PrimaryT, SecondaryT]):
             for backend, attr in targets[start:]:
                 try:
                     result = await _maybe_await(attr(*args, **kwargs))
+                except BluetoothUnconfirmedCommand as e:
+                    # The command may have already executed on this backend;
+                    # replaying it on the next one risks double-executing it.
+                    # Surface the ambiguity to the caller instead of failing over.
+                    LOGGER.debug(
+                        "command=%s backend=%s result=unconfirmed error=%s: %s",
+                        name,
+                        type(backend).__name__,
+                        type(e).__name__,
+                        e,
+                    )
+                    raise
                 except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
                     last_exc = e
                     LOGGER.debug(
