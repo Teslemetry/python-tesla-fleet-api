@@ -42,6 +42,9 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
+Responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
+
 ## Backup Reserve
 
 You can adjust the backup reserve for a specific energy site using its ID:

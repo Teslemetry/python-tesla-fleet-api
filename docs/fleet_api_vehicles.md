@@ -48,6 +48,9 @@ command=vehicle_data transport=fleet result=success
 command=set_charge_limit transport=fleet result=True reason=
 ```
 
+Responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
+
 ## Create a Vehicle
 
 You can create a `VehicleFleet` instance for a specific vehicle using its VIN:

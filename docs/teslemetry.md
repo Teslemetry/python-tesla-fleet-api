@@ -33,6 +33,9 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
+Responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
+
 ## Ping
 
 The `ping` method sends a ping request to the Teslemetry server.

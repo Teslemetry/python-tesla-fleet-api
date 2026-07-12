@@ -257,6 +257,8 @@ Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
 Routers also emit `backend=<ClassName>` lines for each backend tried. See
 [Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
 for examples and the signed-command naming details.
+REST responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
 
 ### Teslemetry
 

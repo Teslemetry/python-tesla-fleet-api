@@ -145,7 +145,11 @@ class TeslaFleetApi(Tesla):
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = {},
     ) -> dict[str, Any]:
-        """Send a request to the Tesla Fleet API."""
+        """Send a request to the Tesla Fleet API.
+
+        Returns the decoded JSON body as provided by the service, including
+        JSON-legal non-object bodies such as ``null``, lists, or scalars.
+        """
 
         # Trailing path segment (e.g. "door_lock", "vehicle_data") as the
         # debug-log command name; the full path (with VIN) is already logged

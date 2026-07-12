@@ -531,6 +531,8 @@ command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfir
 commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 `RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
+REST responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
 For BLE commands run with `confirmation="verify"`, a resolved state-read logs a
 second line with `verify_commands=resolved` and the confirmed result; an
 unresolved read logs `verify_commands=unresolved` before the exception
