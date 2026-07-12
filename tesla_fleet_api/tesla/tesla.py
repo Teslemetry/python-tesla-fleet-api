@@ -21,7 +21,11 @@ def _owner_only_opener(file: str, flags: int) -> int:
     """Open a new file exclusively, born at mode 0o600 with no chmod window."""
     fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        os.fchmod(fd, 0o600)
+        fchmod = getattr(os, "fchmod", None)
+        if fchmod is not None:
+            fchmod(fd, 0o600)
+        else:
+            os.chmod(file, 0o600)
     except OSError:
         os.close(fd)
         raise

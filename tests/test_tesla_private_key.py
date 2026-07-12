@@ -38,6 +38,39 @@ def _rsa_pem(key: rsa.RSAPrivateKey) -> bytes:
 
 
 class GetPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
+    async def test_new_key_file_uses_chmod_without_fchmod(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+
+            with (
+                mock.patch("tesla_fleet_api.tesla.tesla.os.fchmod", new=None),
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.os.chmod", wraps=os.chmod
+                ) as chmod,
+            ):
+                await Tesla().get_private_key(path)
+
+            chmod.assert_called_once_with(path, 0o600)
+
+    async def test_new_key_file_closes_fd_when_chmod_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+
+            with (
+                mock.patch("tesla_fleet_api.tesla.tesla.os.fchmod", new=None),
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.os.chmod",
+                    side_effect=OSError("chmod failed"),
+                ),
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.os.close", wraps=os.close
+                ) as close,
+            ):
+                with self.assertRaises(OSError):
+                    await Tesla().get_private_key(path)
+
+            close.assert_called_once()
+
     async def test_new_key_file_is_owner_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "private_key.pem")
