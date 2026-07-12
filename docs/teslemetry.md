@@ -544,10 +544,14 @@ asyncio.run(main())
 
 Teslemetry energy sites support the same raw `list_authorized_clients` command
 as Fleet API energy sites, plus a typed `get_authorized_clients` helper for
-consumers that need to inspect the client list. The typed helper keeps the raw
-response available on `raw`, parses each client into an `AuthorizedClient`, and
-preserves the distinction between an unknown response (`clients is None`) and
-an explicitly empty client list (`clients == []`).
+consumers that need to inspect the client list. Tesla has not published a
+schema for this pairing endpoint, so the typed helper only unwraps the one
+envelope shape and models the two client fields (`public_key`, `state`)
+confirmed by the endpoint's own known consumer; `clients` is always a list -
+a null response body, an unrecognized response shape, and an explicitly
+empty client list all mean "no authorized clients" and return `[]`. `state`
+is typed as `AuthorizedClientState`. The raw response is still available on
+`raw` for anything not modeled.
 
 ```python
 async def main():
@@ -560,11 +564,8 @@ async def main():
         energy_site = teslemetry.energySites.create(12345)
 
         result = await energy_site.get_authorized_clients()
-        if result.clients is None:
-            print("Authorized clients are not available in this response")
-        else:
-            for client in result.clients:
-                print(client.description, client.state, client.public_key)
+        for client in result.clients:
+            print(client.public_key, client.state)
 
         # The untyped response is still available when callers need the exact
         # Teslemetry payload.
