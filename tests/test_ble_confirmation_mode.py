@@ -46,6 +46,23 @@ class DefaultsTests(TestCase):
         self.assertFalse(vehicle.optimistic)
         self.assertFalse(vehicle.verify_commands)
 
+    def test_invalid_confirmation_raises_value_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "confirmation must be one of"):
+            VehicleBluetooth(
+                _make_parent(),
+                VIN,
+                confirmation="verfy",  # type: ignore[arg-type]
+            )
+
+    def test_factory_invalid_confirmation_raises_value_error(self) -> None:
+        vehicles = Vehicles(_make_parent())
+
+        with self.assertRaisesRegex(ValueError, "confirmation must be one of"):
+            vehicles.createBluetooth(
+                VIN,
+                confirmation="verfy",  # type: ignore[arg-type]
+            )
+
 
 class DeprecatedArgMappingTests(TestCase):
     """The deprecated ``verify_commands``/``optimistic`` constructor aliases."""

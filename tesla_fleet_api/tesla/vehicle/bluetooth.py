@@ -457,6 +457,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             )
             if optimistic:
                 confirmation = "optimistic"
+        if confirmation not in ("optimistic", "ack", "verify"):
+            raise ValueError(
+                'confirmation must be one of "optimistic", "ack", or "verify"'
+            )
         self.confirmation = confirmation
         self.keepalive_interval = keepalive_interval
         self.raise_unconfirmed = raise_unconfirmed
