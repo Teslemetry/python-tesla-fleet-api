@@ -13,7 +13,7 @@ import asyncio
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bleak.exc import BleakError
+from bleak.exc import BleakCharacteristicNotFoundError, BleakError
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothTransportError
@@ -245,12 +245,21 @@ class SendTimeoutTests(IsolatedAsyncioTestCase):
 
 
 class SendTransportErrorTests(IsolatedAsyncioTestCase):
-    async def test_mid_write_gatt_failure_raises_bluetooth_transport_error(
+    """Write-level failures split on delivery certainty.
+
+    A characteristic-resolution failure is raised by bleak synchronously,
+    before any backend I/O - provably pre-submission, so it stays
+    ``BluetoothTransportError``. Everything else from ``write_gatt_char``
+    happens inside backend I/O, where delivery can't be proven either way, so
+    it is treated like a lost ack (``BluetoothTimeout``), not a provable miss.
+    """
+
+    async def test_characteristic_not_found_raises_bluetooth_transport_error(
         self,
     ) -> None:
         vehicle = _make_vehicle()
         msg = _outgoing()
-        underlying = BleakError("write failed")
+        underlying = BleakCharacteristicNotFoundError("write-uuid")
         vehicle.client.write_gatt_char = AsyncMock(side_effect=underlying)
 
         with self.assertRaises(BluetoothTransportError) as ctx:
@@ -258,7 +267,21 @@ class SendTransportErrorTests(IsolatedAsyncioTestCase):
 
         self.assertIs(ctx.exception.__cause__, underlying)
 
-    async def test_write_gatt_timeout_raises_bluetooth_transport_error(
+    async def test_mid_write_gatt_failure_raises_bluetooth_timeout(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        msg = _outgoing()
+        underlying = BleakError("write failed")
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=underlying)
+
+        with self.assertRaises(BluetoothTimeout) as ctx:
+            await vehicle._send(msg, "protobuf_message_as_bytes")
+
+        self.assertNotIsInstance(ctx.exception, BluetoothTransportError)
+        self.assertIs(ctx.exception.__cause__, underlying)
+
+    async def test_write_gatt_timeout_raises_bluetooth_timeout(
         self,
     ) -> None:
         # bleak-esphome surfaces an aioesphomeapi GATT-write timeout as a
@@ -271,9 +294,10 @@ class SendTransportErrorTests(IsolatedAsyncioTestCase):
         )
         vehicle.client.write_gatt_char = AsyncMock(side_effect=underlying)
 
-        with self.assertRaises(BluetoothTransportError) as ctx:
+        with self.assertRaises(BluetoothTimeout) as ctx:
             await vehicle._send(msg, "protobuf_message_as_bytes")
 
+        self.assertNotIsInstance(ctx.exception, BluetoothTransportError)
         self.assertIs(ctx.exception.__cause__, underlying)
 
 

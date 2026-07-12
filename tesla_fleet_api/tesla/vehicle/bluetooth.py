@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
-from bleak.exc import BleakError
+from bleak.exc import BleakCharacteristicNotFoundError, BleakError
 from bleak_retry_connector import MAX_CONNECT_ATTEMPTS, establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.message import DecodeError
@@ -302,15 +302,26 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
     Callers can catch failures from this class with a single ``TeslaFleetError``,
-    but distinct outcomes hide behind that base: a connect/notify/write
-    transport failure before any command reached the vehicle
-    (``BluetoothTransportError``), an ack-wait timeout for a *mutating*
-    command that was already written to the vehicle and whose outcome is
-    genuinely unresolved (``BluetoothUnconfirmedCommand``), a mutating command
-    *proven* not to have taken effect (``BluetoothCommandFailed``), and a
-    plain response-wait timeout for anything else, e.g. a state read
+    but distinct outcomes hide behind that base: a connect/notify failure or a
+    GATT write provably rejected before it reached backend I/O
+    (``BluetoothTransportError``), an ack-wait timeout or a submitted-then-
+    ambiguous GATT write for a *mutating* command whose outcome is genuinely
+    unresolved (``BluetoothUnconfirmedCommand``), a mutating command *proven*
+    not to have taken effect (``BluetoothCommandFailed``), and a plain
+    response-wait timeout - including a write that entered backend I/O and
+    then failed or timed out - for anything else, e.g. a state read
     (``BluetoothTimeout``). Each preserves the underlying failure in its cause
     chain when one exists.
+
+    The write/transport split matters because a GATT write that reaches the
+    backend (D-Bus, CoreBluetooth, an ESPHome proxy) cannot be proven to have
+    missed the vehicle just because the local call then failed or timed out -
+    field data shows such writes executing on the car about as often as not.
+    Only a rejection the local BLE stack raises before touching the backend
+    (e.g. ``BleakCharacteristicNotFoundError`` resolving the write
+    characteristic) is provably pre-submission and safe for a fallback router
+    to retry; everything past that point is treated as ambiguous, exactly
+    like a lost ack.
 
     A ``BluetoothUnconfirmedCommand`` (RKE/closure actions, HVAC/media/charging
     commands, ``wake_up``) means the vehicle can have executed the command
@@ -332,9 +343,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     flag per rung:
 
     - ``"optimistic"``: return success as soon as the GATT write is confirmed,
-      consulting nothing else. Only a write/transport failure
-      (``BluetoothTransportError``) still raises. Pure speed mode - the caller
-      owns any state verification it wants afterward.
+      consulting nothing else. A write provably rejected before submission
+      still raises ``BluetoothTransportError`` unconditionally; a
+      submitted-then-ambiguous write instead follows ``raise_unconfirmed``
+      like every other rung, since even this "don't wait" mode must not let a
+      fallback router blind-retry a command that may already have reached
+      the car. Otherwise the caller owns any state verification it wants
+      afterward.
     - ``"ack"`` (default): wait for the addressed ack. For a VCSEC actuation
       with a derivable expected end state (currently lock/unlock only), the
       wait also races a matching status broadcast against the ack: the vehicle
@@ -370,13 +385,16 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     ``raise_unconfirmed`` (default ``False``) is the orthogonal question of what
     to do once a ladder genuinely cannot resolve - the ack/broadcast wait
     (and, under ``"verify"``, the prover read) neither confirmed nor
-    contradicted the request. Default ``False`` resolves that case as a
-    best-effort success; ``True`` raises ``BluetoothUnconfirmedCommand``
-    instead. It is moot under ``confirmation="optimistic"``, which is never
-    inconclusive. A car-side rejection carried in an ack, any proven
-    non-application (``BluetoothCommandFailed``), and write failures are
-    unaffected by this flag and always raise - it only converts the "could not
-    determine what happened" outcome.
+    contradicted the request, or the GATT write itself entered backend I/O and
+    then failed/timed out with delivery unprovable either way. Default
+    ``False`` resolves that case as a best-effort success; ``True`` raises
+    ``BluetoothUnconfirmedCommand`` instead. This applies under every
+    ``confirmation`` level, including ``"optimistic"`` - a write's delivery
+    can be ambiguous even when no reply is ever awaited. A car-side rejection
+    carried in an ack, any proven non-application (``BluetoothCommandFailed``),
+    and a write provably rejected before submission
+    (``BluetoothTransportError``) are unaffected by this flag and always
+    raise - it only converts the "could not determine what happened" outcome.
 
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
@@ -704,12 +722,36 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
                 write_complete = True
                 self._last_activity = time.monotonic()
-            # bleak-esphome converts an aioesphomeapi write timeout into a
-            # builtin TimeoutError, not a BleakError, so catch both to keep the
-            # GATT-write transport failure within TeslaFleetError.
-            except (BleakError, TimeoutError) as e:
+            except BleakCharacteristicNotFoundError as e:
+                # Raised synchronously while bleak resolves WRITE_UUID against
+                # the connected GATT server, strictly before any backend I/O -
+                # the write never reached the transport, so a fallback router
+                # can safely retry it on another backend.
                 self._disarm_broadcast_confirmation(domain, broadcast_watcher)
                 raise BluetoothTransportError from e
+            except (BleakError, TimeoutError) as e:
+                # Every other failure here originates inside backend I/O (the
+                # D-Bus/CoreBluetooth/ESPHome-proxy write call) where delivery
+                # can't be proven either way - bleak-esphome maps an
+                # aioesphomeapi write timeout to a bare TimeoutError, and even
+                # a BleakError can follow actual radio transmission (field
+                # data: 2 of 3 such write failures had executed). Give an
+                # already-armed broadcast watcher the rest of the window to
+                # resolve it, then raise BluetoothTimeout - not
+                # BluetoothTransportError - so a mutating command's
+                # confirmation ladder treats this like a lost ack instead of a
+                # proven miss a router could safely retry.
+                if broadcast_future is not None:
+                    try:
+                        async with asyncio.timeout(timeout):
+                            return await broadcast_future
+                    except TimeoutError:
+                        pass
+                    finally:
+                        self._disarm_broadcast_confirmation(domain, broadcast_watcher)
+                else:
+                    self._disarm_broadcast_confirmation(domain, broadcast_watcher)
+                raise BluetoothTimeout from e
 
             if optimistic:
                 return RoutableMessage()
@@ -1032,11 +1074,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         if not self._sessions[domain].ready:
             raise BluetoothTimeout()
 
-    async def _send_optimistic(self, domain: Domain, command: bytes) -> dict[str, Any]:
+    async def _send_optimistic(
+        self, domain: Domain, command: bytes, name: str
+    ) -> dict[str, Any]:
         """Sign and write a mutating command without waiting for any reply.
 
-        Only a write/transport failure (``BluetoothTransportError``) raises;
-        the caller owns any state verification it wants afterward.
+        A write provably rejected before submission (``BluetoothTransportError``)
+        always raises. A write that entered backend I/O and then failed or
+        timed out is delivery-ambiguous - even this "don't wait" mode must not
+        let a fallback router blind-retry a command that may already have
+        reached the car - so it follows ``raise_unconfirmed`` like every other
+        rung instead of raising unconditionally.
         """
         session = self._sessions[domain]
         async with session.lock:
@@ -1044,7 +1092,11 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 msg = await self._commandHmac(session, command)
             else:
                 msg = await self._commandAes(session, command)
-        await self._send(msg, "protobuf_message_as_bytes", optimistic=True)
+        try:
+            await self._send(msg, "protobuf_message_as_bytes", optimistic=True)
+        except BluetoothTimeout as timeout:
+            unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
+            return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
         return {"response": {"result": True, "reason": ""}}
 
     def _unconfirmed_outcome(
@@ -1101,15 +1153,19 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         non-application and raises ``BluetoothCommandFailed`` - not the
         ambiguous ``BluetoothUnconfirmedCommand`` - since a fallback router
         can safely fail over on a command proven not to have applied. With
-        ``confirmation="optimistic"``, the write itself is the whole outcome
-        and none of this ladder runs. With ``raise_unconfirmed`` off, only a
-        ladder that is still genuinely unresolved resolves as a best-effort
-        success instead of raising - see the class docstring.
+        ``confirmation="optimistic"``, a confirmed write is the whole outcome
+        and no ack/broadcast/verify rung runs - but a delivery-ambiguous write
+        failure still follows ``raise_unconfirmed`` (see ``_send_optimistic``).
+        With ``raise_unconfirmed`` off, only a ladder that is still genuinely
+        unresolved resolves as a best-effort success instead of raising - see
+        the class docstring.
         """
         await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
         if self.confirmation == "optimistic":
             return await self._send_optimistic(
-                Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+                Domain.DOMAIN_VEHICLE_SECURITY,
+                command.SerializeToString(),
+                vcsec_command_name(command),
             )
         plan = _vcsec_verify_plan(command)
         try:
@@ -1149,7 +1205,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
         if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
-                Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+                Domain.DOMAIN_INFOTAINMENT,
+                command.SerializeToString(),
+                infotainment_command_name(command),
             )
         try:
             return await super()._sendInfotainment(command)

@@ -71,7 +71,16 @@ class BluetoothCommandFailed(TeslaFleetError):
 
 
 class BluetoothTransportError(TeslaFleetError):
-    """The Bluetooth transport (connect, notify, or GATT write) failed before a vehicle response could be awaited."""
+    """The Bluetooth transport failed provably before the write reached the vehicle.
+
+    Covers connect, notify-subscribe, and GATT characteristic-resolution
+    failures - all raised by the local BLE stack before any bytes go out over
+    the air, so a fallback router can safely retry the same command
+    elsewhere. A GATT write that entered backend I/O and then failed or timed
+    out is delivery-ambiguous instead (the write may have reached the
+    vehicle) and raises ``BluetoothTimeout``/``BluetoothUnconfirmedCommand``,
+    not this class - see those exceptions.
+    """
 
     message = (
         "The Bluetooth transport failed before a vehicle response could be awaited."

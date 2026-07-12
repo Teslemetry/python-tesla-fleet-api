@@ -43,6 +43,12 @@ class Tesla:
             )
             async with aiofiles.open(path, "wb") as key_file:
                 await key_file.write(pem)
+            try:
+                from os import chmod
+
+                chmod(path, 0o600)
+            except OSError:
+                pass
         else:
             try:
                 async with aiofiles.open(path, "rb") as key_file:

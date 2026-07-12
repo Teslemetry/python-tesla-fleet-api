@@ -16,6 +16,7 @@ from typing import Any, cast
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
+from bleak.exc import BleakError
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.exceptions import (
@@ -354,3 +355,41 @@ class DefaultsAndFlagInterplayTests(IsolatedAsyncioTestCase):
         result = await asyncio.wait_for(task, timeout=2.0)
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
+
+class WriteFailureBroadcastRaceTests(IsolatedAsyncioTestCase):
+    """A GATT write failure/timeout still lets an already-armed broadcast resolve it.
+
+    The broadcast watcher is armed before ``write_gatt_char`` is even called,
+    so a matching broadcast that arrives while (or shortly after)
+    ``write_gatt_char`` raises must still confirm the command - the write
+    failure doesn't prove the command never reached the vehicle.
+    """
+
+    async def test_broadcast_confirms_despite_write_failure(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 5.0
+
+        async def write_raises_then_broadcasts(*_: Any) -> None:
+            vehicle._on_message(_locked_broadcast())
+            await asyncio.sleep(0)
+            raise BleakError("write failed")
+
+        vehicle.client.write_gatt_char = AsyncMock(
+            side_effect=write_raises_then_broadcasts
+        )
+
+        result = await asyncio.wait_for(vehicle.door_lock(), timeout=0.5)
+
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
+    async def test_write_timeout_with_no_broadcast_raises_unconfirmed(self) -> None:
+        vehicle = _make_vehicle(raise_unconfirmed=True)
+        vehicle._actuation_timeout = 0.05
+
+        vehicle.client.write_gatt_char = AsyncMock(
+            side_effect=TimeoutError("write timed out")
+        )
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await asyncio.wait_for(vehicle.door_lock(), timeout=1.0)
