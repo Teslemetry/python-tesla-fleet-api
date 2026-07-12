@@ -754,6 +754,10 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             domain, command, attempt, expects_data=expects_data
         )
 
+    async def _ensure_handshake(self, domain: Domain) -> None:
+        if not self._sessions[domain].ready:
+            await self._handshake(domain)
+
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Send a VCSEC actuation.
 
@@ -763,6 +767,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         docstring. With ``verify_commands`` on, that ambiguity is resolved by
         reading back state before it can reach the caller.
         """
+        await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
         try:
             return await super()._sendVehicleSecurity(command)
         except BluetoothTimeout as timeout:
@@ -794,6 +799,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
         Same unconfirmed-ack semantics as ``_sendVehicleSecurity`` - see there.
         """
+        await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
         try:
             return await super()._sendInfotainment(command)
         except BluetoothTimeout as timeout:

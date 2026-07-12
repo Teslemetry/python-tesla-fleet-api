@@ -16,11 +16,14 @@ Uses the same mocked-``_send`` harness as ``test_ble_command_verification.py``.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
 )
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
@@ -83,6 +86,17 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
 
         with self.assertRaises(BluetoothUnconfirmedCommand):
             await vehicle.door_lock()
+
+    async def test_handshake_timeout_raises_plain_bluetooth_timeout(self) -> None:
+        vehicle, send = self.make_vehicle()
+        sessions = cast("dict[int, Any]", getattr(vehicle, "_sessions"))
+        sessions[Domain.DOMAIN_VEHICLE_SECURITY].epoch = None
+        send.side_effect = BluetoothTimeout()
+
+        with self.assertRaises(BluetoothTimeout) as ctx:
+            await vehicle.door_lock()
+
+        self.assertNotIsInstance(ctx.exception, BluetoothUnconfirmedCommand)
 
 
 class ReadTimeoutTests(MockedBleTransportTestCase):
