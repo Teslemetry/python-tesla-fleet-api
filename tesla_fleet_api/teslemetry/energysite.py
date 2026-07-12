@@ -103,8 +103,8 @@ class AuthorizedClients:
 def _authorized_clients_list(payload: Any) -> list[Any]:
     """Return the raw authorized-clients list from a command response, or [].
 
-    A precise, single-path unwrap of the one documented envelope - not a
-    search across candidate wrapper keys.
+    A precise, single-path unwrap of the one confirmed envelope - not a
+    search across candidate wrapper keys for this undocumented endpoint.
     """
     if payload is None:
         return []
