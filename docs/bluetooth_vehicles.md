@@ -130,15 +130,25 @@ retry `BluetoothTimeout` with backoff. Keep one BLE connection open across
 related commands when possible instead of reconnecting for each command.
 
 `VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
-subclass, when the BLE connection, notification setup, or GATT command write
-fails before a vehicle response can be awaited. The original transport
-exception is available as the exception's `__cause__`; this includes
-`bleak.exc.BleakError` and builtin `TimeoutError` from ESPHome proxy connect,
-notify, or write timeouts. Catch `TeslaFleetError` to handle both transport
-failures and response-wait timeout failures with one library error hierarchy,
-or catch `BluetoothTransportError` separately when you need to distinguish a
-transport failure - the command never reached the vehicle - from a vehicle
-timeout after the command or request was written.
+subclass, when the BLE connection, notification setup, or GATT characteristic
+resolution fails *before any write reaches the backend* - provably before the
+command could have reached the vehicle. The original transport exception is
+available as the exception's `__cause__`. Catch `TeslaFleetError` to handle
+both transport failures and response-wait timeout failures with one library
+error hierarchy, or catch `BluetoothTransportError` separately when you need
+to distinguish a provable pre-submission failure from a vehicle timeout after
+the command or request may have been written.
+
+A GATT write that enters the backend (D-Bus, CoreBluetooth, an ESPHome proxy)
+and then fails or times out - `bleak.exc.BleakError`, or builtin `TimeoutError`
+from an ESPHome proxy write timeout - is treated as delivery-ambiguous rather
+than a transport failure: field measurements show such writes reaching the
+vehicle about as often as not, so it raises `BluetoothTimeout` (or, for a
+mutating command, `BluetoothUnconfirmedCommand` through the same ladder as a
+lost ack - see "Mutating Command Timeouts" below) instead of
+`BluetoothTransportError`. A `Router`/`VehicleRouter` primary-fallback chain
+(see the top-level README) must not replay a command on this exception, which
+is exactly why it is *not* classified as a transport failure.
 
 A response-wait timeout for a *mutating* command (RKE/closure actions,
 HVAC/media/charging commands, `wake_up()`) that stays genuinely unresolved is
@@ -195,6 +205,19 @@ outcome. `confirmation` (constructor/factory arg, default `"ack"`) picks how
 many of those steps run; `raise_unconfirmed` (default `False`) picks what the
 last step does when nothing above it settled the question.
 
+| Rung | Runs under | On success | On failure/ambiguity |
+| --- | --- | --- | --- |
+| GATT write | every level, incl. `"optimistic"` | proceeds to the next rung (or returns, under `"optimistic"`) | pre-submission (e.g. characteristic not found): `BluetoothTransportError`, always raises. Submitted-then-failed/timed-out: ambiguous, races any armed broadcast watcher, then falls to the "genuinely unresolved" outcome below |
+| Addressed ack + broadcast race (lock/unlock only) | `"ack"`, `"verify"` | returns a confirmed result | a proven mismatch at window end raises `BluetoothCommandFailed`; a lost ack with nothing else confirming falls to the next rung |
+| State-read verification | `"verify"` only | returns a confirmed result | a proven mismatch raises `BluetoothCommandFailed`; an unreadable prover (e.g. asleep car) falls to the next rung |
+| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success. `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
+
+The GATT write rung's ambiguous case is not hypothetical: field measurements
+of write-level transport errors found some had already executed on the
+vehicle despite the local write call failing, so a submitted-then-ambiguous
+write is deliberately routed into the same unresolved-outcome handling as a
+lost ack rather than treated as a safe-to-retry transport failure.
+
 **Broadcast confirmation (lock/unlock, `"ack"` and `"verify"`).** The vehicle
 keeps emitting unsolicited VCSEC status broadcasts on the same notification
 subscription even when it emits no addressed ack for a lock/unlock actuation.
@@ -244,20 +267,25 @@ falls through to `raise_unconfirmed` regardless of `confirmation`.
 
 - `confirmation="optimistic"` returns success as soon as the GATT write is
   confirmed, consulting nothing else for every mutating command. This is pure
-  speed mode: the caller owns any state verification it wants afterward. Only
-  a write/transport failure (`BluetoothTransportError`) still raises. `ping()`
-  (the one non-mutating infotainment send) is exempt and always waits for its
-  real reply.
+  speed mode: the caller owns any state verification it wants afterward. A
+  write provably rejected before submission (`BluetoothTransportError`) always
+  raises; a submitted-then-ambiguous write instead follows `raise_unconfirmed`
+  like every other rung, since even this mode must not let a fallback router
+  blind-retry a command that may already have reached the car. `ping()` (the
+  one non-mutating infotainment send) is exempt and always waits for its real
+  reply.
 - `raise_unconfirmed=True` changes what happens only when the whole ladder is
   exhausted without a definite answer - the ack/broadcast wait timed out and,
   under `confirmation="verify"`, the prover read itself could not complete
-  (e.g. the car is asleep). Instead of the default best-effort success
-  (`{"response": {"result": True, "reason": ""}}`), that ambiguous case raises
-  `BluetoothUnconfirmedCommand`. A car-side rejection carried in an ack, any
-  proven non-application (`BluetoothCommandFailed`), and write failures are
-  unaffected and always raise - this flag converts only the "could not
-  determine what happened" outcome. It is moot under
-  `confirmation="optimistic"`, which is never inconclusive.
+  (e.g. the car is asleep) - or the GATT write itself entered backend I/O and
+  then failed/timed out with delivery unprovable either way. Instead of the
+  default best-effort success (`{"response": {"result": True, "reason": ""}}`),
+  that ambiguous case raises `BluetoothUnconfirmedCommand`. A car-side
+  rejection carried in an ack, any proven non-application
+  (`BluetoothCommandFailed`), and a write provably rejected before submission
+  (`BluetoothTransportError`) are unaffected and always raise - this flag
+  converts only the "could not determine what happened" outcome, and applies
+  under every `confirmation` level including `"optimistic"`.
 
 ```python
 vehicle = tesla_bluetooth.vehicles.create(

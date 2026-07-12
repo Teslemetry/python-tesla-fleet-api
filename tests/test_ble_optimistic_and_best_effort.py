@@ -5,13 +5,14 @@ Both form one outcome contract on top of the existing confirmation ladder
 
 - ``optimistic`` (default off) skips the ack wait and ``verify_commands``
   entirely for a mutating command - a confirmed GATT write is the whole
-  outcome. Only a write/transport failure still raises.
+  outcome. A write provably rejected before submission always raises; a
+  submitted-then-ambiguous write instead follows ``raise_unconfirmed``.
 - ``raise_unconfirmed`` (default on, i.e. current behavior) controls what
   happens when the ladder is exhausted without a positive or negative
   answer: off resolves that ambiguous case as a best-effort success instead
   of raising ``BluetoothUnconfirmedCommand``. A car-side rejection, a
-  ``verify_commands`` state mismatch, and write failures are unaffected and
-  always raise.
+  ``verify_commands`` state mismatch, and a write provably rejected before
+  submission are unaffected and always raise.
 """
 
 from __future__ import annotations
@@ -61,6 +62,27 @@ class OptimisticModeTests(MockedBleTransportTestCase):
 
         with self.assertRaises(BluetoothTransportError):
             await vehicle.door_lock()
+
+    async def test_ambiguous_write_follows_raise_unconfirmed_true(self) -> None:
+        # A submitted-then-timed-out write is delivery-ambiguous, not a
+        # provable pre-submission failure, so it must not raise
+        # BluetoothTransportError - it follows raise_unconfirmed like every
+        # other rung, even though optimistic mode never waits for a reply.
+        vehicle, send = self.make_vehicle(optimistic=True, raise_unconfirmed=True)
+        send.side_effect = BluetoothTimeout()
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await vehicle.door_lock()
+
+    async def test_ambiguous_write_resolves_best_effort_when_raise_unconfirmed_off(
+        self,
+    ) -> None:
+        vehicle, send = self.make_vehicle(optimistic=True, raise_unconfirmed=False)
+        send.side_effect = BluetoothTimeout()
+
+        result = await vehicle.door_lock()
+
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
     async def test_non_mutating_infotainment_is_unaffected(self) -> None:
         # ping() always waits for its real reply; optimistic mode is only for

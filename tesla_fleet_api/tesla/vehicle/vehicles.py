@@ -57,9 +57,9 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
-        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
-        matching state broadcast, ``"verify"`` additionally reads back state
-        on an ack/broadcast timeout.
+        skips reply waits after a confirmed write, ``"ack"`` (default) waits
+        for an addressed ack or a matching state broadcast, ``"verify"``
+        additionally reads back state on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
@@ -113,9 +113,9 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
-        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
-        matching state broadcast, ``"verify"`` additionally reads back state
-        on an ack/broadcast timeout.
+        skips reply waits after a confirmed write, ``"ack"`` (default) waits
+        for an addressed ack or a matching state broadcast, ``"verify"``
+        additionally reads back state on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
@@ -150,9 +150,9 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         ``confirmation`` sets the confirmation ladder depth: ``"optimistic"``
-        consults nothing, ``"ack"`` (default) waits for an addressed ack or a
-        matching state broadcast, ``"verify"`` additionally reads back state
-        on an ack/broadcast timeout.
+        skips reply waits after a confirmed write, ``"ack"`` (default) waits
+        for an addressed ack or a matching state broadcast, ``"verify"``
+        additionally reads back state on an ack/broadcast timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
