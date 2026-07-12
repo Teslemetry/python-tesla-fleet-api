@@ -20,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.exceptions import (
     BluetoothCommandFailed,
+    BluetoothTimeout,
     BluetoothUnconfirmedCommand,
 )
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
@@ -139,6 +140,20 @@ async def _wait_until_watching(
 
 
 class BroadcastConfirmsBeforeAckTests(IsolatedAsyncioTestCase):
+    async def test_broadcast_arriving_during_gatt_write_confirms_lock(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 5.0
+
+        async def write_then_broadcast(*_: Any) -> None:
+            vehicle._on_message(_locked_broadcast())
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_broadcast)
+
+        result = await asyncio.wait_for(vehicle.door_lock(), timeout=0.5)
+
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
     async def test_broadcast_confirms_lock_before_actuation_timeout(self) -> None:
         vehicle = _make_vehicle()
         vehicle._actuation_timeout = 5.0  # generous ceiling the broadcast must beat
@@ -239,6 +254,34 @@ class MismatchedBroadcastTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(BluetoothUnconfirmedCommand):
             await asyncio.wait_for(vehicle.door_lock(), timeout=1.0)
+
+
+class SimultaneousCompletionTests(IsolatedAsyncioTestCase):
+    async def test_successful_broadcast_wins_over_simultaneous_response_timeout(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        broadcast_future = asyncio.get_running_loop().create_future()
+        broadcast = _locked_broadcast()
+        broadcast_future.set_result(broadcast)
+
+        async def response_timeout(*_: Any) -> RoutableMessage:
+            raise BluetoothTimeout()
+
+        vehicle._await_response = response_timeout  # type: ignore[method-assign]
+
+        result = await vehicle._await_response_or_broadcast(
+            DOMAIN,
+            RoutableMessage(),
+            "protobuf_message_as_bytes",
+            False,
+            0.0,
+            broadcast_future,
+            None,
+            [],
+        )
+
+        self.assertIs(result, broadcast)
 
 
 class DefaultsAndFlagInterplayTests(IsolatedAsyncioTestCase):

@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothUnconfirmedCommand
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles, VehiclesBluetooth
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
@@ -74,6 +75,42 @@ class DeprecatedArgMappingTests(TestCase):
             vehicle = VehicleBluetooth(_make_parent(), VIN, verify_commands=False)
 
         self.assertEqual(vehicle.confirmation, "ack")
+
+    def test_positional_verify_commands_maps_to_confirmation(self) -> None:
+        with self.assertWarns(DeprecationWarning):
+            vehicle = VehicleBluetooth(_make_parent(), VIN, None, None, True)
+
+        self.assertEqual(vehicle.confirmation, "verify")
+
+    def test_positional_optimistic_slot_still_maps_to_optimistic(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            vehicle = VehicleBluetooth(
+                _make_parent(), VIN, None, None, False, None, True
+            )
+
+        self.assertEqual(vehicle.confirmation, "optimistic")
+        self.assertFalse(vehicle.raise_unconfirmed)
+
+    def test_vehicle_factory_preserves_old_positional_bool_order(self) -> None:
+        vehicles = Vehicles(_make_parent())
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            vehicle = vehicles.createBluetooth(VIN, True, None, True, False)
+
+        self.assertEqual(vehicle.confirmation, "optimistic")
+        self.assertFalse(vehicle.raise_unconfirmed)
+
+    def test_bluetooth_collection_preserves_old_positional_bool_order(self) -> None:
+        vehicles = VehiclesBluetooth(_make_parent())
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            vehicle = vehicles.createBluetooth(VIN, None, None, True, None, True, False)
+
+        self.assertEqual(vehicle.confirmation, "optimistic")
+        self.assertFalse(vehicle.raise_unconfirmed)
 
     def test_optimistic_true_dominates_verify_commands_true(self) -> None:
         # Matches the old three-boolean dominance order: optimistic wins.

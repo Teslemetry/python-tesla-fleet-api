@@ -47,12 +47,12 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
     def createBluetooth(
         self,
         vin: str,
-        confirmation: BluetoothConfirmation = "ack",
+        confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool | None = None,
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-        optimistic: bool | None = None,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -73,9 +73,9 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
             vin,
             confirmation=confirmation,
             keepalive_interval=keepalive_interval,
+            optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
             verify_commands=verify_commands,
-            optimistic=optimistic,
         )
         self[vin] = vehicle
         return vehicle
@@ -103,12 +103,12 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        confirmation: BluetoothConfirmation = "ack",
+        confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool | None = None,
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-        optimistic: bool | None = None,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -130,9 +130,9 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
             device,
             confirmation,
             keepalive_interval,
+            optimistic,
             raise_unconfirmed,
             verify_commands=verify_commands,
-            optimistic=optimistic,
         )
 
     def createBluetooth(
@@ -140,12 +140,12 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        confirmation: BluetoothConfirmation = "ack",
+        confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool | None = None,
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-        optimistic: bool | None = None,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -168,9 +168,9 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
             device,
             confirmation=confirmation,
             keepalive_interval=keepalive_interval,
-            verify_commands=verify_commands,
             optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
+            verify_commands=verify_commands,
         )
         self[vin] = vehicle
         return vehicle

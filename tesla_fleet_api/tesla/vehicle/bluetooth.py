@@ -103,6 +103,7 @@ if TYPE_CHECKING:
     from tesla_fleet_api.tesla.tesla import Tesla
 
 BluetoothParentT = TypeVar("BluetoothParentT", bound="Tesla")
+_BroadcastWatcher = Callable[[RoutableMessage], None]
 
 
 def prependLength(message: bytes) -> bytearray:
@@ -416,23 +417,30 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         vin: str,
         key: ec.EllipticCurvePrivateKey | None = None,
         device: BLEDevice | None = None,
-        confirmation: BluetoothConfirmation = "ack",
+        confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool | None = None,
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-        optimistic: bool | None = None,
     ):
         """Initialize a BLE-connected vehicle.
 
-        ``verify_commands`` and ``optimistic`` are deprecated keyword-only
-        aliases for ``confirmation="verify"``/``confirmation="optimistic"``
-        respectively; passing either emits a ``DeprecationWarning`` and maps
-        onto ``confirmation``, overriding any value passed there (a ``True``
+        ``verify_commands`` and ``optimistic`` are deprecated aliases for
+        ``confirmation="verify"``/``confirmation="optimistic"`` respectively;
+        passing either emits a ``DeprecationWarning`` and maps onto
+        ``confirmation``, overriding any value passed there (a ``True``
         ``optimistic`` wins over a ``True`` ``verify_commands`` if both are
         somehow passed, matching the old dominance order).
         """
         super().__init__(parent, vin, key)
+        if isinstance(confirmation, bool):
+            warnings.warn(
+                'positional verify_commands is deprecated; pass confirmation="verify" instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            confirmation = "verify" if confirmation else "ack"
         if verify_commands is not None:
             warnings.warn(
                 'verify_commands is deprecated; pass confirmation="verify" instead.',
@@ -679,6 +687,13 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
             await self.connect_if_needed()
             assert self.client is not None
+            mismatches: list[VehicleStatus] = []
+            broadcast_future: asyncio.Future[RoutableMessage] | None = None
+            broadcast_watcher: _BroadcastWatcher | None = None
+            if confirm_broadcast is not None and not optimistic:
+                broadcast_future, broadcast_watcher = self._arm_broadcast_confirmation(
+                    domain, confirm_broadcast, mismatches
+                )
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
                 self._last_activity = time.monotonic()
@@ -686,6 +701,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             # builtin TimeoutError, not a BleakError, so catch both to keep the
             # GATT-write transport failure within TeslaFleetError.
             except (BleakError, TimeoutError) as e:
+                self._disarm_broadcast_confirmation(domain, broadcast_watcher)
                 raise BluetoothTransportError from e
 
             if optimistic:
@@ -696,7 +712,14 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                     domain, msg, requires, expects_data, timeout
                 )
             return await self._await_response_or_broadcast(
-                domain, msg, requires, expects_data, timeout, confirm_broadcast
+                domain,
+                msg,
+                requires,
+                expects_data,
+                timeout,
+                broadcast_future,
+                broadcast_watcher,
+                mismatches,
             )
 
     async def _await_response(
@@ -754,7 +777,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         requires: str,
         expects_data: bool,
         timeout: float,
-        confirm_broadcast: Callable[[VehicleStatus], bool],
+        broadcast_future: asyncio.Future[RoutableMessage] | None,
+        broadcast_watcher: _BroadcastWatcher | None,
+        mismatches: list[VehicleStatus],
     ) -> RoutableMessage:
         """Race the addressed reply against a matching state broadcast.
 
@@ -771,19 +796,27 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         transport can fail over safely instead of risking a double-apply on a
         genuinely unresolved ack.
         """
-        mismatches: list[VehicleStatus] = []
         response_task = asyncio.ensure_future(
             self._await_response(domain, msg, requires, expects_data, timeout)
         )
-        broadcast_task = asyncio.ensure_future(
-            self._await_broadcast_confirmation(domain, confirm_broadcast, mismatches)
-        )
+        assert broadcast_future is not None
+        broadcast_task = asyncio.ensure_future(broadcast_future)
         try:
             done, _ = await asyncio.wait(
                 {response_task, broadcast_task}, return_when=asyncio.FIRST_COMPLETED
             )
             if response_task in done:
-                return response_task.result()
+                response_exc = response_task.exception()
+                if response_exc is None:
+                    return response_task.result()
+                if (
+                    isinstance(response_exc, BluetoothTimeout)
+                    and broadcast_task in done
+                ):
+                    broadcast_exc = broadcast_task.exception()
+                    if broadcast_exc is None:
+                        return broadcast_task.result()
+                raise response_exc
             return broadcast_task.result()
         except BluetoothTimeout as timeout_exc:
             if mismatches:
@@ -796,14 +829,15 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 if not task.done():
                     task.cancel()
             await asyncio.gather(response_task, broadcast_task, return_exceptions=True)
+            self._disarm_broadcast_confirmation(domain, broadcast_watcher)
 
-    async def _await_broadcast_confirmation(
+    def _arm_broadcast_confirmation(
         self,
         domain: Domain,
         confirm_broadcast: Callable[[VehicleStatus], bool],
         mismatches: list[VehicleStatus],
-    ) -> RoutableMessage:
-        """Wait for a broadcast whose decoded VCSEC status satisfies ``confirm_broadcast``.
+    ) -> tuple[asyncio.Future[RoutableMessage], _BroadcastWatcher]:
+        """Arm a watcher for broadcasts satisfying ``confirm_broadcast``.
 
         Live-verified: a VCSEC actuation's addressed ack can be lost while the
         vehicle keeps emitting its status broadcast on the same notification
@@ -829,11 +863,16 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 mismatches.append(status)
 
         self._broadcast_watchers[domain] = on_broadcast
-        try:
-            return await future
-        finally:
-            if self._broadcast_watchers.get(domain) is on_broadcast:
-                del self._broadcast_watchers[domain]
+        return future, on_broadcast
+
+    def _disarm_broadcast_confirmation(
+        self, domain: Domain, broadcast_watcher: _BroadcastWatcher | None
+    ) -> None:
+        if (
+            broadcast_watcher is not None
+            and self._broadcast_watchers.get(domain) is broadcast_watcher
+        ):
+            del self._broadcast_watchers[domain]
 
     # Group 12: VCSEC closures (Bluetooth-only for individual doors)
 
