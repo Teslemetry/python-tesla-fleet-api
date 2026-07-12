@@ -189,6 +189,12 @@ asyncio.run(main())
 
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
+`get_private_key(path)` loads an existing EC private key or creates a new
+unencrypted PEM key file. Newly created key files are created owner-readable
+and owner-writable only (`0600`) from the start, with no write-then-chmod
+window, and concurrent creators fall back to reading the file that won the
+create race.
+
 `VehicleBluetooth` keeps a held BLE connection alive during idle periods by
 default with a passive GATT read about every 20 seconds. Pass
 `keepalive_interval=None` (or `0`) when creating the vehicle to disable it;

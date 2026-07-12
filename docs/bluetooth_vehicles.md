@@ -39,6 +39,12 @@ async def main():
 asyncio.run(main())
 ```
 
+`get_private_key(path)` loads an existing EC private key or creates a new
+unencrypted PEM key file. Newly created key files are created owner-readable
+and owner-writable only (`0600`) from the start, with no write-then-chmod
+window, and concurrent creators fall back to reading the file that won the
+create race.
+
 ## Keeping the Connection Alive (`keepalive_interval`)
 
 An idle held BLE link to the vehicle drops on its own after roughly 42 seconds

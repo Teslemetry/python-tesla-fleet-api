@@ -69,9 +69,10 @@ class Tesla:
     ) -> ec.EllipticCurvePrivateKey:
         """Get or create the private key.
 
-        A newly created key file is opened with O_EXCL so it is born at mode
-        0o600 with no world-readable window. If another process wins the
-        create race, its file is read instead of raising.
+        The private key is stored as an unencrypted PEM file. A newly created
+        key file is opened with O_EXCL so it is born at mode 0o600 with no
+        world-readable window. If another process wins the create race, its
+        file is read instead of raising.
         """
         if not exists(path):
             self.private_key = ec.generate_private_key(
@@ -148,10 +149,10 @@ class Tesla:
         """Get or create an RSA private key for energy gateway client registration.
 
         The default 4096-bit key matches the format expected by the Powerwall
-        TEDapi v1r LAN protocol. A newly created key file is opened with
-        O_EXCL so it is born at mode 0o600 with no world-readable window. If
-        another process wins the create race, its file is read instead of
-        raising.
+        TEDapi v1r LAN protocol. The private key is stored as an unencrypted
+        PEM file. A newly created key file is opened with O_EXCL so it is born
+        at mode 0o600 with no world-readable window. If another process wins
+        the create race, its file is read instead of raising.
         """
         if not exists(path):
             self.rsa_private_key = rsa.generate_private_key(
