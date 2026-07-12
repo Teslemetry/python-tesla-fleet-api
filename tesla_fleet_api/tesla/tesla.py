@@ -92,9 +92,7 @@ class Tesla:
             except FileExistsError:
                 value = await _load_pem_private_key(path, retry_invalid=True)
                 if not isinstance(value, ec.EllipticCurvePrivateKey):
-                    raise AssertionError(
-                        "Loaded key is not an EllipticCurvePrivateKey"
-                    )
+                    raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
                 self.private_key = value
                 return self.private_key
 
