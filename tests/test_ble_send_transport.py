@@ -267,6 +267,19 @@ class SendTransportErrorTests(IsolatedAsyncioTestCase):
 
         self.assertIs(ctx.exception.__cause__, underlying)
 
+    async def test_disconnected_client_raises_bluetooth_transport_error_without_write(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        msg = _outgoing()
+        vehicle.client.is_connected = False
+        vehicle.client.write_gatt_char = AsyncMock()
+
+        with self.assertRaises(BluetoothTransportError):
+            await vehicle._send(msg, "protobuf_message_as_bytes")
+
+        vehicle.client.write_gatt_char.assert_not_awaited()
+
     async def test_mid_write_gatt_failure_raises_bluetooth_timeout(
         self,
     ) -> None:

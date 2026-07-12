@@ -718,6 +718,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 broadcast_future, broadcast_watcher = self._arm_broadcast_confirmation(
                     domain, confirm_broadcast, mismatches, lambda: write_complete
                 )
+            if not self.client.is_connected:
+                self._disarm_broadcast_confirmation(domain, broadcast_watcher)
+                raise BluetoothTransportError
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
                 write_complete = True

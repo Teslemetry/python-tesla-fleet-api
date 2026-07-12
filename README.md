@@ -172,12 +172,14 @@ default with a passive GATT read about every 20 seconds. Pass
 leaving it enabled can keep an already-awake car awake longer, so disconnect or
 disable keepalive when vehicle sleep is preferred.
 
-BLE connect/notify and GATT write failures from `VehicleBluetooth` raise
+BLE connect/notify failures, and GATT writes rejected before backend I/O, raise
 `BluetoothTransportError`, a `TeslaFleetError` subclass, with the original
-transport exception chained as `__cause__`. Mutating BLE commands use a
-confirmation ladder controlled by `confirmation` (`"ack"` by default) and
-`raise_unconfirmed` (`False` by default): an inconclusive lost acknowledgement
-resolves as best-effort success unless you opt in to
+transport exception chained as `__cause__` when available. A GATT write that
+entered backend I/O and then failed or timed out is delivery-ambiguous and
+raises `BluetoothTimeout`/`BluetoothUnconfirmedCommand` instead. Mutating BLE
+commands use a confirmation ladder controlled by `confirmation` (`"ack"` by
+default) and `raise_unconfirmed` (`False` by default): an inconclusive lost
+acknowledgement resolves as best-effort success unless you opt in to
 `BluetoothUnconfirmedCommand`, while a command proven not to have applied raises
 `BluetoothCommandFailed`. See [Bluetooth for Vehicles](docs/bluetooth_vehicles.md)
 for the full ladder. Catch `TeslaFleetError` to handle Bluetooth transport
