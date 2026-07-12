@@ -97,6 +97,7 @@ this repo's `EnergySite` (`get_system_info()`, `live_status()`,
 gateway over the LAN:
 
 ```python
+import aiohttp
 from aiopowerwall import PowerwallClient
 from aiopowerwall.energysite import PowerwallEnergySite
 
@@ -116,6 +117,8 @@ async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEner
 ## 4. Compose local + cloud with EnergySiteRouter
 
 ```python
+import asyncio
+import aiohttp
 from tesla_fleet_api import Teslemetry
 from tesla_fleet_api.router import EnergySiteRouter
 
