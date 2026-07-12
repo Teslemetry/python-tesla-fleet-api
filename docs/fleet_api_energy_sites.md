@@ -357,6 +357,8 @@ asyncio.run(main())
 
 Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
 
+These commands are unsigned and cloud-only - the actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods on `EnergySite` are documented as accepted by the gateway without physically taking effect for that reason. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+
 `get_rsa_private_key(path)` loads an existing RSA private key for gateway
 client registration or creates a new unencrypted PEM key file. Newly created
 key files are created owner-readable and owner-writable only (`0600`) from the
