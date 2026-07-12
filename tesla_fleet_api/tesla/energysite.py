@@ -122,7 +122,7 @@ class EnergySite:
         Used to pair a local key (typically RSA-4096 in DER PKCS1 format) with
         a Powerwall so it can be used for the LAN TEDapi v1r protocol. After
         registration the key may be in PENDING or PENDING_VERIFICATION state
-        until the gateway confirms it — see ``AuthorizedClientState``. The
+        until the gateway confirms it - see ``AuthorizedClientState``. The
         gateway may auto-verify via cloud, otherwise a physical breaker
         toggle is required to confirm. Use ``list_authorized_clients`` to
         poll for VERIFIED state.
@@ -133,7 +133,8 @@ class EnergySite:
                 base64-encoded string.
             description: Human-readable description of the client.
             key_type: The type of key being registered (default RSA).
-            authorized_client_type: The authorized client type (default LAN).
+            authorized_client_type: The authorized client type (default
+                CUSTOMER_MOBILE_APP for LAN clients).
         """
         if isinstance(public_key, bytes):
             public_key_b64 = base64.b64encode(public_key).decode("ascii")
@@ -206,21 +207,19 @@ class EnergySite:
     ) -> dict[str, Any]:
         """Set the island mode on the energy gateway.
 
-        Physically opens or closes the grid contactor on Powerwall 2/3.
-        Requires the command to be sent as a signed RoutableMessage via
-        the ``device_command`` endpoint — unsigned ``grpc_command`` calls
-        are accepted but do not physically operate the contactor.
-
-        Confirmed working on PW2 (firmware 26.10.0) and PW3 (firmware
-        26.2.1) when delivered as a signed ``routable_message`` with
-        ``force=True`` for off-grid.
+        This cloud method sends an unsigned ``grpc_command``. Gateways have
+        been observed accepting that request without physically operating
+        the grid contactor, so callers must verify the resulting state
+        rather than trusting a success-shaped response. For a signed local
+        LAN control path, pair an RSA key with ``add_authorized_client`` and
+        compose an aiopowerwall local backend with ``EnergySiteRouter``.
 
         Args:
             mode: EnergyIslandMode.OFF_GRID (6) to island,
                   EnergyIslandMode.ON_GRID (1) to reconnect.
             force: Whether to force the contactor operation. Defaults to
                    True for OFF_GRID, False for ON_GRID. Required for
-                   off-grid — without force=True the gateway acknowledges
+                   off-grid - without force=True the gateway acknowledges
                    the command but does not physically open the contactor.
         """
         if force is None:
@@ -232,18 +231,20 @@ class EnergySite:
         )
 
     async def go_off_grid(self) -> dict[str, Any]:
-        """Physically disconnect from the grid (open contactor).
+        """Request off-grid mode through the cloud ``grpc_command`` path.
 
         Convenience wrapper around set_island_mode(OFF_GRID, force=True).
-        Confirmed working on both Powerwall 2 and Powerwall 3 when sent
-        as a signed RoutableMessage via the device_command endpoint.
+        This may be accepted without physically opening the contactor; verify
+        state after the call.
         """
         return await self.set_island_mode(EnergyIslandMode.OFF_GRID)
 
     async def reconnect_grid(self) -> dict[str, Any]:
-        """Reconnect to the grid (close contactor).
+        """Request on-grid mode through the cloud ``grpc_command`` path.
 
-        Convenience wrapper around set_island_mode(ON_GRID).
+        Convenience wrapper around set_island_mode(ON_GRID). This may be
+        accepted without physically closing the contactor; verify state
+        after the call.
         """
         return await self.set_island_mode(EnergyIslandMode.ON_GRID)
 

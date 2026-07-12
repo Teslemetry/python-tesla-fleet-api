@@ -4,8 +4,9 @@ This library and the sibling [`aiopowerwall`](https://pypi.org/project/aiopowerw
 library are designed to be used together to give an energy gateway (Powerwall
 2/3) both a local, signed LAN control path and a cloud fallback:
 
-- **This repo holds the keypair lifecycle.** `Tesla.get_rsa_private_key` /
-  `rsa_public_der_pkcs1` generate and persist the RSA key, and
+- **This repo holds the keypair lifecycle.** `Tesla.get_rsa_private_key`
+  generates or loads and persists the RSA key, `rsa_public_der_pkcs1` derives
+  the public key bytes for registration, and
   `EnergySite.add_authorized_client` registers its public half with the
   gateway over the cloud. `aiopowerwall` deliberately does **not** implement
   registration - it only consumes an already-paired key.
