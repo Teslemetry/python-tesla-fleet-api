@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import base64
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, cast
 
 from tesla_fleet_api.const import (
     AuthorizedClientKeyType,
@@ -9,6 +10,106 @@ from tesla_fleet_api.const import (
     Method,
 )
 from tesla_fleet_api.tesla.energysite import EnergySite, EnergySites
+
+
+def _field(payload: dict[str, Any], *keys: str) -> Any:
+    """Return the first present key's value.
+
+    Checks key presence rather than truthiness, so a legal falsy value
+    (``0``, ``False``, ``""``) is never mistaken for a missing field.
+    """
+    for key in keys:
+        if key in payload:
+            return payload[key]
+    return None
+
+
+def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
+    return AuthorizedClient(
+        public_key=_field(payload, "public_key", "publicKey"),
+        description=_field(payload, "description"),
+        key_type=_field(payload, "key_type", "keyType"),
+        authorized_client_type=_field(
+            payload, "authorized_client_type", "authorizedClientType"
+        ),
+        state=_field(payload, "state", "authorized_client_state"),
+        raw=payload,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedClient:
+    """One entry from a Teslemetry ``list_authorized_clients`` response.
+
+    Tesla has not published this response shape, so fields are read
+    defensively (snake_case and camelCase key variants). ``raw`` keeps the
+    original entry for any field not modeled here.
+    """
+
+    public_key: str | None
+    description: str | None
+    key_type: int | None
+    authorized_client_type: int | None
+    state: int | None
+    raw: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedClients:
+    """Parsed result of :meth:`TeslemetryEnergySite.get_authorized_clients`.
+
+    ``clients`` is ``None`` when the outcome is genuinely unknown: the
+    response body itself was ``None`` (Teslemetry may return a null body),
+    or no ``authorized_clients``/``authorizedClients`` key could be found in
+    it. An explicitly present but empty client list is authoritative and
+    distinct from that - it means the gateway reports zero authorized
+    clients, not "keep looking elsewhere in the payload" - so it is
+    returned as ``[]``, never coerced to ``None``.
+    """
+
+    clients: list[AuthorizedClient] | None
+    raw: Any
+
+
+def _find_authorized_clients_list(payload: Any) -> tuple[bool, list[Any]]:
+    """Locate the raw authorized-clients list in a command response.
+
+    Returns ``(found, entries)``. ``found`` is ``False`` only when no
+    ``authorized_clients``/``authorizedClients`` key exists anywhere
+    checked (the payload itself, or its ``response`` wrapper) - an unknown
+    outcome, never conflated with a found-but-empty list.
+    """
+    body: Any = payload
+    if isinstance(body, dict):
+        body = cast("dict[str, Any]", body)
+        wrapped = _field(body, "response")
+        if isinstance(wrapped, dict):
+            body = cast("dict[str, Any]", wrapped)
+    if isinstance(body, list):
+        return True, cast("list[Any]", body)
+    if not isinstance(body, dict):
+        return False, []
+    body = cast("dict[str, Any]", body)
+    for key in ("authorized_clients", "authorizedClients"):
+        if key in body:
+            value = body[key]
+            return True, cast("list[Any]", value) if isinstance(value, list) else []
+    return False, []
+
+
+def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
+    """Parse a raw ``list_authorized_clients()`` response into typed clients."""
+    if payload is None:
+        return AuthorizedClients(clients=None, raw=None)
+    found, entries = _find_authorized_clients_list(payload)
+    if not found:
+        return AuthorizedClients(clients=None, raw=payload)
+    clients = [
+        _parse_client(cast("dict[str, Any]", entry))
+        for entry in entries
+        if isinstance(entry, dict)
+    ]
+    return AuthorizedClients(clients=clients, raw=payload)
 
 
 class TeslemetryEnergySite(EnergySite):
@@ -76,6 +177,17 @@ class TeslemetryEnergySite(EnergySite):
             Method.GET,
             f"api/1/energy_sites/{self.energy_site_id}/command/authorized_clients",
         )
+
+    async def get_authorized_clients(self) -> AuthorizedClients:
+        """List authorized clients on the energy gateway, parsed into a typed result.
+
+        Prefer this over :meth:`list_authorized_clients` for consumers that
+        need to inspect the client list - it centralizes the response
+        parsing (including the null-body and empty-vs-absent-list cases)
+        here instead of in the caller. See :class:`AuthorizedClients` for
+        the exact semantics.
+        """
+        return _parse_authorized_clients(await self.list_authorized_clients())
 
     async def remove_authorized_client(
         self, params: dict[str, Any] | None = None
