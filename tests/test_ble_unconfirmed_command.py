@@ -122,9 +122,7 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
             msg: RoutableMessage, _requires: str, **_kwargs: Any
         ) -> RoutableMessage:
             return RoutableMessage(
-                from_destination=Destination(
-                    domain=Domain.DOMAIN_VEHICLE_SECURITY
-                ),
+                from_destination=Destination(domain=Domain.DOMAIN_VEHICLE_SECURITY),
                 request_uuid=msg.uuid,
             )
 
