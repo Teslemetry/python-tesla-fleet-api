@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: tesla_fleet_api
-Version: 1.7.2
+Version: 1.7.3
 Summary: Tesla Fleet API library for Python
 Author-email: Brett Adams <hello@teslemetry.com>
 License-Expression: Apache-2.0
