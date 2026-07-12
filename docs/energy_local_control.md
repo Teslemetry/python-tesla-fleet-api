@@ -61,20 +61,21 @@ async def pair_key(session: aiohttp.ClientSession, energy_site_id: int) -> None:
     # Creates tedapi_rsa_private.pem (mode 0600) on first run, or loads
     # the existing key on subsequent runs.
     await api.get_rsa_private_key("tedapi_rsa_private.pem")
+    public_key_b64 = api.rsa_public_der_pkcs1_b64
 
     energy_site = api.energySites.create(energy_site_id)
     await energy_site.add_authorized_client(
-        api.rsa_public_der_pkcs1,
+        public_key_b64,
         description="My local control client",
     )
 
     for _ in range(30):
         result = await energy_site.find_authorized_clients()
-        verified = [
-            c for c in result.clients
-            if c.state == AuthorizedClientState.VERIFIED
-        ]
-        if verified:
+        if any(
+            c.public_key == public_key_b64
+            and c.state == AuthorizedClientState.VERIFIED
+            for c in result.clients
+        ):
             return
         await asyncio.sleep(10)
     raise TimeoutError("Key was not verified in time")
