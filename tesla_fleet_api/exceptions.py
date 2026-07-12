@@ -29,17 +29,19 @@ class BluetoothTimeout(TeslaFleetError):
 
 
 class BluetoothUnconfirmedCommand(BluetoothTimeout):
-    """A mutating Bluetooth command timed out after it was written to the vehicle.
+    """A mutating Bluetooth command has an unresolved delivery outcome.
 
-    The write succeeded, so the vehicle may have executed the command even
-    though its ack was lost - lock/unlock have both been observed to execute
-    despite this exception. Treat the outcome as unknown, not failed: verify
-    by reading state back when possible, and never blind-retry or re-issue
-    the same command on another transport, since it may already have run.
+    The write either completed and its ack was lost, or it entered backend I/O
+    and then failed/timed out in a way that cannot prove whether the vehicle
+    received it. The vehicle may have executed the command - lock/unlock have
+    both been observed to execute despite this exception. Treat the outcome as
+    unknown, not failed: verify by reading state back when possible, and never
+    blind-retry or re-issue the same command on another transport, since it may
+    already have run.
 
     Subclasses ``BluetoothTimeout`` so existing ``except BluetoothTimeout``
     handling still catches it, while remaining distinguishable from it (and
-    from ``BluetoothTransportError``, the genuine pre-write transport
+    from ``BluetoothTransportError``, the provable pre-submission transport
     failure) for callers that want to react to the ambiguity specifically -
     e.g. a BLE-primary/cloud-fallback router should not fail over on this
     exception, since failing over risks double-executing the command.

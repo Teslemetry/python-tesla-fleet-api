@@ -30,7 +30,11 @@ class Tesla:
     async def get_private_key(
         self, path: str = "private_key.pem"
     ) -> ec.EllipticCurvePrivateKey:
-        """Get or create the private key."""
+        """Get or create the private key.
+
+        The private key is stored as an unencrypted PEM file with permissions
+        0o600 when created.
+        """
         if not exists(path):
             self.private_key = ec.generate_private_key(
                 ec.SECP256R1(), default_backend()
