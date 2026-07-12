@@ -1,6 +1,7 @@
 """Tesla Fleet API for Python."""
 
 import base64
+import os
 from os.path import exists
 import aiofiles
 
@@ -14,6 +15,11 @@ from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+
+
+def _owner_only_opener(file: str, flags: int) -> int:
+    """Open a new file exclusively, born at mode 0o600 with no chmod window."""
+    return os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 
 
 class Tesla:
@@ -33,42 +39,42 @@ class Tesla:
     ) -> ec.EllipticCurvePrivateKey:
         """Get or create the private key.
 
-        The private key is stored as an unencrypted PEM file with permissions
-        0o600 when created.
+        A newly created key file is opened with O_EXCL so it is born at mode
+        0o600 with no world-readable window. If another process wins the
+        create race, its file is read instead of raising.
         """
         if not exists(path):
             self.private_key = ec.generate_private_key(
                 ec.SECP256R1(), default_backend()
             )
-            # save the key
             pem = self.private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption(),
             )
-            async with aiofiles.open(path, "wb") as key_file:
-                await key_file.write(pem)
             try:
-                from os import chmod
-
-                chmod(path, 0o600)
-            except OSError:
+                async with aiofiles.open(
+                    path, "wb", opener=_owner_only_opener
+                ) as key_file:
+                    await key_file.write(pem)
+                return self.private_key
+            except FileExistsError:
                 pass
-        else:
-            try:
-                async with aiofiles.open(path, "rb") as key_file:
-                    key_data = await key_file.read()
-                value = serialization.load_pem_private_key(
-                    key_data, password=None, backend=default_backend()
-                )
-            except FileNotFoundError:
-                raise FileNotFoundError(f"Private key file not found at {path}")
-            except PermissionError:
-                raise PermissionError(f"Permission denied when trying to read {path}")
 
-            if not isinstance(value, ec.EllipticCurvePrivateKey):
-                raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
-            self.private_key = value
+        try:
+            async with aiofiles.open(path, "rb") as key_file:
+                key_data = await key_file.read()
+            value = serialization.load_pem_private_key(
+                key_data, password=None, backend=default_backend()
+            )
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Private key file not found at {path}")
+        except PermissionError:
+            raise PermissionError(f"Permission denied when trying to read {path}")
+
+        if not isinstance(value, ec.EllipticCurvePrivateKey):
+            raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
+        self.private_key = value
         return self.private_key
 
     @property
@@ -110,8 +116,10 @@ class Tesla:
         """Get or create an RSA private key for energy gateway client registration.
 
         The default 4096-bit key matches the format expected by the Powerwall
-        TEDapi v1r LAN protocol. The private key is stored as an unencrypted
-        PEM file with permissions 0o600 when created.
+        TEDapi v1r LAN protocol. A newly created key file is opened with
+        O_EXCL so it is born at mode 0o600 with no world-readable window. If
+        another process wins the create race, its file is read instead of
+        raising.
         """
         if not exists(path):
             self.rsa_private_key = rsa.generate_private_key(
@@ -124,23 +132,23 @@ class Tesla:
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption(),
             )
-            async with aiofiles.open(path, "wb") as key_file:
-                await key_file.write(pem)
             try:
-                from os import chmod
-
-                chmod(path, 0o600)
-            except OSError:
+                async with aiofiles.open(
+                    path, "wb", opener=_owner_only_opener
+                ) as key_file:
+                    await key_file.write(pem)
+                return self.rsa_private_key
+            except FileExistsError:
                 pass
-        else:
-            async with aiofiles.open(path, "rb") as key_file:
-                key_data = await key_file.read()
-            value = serialization.load_pem_private_key(
-                key_data, password=None, backend=default_backend()
-            )
-            if not isinstance(value, rsa.RSAPrivateKey):
-                raise AssertionError("Loaded key is not an RSAPrivateKey")
-            self.rsa_private_key = value
+
+        async with aiofiles.open(path, "rb") as key_file:
+            key_data = await key_file.read()
+        value = serialization.load_pem_private_key(
+            key_data, password=None, backend=default_backend()
+        )
+        if not isinstance(value, rsa.RSAPrivateKey):
+            raise AssertionError("Loaded key is not an RSAPrivateKey")
+        self.rsa_private_key = value
         return self.rsa_private_key
 
     @property
