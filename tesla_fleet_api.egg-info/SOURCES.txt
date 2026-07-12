@@ -61,9 +61,11 @@ tesla_fleet_api/tessie/__init__.py
 tesla_fleet_api/tessie/tessie.py
 tesla_fleet_api/tessie/vehicle.py
 tests/test_auto_seat_climate.py
+tests/test_ble_broadcast_confirmation.py
 tests/test_ble_charging_commands.py
 tests/test_ble_climate_commands.py
 tests/test_ble_command_verification.py
+tests/test_ble_confirmation_mode.py
 tests/test_ble_expects_data.py
 tests/test_ble_keepalive.py
 tests/test_ble_message_routing.py
@@ -72,10 +74,12 @@ tests/test_ble_mocked_commands.py
 tests/test_ble_mocked_media_commands.py
 tests/test_ble_mocked_state_readers.py
 tests/test_ble_nav_misc_commands.py
+tests/test_ble_optimistic_and_best_effort.py
 tests/test_ble_pair.py
 tests/test_ble_reassembling_buffer.py
 tests/test_ble_send_transport.py
 tests/test_ble_unconfirmed_command.py
+tests/test_ble_write_timeout_router.py
 tests/test_command_counter_lock.py
 tests/test_command_logging.py
 tests/test_cross_transport_parity.py
@@ -84,4 +88,5 @@ tests/test_firmware_at_least.py
 tests/test_fleet_auth_refresh.py
 tests/test_power_mode_commands.py
 tests/test_router.py
+tests/test_tesla_private_key.py
 tests/test_tessie_vehicle_params.py

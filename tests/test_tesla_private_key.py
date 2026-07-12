@@ -10,6 +10,7 @@ winner's file instead of raising.
 from __future__ import annotations
 
 import stat
+import os
 import tempfile
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, mock
@@ -43,6 +44,19 @@ class GetPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             tesla = Tesla()
 
             await tesla.get_private_key(path)
+
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+
+    async def test_new_key_file_is_owner_only_with_restrictive_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+            tesla = Tesla()
+            old_umask = os.umask(0o777)
+            try:
+                await tesla.get_private_key(path)
+            finally:
+                os.umask(old_umask)
 
             mode = stat.S_IMODE(Path(path).stat().st_mode)
             self.assertEqual(mode, 0o600)
@@ -83,6 +97,19 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             tesla = Tesla()
 
             await tesla.get_rsa_private_key(path, key_size=1024)
+
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+
+    async def test_new_key_file_is_owner_only_with_restrictive_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            tesla = Tesla()
+            old_umask = os.umask(0o777)
+            try:
+                await tesla.get_rsa_private_key(path, key_size=1024)
+            finally:
+                os.umask(old_umask)
 
             mode = stat.S_IMODE(Path(path).stat().st_mode)
             self.assertEqual(mode, 0o600)

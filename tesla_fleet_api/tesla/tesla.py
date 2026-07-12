@@ -19,7 +19,13 @@ from cryptography.hazmat.backends import default_backend
 
 def _owner_only_opener(file: str, flags: int) -> int:
     """Open a new file exclusively, born at mode 0o600 with no chmod window."""
-    return os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+    except OSError:
+        os.close(fd)
+        raise
+    return fd
 
 
 class Tesla:
