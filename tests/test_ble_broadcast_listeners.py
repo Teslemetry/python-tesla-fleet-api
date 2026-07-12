@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from tesla_fleet_api.exceptions import BluetoothTimeout
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Destination,
@@ -361,6 +362,74 @@ class GenericBroadcastListenerTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(seen, [])
+
+
+class ListenerExceptionIsolationTests(IsolatedAsyncioTestCase):
+    async def test_failing_generic_listener_does_not_block_later_listeners(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        seen: list[RoutableMessage] = []
+
+        def fail(_: RoutableMessage) -> None:
+            raise RuntimeError("listener failed")
+
+        vehicle.listen_broadcast(DOMAIN, fail)
+        vehicle.listen_broadcast(DOMAIN, seen.append)
+
+        msg = _status_broadcast(
+            VehicleStatus(vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED)
+        )
+        vehicle._on_message(msg)
+
+        self.assertEqual(seen, [msg])
+
+    async def test_failing_typed_listener_does_not_block_later_listeners(self) -> None:
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+
+        def fail(_: VehicleLockState_E) -> None:
+            raise BluetoothTimeout()
+
+        vehicle.listen_vehicle_lock_state(fail)
+        vehicle.listen_vehicle_lock_state(seen.append)
+
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        self.assertEqual(seen, [VehicleLockState_E.VEHICLELOCKSTATE_LOCKED])
+
+    async def test_failing_listener_does_not_block_later_addressed_reply(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+
+        def fail(_: VehicleLockState_E) -> None:
+            raise RuntimeError("listener failed")
+
+        vehicle.listen_vehicle_lock_state(fail)
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        reply = _addressed_status(
+            vehicle,
+            VehicleStatus(
+                vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED
+            ),
+        )
+        vehicle._on_message(reply)
+
+        self.assertIs(vehicle._queues[DOMAIN].get_nowait(), reply)
 
 
 class AddressedMessagesNeverReachListenersTests(IsolatedAsyncioTestCase):

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Callable, TypeVar
 
+from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     Domain,
     RoutableMessage,
@@ -29,6 +30,8 @@ from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
 Unsubscribe = Callable[[], None]
 
 T = TypeVar("T")
+
+_FATAL_CALLBACK_ERRORS = (KeyboardInterrupt, SystemExit)
 
 
 class BroadcastListeners:
@@ -58,13 +61,21 @@ class BroadcastListeners:
 
         return unsubscribe
 
+    def _dispatch_callback(self, callback: Callable[[T], None], value: T) -> None:
+        try:
+            callback(value)
+        except _FATAL_CALLBACK_ERRORS:
+            raise
+        except BaseException:
+            LOGGER.exception("BLE broadcast listener callback failed")
+
     def _dispatch_domain_listeners(self, domain: Domain, msg: RoutableMessage) -> None:
         for callback in list(self._domain_listeners.get(domain, ())):
-            callback(msg)
+            self._dispatch_callback(callback, msg)
 
     def _dispatch_status_listeners(self, status: VehicleStatus) -> None:
         for callback in list(self._status_listeners):
-            callback(status)
+            self._dispatch_callback(callback, status)
 
     # -- Generic, untyped --------------------------------------------------
 
