@@ -1,7 +1,9 @@
 """Tesla Fleet API for Python."""
 
 import base64
+import asyncio
 import os
+import time
 from os.path import exists
 import aiofiles
 
@@ -15,6 +17,9 @@ from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+
+_KEY_READ_RETRY_TIMEOUT = 1.0
+_KEY_READ_RETRY_INTERVAL = 0.05
 
 
 def _owner_only_opener(file: str, flags: int) -> int:
@@ -30,6 +35,21 @@ def _owner_only_opener(file: str, flags: int) -> int:
         os.close(fd)
         raise
     return fd
+
+
+async def _load_pem_private_key(path: str, retry_invalid: bool = False) -> object:
+    deadline = time.monotonic() + _KEY_READ_RETRY_TIMEOUT
+    while True:
+        async with aiofiles.open(path, "rb") as key_file:
+            key_data = await key_file.read()
+        try:
+            return serialization.load_pem_private_key(
+                key_data, password=None, backend=default_backend()
+            )
+        except ValueError:
+            if not retry_invalid or time.monotonic() >= deadline:
+                raise
+            await asyncio.sleep(_KEY_READ_RETRY_INTERVAL)
 
 
 class Tesla:
@@ -69,14 +89,16 @@ class Tesla:
                     await key_file.write(pem)
                 return self.private_key
             except FileExistsError:
-                pass
+                value = await _load_pem_private_key(path, retry_invalid=True)
+                if not isinstance(value, ec.EllipticCurvePrivateKey):
+                    raise AssertionError(
+                        "Loaded key is not an EllipticCurvePrivateKey"
+                    )
+                self.private_key = value
+                return self.private_key
 
         try:
-            async with aiofiles.open(path, "rb") as key_file:
-                key_data = await key_file.read()
-            value = serialization.load_pem_private_key(
-                key_data, password=None, backend=default_backend()
-            )
+            value = await _load_pem_private_key(path)
         except FileNotFoundError:
             raise FileNotFoundError(f"Private key file not found at {path}")
         except PermissionError:
@@ -149,13 +171,13 @@ class Tesla:
                     await key_file.write(pem)
                 return self.rsa_private_key
             except FileExistsError:
-                pass
+                value = await _load_pem_private_key(path, retry_invalid=True)
+                if not isinstance(value, rsa.RSAPrivateKey):
+                    raise AssertionError("Loaded key is not an RSAPrivateKey")
+                self.rsa_private_key = value
+                return self.rsa_private_key
 
-        async with aiofiles.open(path, "rb") as key_file:
-            key_data = await key_file.read()
-        value = serialization.load_pem_private_key(
-            key_data, password=None, backend=default_backend()
-        )
+        value = await _load_pem_private_key(path)
         if not isinstance(value, rsa.RSAPrivateKey):
             raise AssertionError("Loaded key is not an RSAPrivateKey")
         self.rsa_private_key = value
