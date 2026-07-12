@@ -98,7 +98,7 @@ class Tesla:
                 return self.private_key
 
         try:
-            value = await _load_pem_private_key(path)
+            value = await _load_pem_private_key(path, retry_invalid=True)
         except FileNotFoundError:
             raise FileNotFoundError(f"Private key file not found at {path}")
         except PermissionError:
@@ -177,7 +177,7 @@ class Tesla:
                 self.rsa_private_key = value
                 return self.rsa_private_key
 
-        value = await _load_pem_private_key(path)
+        value = await _load_pem_private_key(path, retry_invalid=True)
         if not isinstance(value, rsa.RSAPrivateKey):
             raise AssertionError("Loaded key is not an RSAPrivateKey")
         self.rsa_private_key = value

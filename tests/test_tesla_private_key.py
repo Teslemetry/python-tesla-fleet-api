@@ -145,6 +145,24 @@ class GetPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
 
             self.assertEqual(_ec_pem(key), _ec_pem(winner_key))
 
+    async def test_existing_path_waits_for_winner_to_finish_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "private_key.pem"
+            winner_key = ec.generate_private_key(ec.SECP256R1())
+            path.touch(mode=0o600)
+
+            async def finish_write() -> None:
+                await asyncio.sleep(0.1)
+                path.write_bytes(_ec_pem(winner_key))
+
+            writer = asyncio.create_task(finish_write())
+            try:
+                key = await Tesla().get_private_key(str(path))
+            finally:
+                await writer
+
+            self.assertEqual(_ec_pem(key), _ec_pem(winner_key))
+
 
 class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
     async def test_new_key_file_is_owner_only(self) -> None:
@@ -215,6 +233,27 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
                     "tesla_fleet_api.tesla.tesla.exists", return_value=False
                 ):
                     key = await loser.get_rsa_private_key(str(path), key_size=1024)
+            finally:
+                await writer
+
+            self.assertEqual(_rsa_pem(key), _rsa_pem(winner_key))
+
+    async def test_existing_path_waits_for_winner_to_finish_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "tedapi_rsa_private.pem"
+            winner_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=1024,
+            )
+            path.touch(mode=0o600)
+
+            async def finish_write() -> None:
+                await asyncio.sleep(0.1)
+                path.write_bytes(_rsa_pem(winner_key))
+
+            writer = asyncio.create_task(finish_write())
+            try:
+                key = await Tesla().get_rsa_private_key(str(path), key_size=1024)
             finally:
                 await writer
 
