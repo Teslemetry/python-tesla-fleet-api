@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
+
 class Tesla:
     """Base class describing interactions with Tesla products."""
 
@@ -80,20 +81,28 @@ class Tesla:
         """Get the public key in PEM format."""
         if self.private_key is None:
             raise ValueError("Private key is not set")
-        return self.private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode('utf-8')
+        return (
+            self.private_key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("utf-8")
+        )
 
     @property
     def public_uncompressed_point(self) -> str:
         """Get the public key in uncompressed point format."""
         if self.private_key is None:
             raise ValueError("Private key is not set")
-        return self.private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.X962,
-            format=serialization.PublicFormat.UncompressedPoint,
-        ).hex()
+        return (
+            self.private_key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.X962,
+                format=serialization.PublicFormat.UncompressedPoint,
+            )
+            .hex()
+        )
 
     async def get_rsa_private_key(
         self, path: str = "tedapi_rsa_private.pem", key_size: int = 4096
@@ -163,7 +172,11 @@ class Tesla:
         """Get the RSA public key in PEM (SubjectPublicKeyInfo) format."""
         if self.rsa_private_key is None:
             raise ValueError("RSA private key is not set")
-        return self.rsa_private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode("utf-8")
+        return (
+            self.rsa_private_key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("utf-8")
+        )
