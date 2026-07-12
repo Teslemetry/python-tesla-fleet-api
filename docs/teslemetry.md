@@ -540,6 +540,40 @@ async def main():
 asyncio.run(main())
 ```
 
+## Energy Site Authorized Clients
+
+Teslemetry energy sites support the same raw `list_authorized_clients` command
+as Fleet API energy sites, plus a typed `get_authorized_clients` helper for
+consumers that need to inspect the client list. The typed helper keeps the raw
+response available on `raw`, parses each client into an `AuthorizedClient`, and
+preserves the distinction between an unknown response (`clients is None`) and
+an explicitly empty client list (`clients == []`).
+
+```python
+async def main():
+    async with aiohttp.ClientSession() as session:
+        teslemetry = Teslemetry(
+            session=session,
+            access_token="<access_token>",
+        )
+
+        energy_site = teslemetry.energySites.create(12345)
+
+        result = await energy_site.get_authorized_clients()
+        if result.clients is None:
+            print("Authorized clients are not available in this response")
+        else:
+            for client in result.clients:
+                print(client.description, client.state, client.public_key)
+
+        # The untyped response is still available when callers need the exact
+        # Teslemetry payload.
+        raw = await energy_site.list_authorized_clients()
+        print(raw)
+
+asyncio.run(main())
+```
+
 ## Migrate to OAuth
 
 The `migrate_to_oauth` method migrates from an access token to OAuth.
