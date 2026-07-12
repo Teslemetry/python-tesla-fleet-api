@@ -8,6 +8,11 @@ LOGGER = logging.getLogger(__package__)
 
 Region = Literal["na", "eu", "cn"]
 
+# BLE command-confirmation ladder depth: "optimistic" consults nothing (fire
+# and forget), "ack" waits for an addressed ack or a matching state broadcast,
+# "verify" additionally reads back state on an ack/broadcast timeout.
+BluetoothConfirmation = Literal["optimistic", "ack", "verify"]
+
 SERVERS: dict[Region, str] = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
     "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",

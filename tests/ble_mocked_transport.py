@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.hashes import SHA256, Hash
 
+from tesla_fleet_api.const import BluetoothConfirmation
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     ActionStatus,
@@ -99,6 +100,7 @@ class MockedBleTransportTestCase(IsolatedAsyncioTestCase):
         verify_commands: bool = False,
         optimistic: bool = False,
         raise_unconfirmed: bool = True,
+        confirmation: BluetoothConfirmation | None = None,
     ) -> tuple[VehicleBluetooth[Any], AsyncMock]:
         """Build a VehicleBluetooth whose ``_send`` and connection are fully mocked.
 
@@ -106,16 +108,25 @@ class MockedBleTransportTestCase(IsolatedAsyncioTestCase):
         set ``send.return_value``/``side_effect`` to script replies. Pass
         ``verify_commands=True`` to exercise the opt-in post-timeout state
         verification, ``optimistic=True`` to skip the ack wait entirely, or
-        ``raise_unconfirmed=False`` to resolve an exhausted ladder as a
-        best-effort success.
+        ``confirmation`` directly to set the ladder depth without going
+        through those deprecated aliases (it wins over both when given).
+        ``raise_unconfirmed`` defaults ``True`` here - opposite of the real
+        class default - purely so the many existing timeout/error tests below
+        keep asserting a raise without each passing it explicitly; the real
+        default is exercised by dedicated tests instead.
         """
+        if confirmation is None:
+            confirmation = "ack"
+            if verify_commands:
+                confirmation = "verify"
+            if optimistic:
+                confirmation = "optimistic"
         parent = MagicMock()
         parent.private_key = ec.generate_private_key(ec.SECP256R1())
         vehicle = VehicleBluetooth(
             parent,
             self.VIN,
-            verify_commands=verify_commands,
-            optimistic=optimistic,
+            confirmation=confirmation,
             raise_unconfirmed=raise_unconfirmed,
         )
 

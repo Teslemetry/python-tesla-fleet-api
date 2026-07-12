@@ -3,7 +3,16 @@ from abc import ABC, abstractmethod
 
 import struct
 from random import randbytes
-from typing import Any, TYPE_CHECKING, ClassVar, Generic, Literal, TypeVar, cast
+from typing import (
+    Any,
+    TYPE_CHECKING,
+    Callable,
+    ClassVar,
+    Generic,
+    Literal,
+    TypeVar,
+    cast,
+)
 import time
 import hmac
 import hashlib
@@ -375,13 +384,22 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
     @abstractmethod
     async def _send(
-        self, msg: RoutableMessage, requires: str, expects_data: bool = True
+        self,
+        msg: RoutableMessage,
+        requires: str,
+        expects_data: bool = True,
+        *,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
     ) -> RoutableMessage:
         """Transmit the message to the vehicle.
 
         ``expects_data`` is False when the reply is a single terminal ack with
         no following data frame (a VCSEC actuation), letting a framing
         transport return on that ack instead of waiting out a data follow-up.
+        ``confirm_broadcast``, when given, lets a transport that also observes
+        unsolicited state broadcasts (BLE) treat a matching broadcast as an
+        alternate confirmation alongside the addressed ack - transports with no
+        such side channel (e.g. Fleet API) ignore it.
         """
         raise NotImplementedError
 
@@ -407,6 +425,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         command: bytes,
         attempt: int = 0,
         expects_data: bool = True,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint.
 
@@ -417,6 +436,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         ``expects_data`` is threaded to ``_send`` and every retry; it is False
         for a VCSEC actuation, whose reply is a bare terminal ack.
+        ``confirm_broadcast`` is threaded the same way; a transport with no
+        broadcast side channel simply ignores it.
         """
         session = self._sessions[domain]
         if not session.ready:
@@ -432,7 +453,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         try:
             resp = await self._send(
-                msg, "protobuf_message_as_bytes", expects_data=expects_data
+                msg,
+                "protobuf_message_as_bytes",
+                expects_data=expects_data,
+                confirm_broadcast=confirm_broadcast,
             )
         except (
             # TeslaFleetMessageFaultInvalidSignature,
@@ -444,7 +468,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 # We tried 3 times, give up, raise the error
                 raise e
             return await self._command(
-                domain, command, attempt, expects_data=expects_data
+                domain,
+                command,
+                attempt,
+                expects_data=expects_data,
+                confirm_broadcast=confirm_broadcast,
             )
 
         if (
@@ -458,7 +486,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             async with session.lock:
                 await sleep(2)
             return await self._command(
-                domain, command, attempt, expects_data=expects_data
+                domain,
+                command,
+                attempt,
+                expects_data=expects_data,
+                confirm_broadcast=confirm_broadcast,
             )
 
         if resp.HasField("protobuf_message_as_bytes"):
@@ -543,6 +575,12 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                         }
                     }
                 elif vcsec.HasField("vehicleStatus"):
+                    if not expects_data:
+                        # An actuation has no data reply of its own; a
+                        # populated vehicleStatus here is our own broadcast
+                        # substitution for a lost ack (see _send), not a
+                        # requested read - report it as an actuation success.
+                        return {"response": {"result": True, "reason": ""}}
                     return {"response": vcsec.vehicleStatus}
                 elif (
                     vcsec.commandStatus.operationStatus
@@ -562,7 +600,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     async with session.lock:
                         await sleep(2)
                     return await self._command(
-                        domain, command, attempt, expects_data=expects_data
+                        domain,
+                        command,
+                        attempt,
+                        expects_data=expects_data,
+                        confirm_broadcast=confirm_broadcast,
                     )
                 elif (
                     vcsec.commandStatus.operationStatus
@@ -716,11 +758,18 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             flags=flags,
         )
 
-    async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
+    async def _sendVehicleSecurity(
+        self,
+        command: UnsignedMessage,
+        *,
+        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+    ) -> dict[str, Any]:
         """Sign and send an actuation to the Vehicle Security computer.
 
         A VCSEC actuation replies with a single terminal ack and no data frame,
         so ``expects_data=False`` lets ``_send`` return on that ack.
+        ``confirm_broadcast`` is passed through to ``_send``; only a transport
+        with a broadcast side channel (BLE) acts on it.
         """
         name = vcsec_command_name(command)
         try:
@@ -728,6 +777,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 Domain.DOMAIN_VEHICLE_SECURITY,
                 command.SerializeToString(),
                 expects_data=False,
+                confirm_broadcast=confirm_broadcast,
             )
         except (Exception, TeslaFleetError) as e:
             _log_command_error(name, self._transport_name, e)

@@ -17,6 +17,7 @@ Both form one outcome contract on top of the existing confirmation ladder
 from __future__ import annotations
 
 from tesla_fleet_api.exceptions import (
+    BluetoothCommandFailed,
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
@@ -72,14 +73,19 @@ class OptimisticModeTests(MockedBleTransportTestCase):
         self.assertEqual(result["response"]["result"], True)
         send.assert_awaited_once()
 
-    async def test_verify_commands_is_never_consulted(self) -> None:
-        # Even with verify_commands=True, optimistic mode must never issue a
-        # second (prover) send - it never waits long enough to time out.
-        vehicle, send = self.make_vehicle(optimistic=True)
-        vehicle.verify_commands = True
+    async def test_optimistic_and_raise_unconfirmed_combo_is_moot_not_error(
+        self,
+    ) -> None:
+        # confirmation="optimistic" makes raise_unconfirmed irrelevant rather
+        # than an error - optimistic never reaches an unconfirmed outcome to
+        # apply it to, and construction/use with both set must not raise.
+        vehicle, send = self.make_vehicle(
+            confirmation="optimistic", raise_unconfirmed=True
+        )
 
-        await vehicle.door_lock()
+        result = await vehicle.door_lock()
 
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         send.assert_awaited_once()
 
 
@@ -146,8 +152,8 @@ class RaiseUnconfirmedTests(MockedBleTransportTestCase):
 
     async def test_verify_commands_mismatch_still_raises(self) -> None:
         # A prover read that disagrees is affirmative evidence, not mere
-        # absence of confirmation - it must raise regardless of
-        # raise_unconfirmed.
+        # absence of confirmation - it must raise BluetoothCommandFailed
+        # regardless of raise_unconfirmed.
         vehicle, send = self.make_vehicle(verify_commands=True, raise_unconfirmed=False)
         send.side_effect = [
             BluetoothTimeout(),
@@ -158,7 +164,7 @@ class RaiseUnconfirmedTests(MockedBleTransportTestCase):
             ),
         ]
 
-        with self.assertRaises(BluetoothUnconfirmedCommand):
+        with self.assertRaises(BluetoothCommandFailed):
             await vehicle.door_lock()
 
     async def test_write_failure_still_raises(self) -> None:

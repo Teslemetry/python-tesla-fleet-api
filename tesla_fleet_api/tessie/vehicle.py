@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
-from tesla_fleet_api.const import Method
+from tesla_fleet_api.const import BluetoothConfirmation, Method
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 
@@ -1202,10 +1202,12 @@ class TessieVehicles(Vehicles["Tessie"]):
     def createBluetooth(
         self,
         vin: str,
-        verify_commands: bool = False,
+        confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = None,
-        optimistic: bool = False,
-        raise_unconfirmed: bool = True,
+        optimistic: bool | None = None,
+        raise_unconfirmed: bool = False,
+        *,
+        verify_commands: bool | None = None,
     ) -> Any:
         """Not supported; parameters match the Fleet API Bluetooth factory."""
         raise NotImplementedError("Tessie cannot use local Bluetooth")

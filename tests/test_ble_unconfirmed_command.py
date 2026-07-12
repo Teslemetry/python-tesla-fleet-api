@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from tesla_fleet_api.exceptions import (
+    BluetoothCommandFailed,
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
@@ -86,9 +87,10 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
 
         self.assertIs(ctx.exception.__cause__, original)
 
-    async def test_verify_commands_unresolved_raises_unconfirmed(self) -> None:
-        # With verify_commands on, a prover read that disagrees still leaves
-        # the caller with an unconfirmed (not confirmed-failed) outcome.
+    async def test_verify_commands_mismatch_raises_command_failed(self) -> None:
+        # With verify_commands on, a prover read that disagrees is proof the
+        # command did not apply, distinct from an unresolved ack timeout - it
+        # raises BluetoothCommandFailed, not BluetoothUnconfirmedCommand.
         vehicle, send = self.make_vehicle(verify_commands=True)
         send.side_effect = [
             BluetoothTimeout(),
@@ -99,8 +101,17 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
             ),
         ]
 
-        with self.assertRaises(BluetoothUnconfirmedCommand):
+        with self.assertRaises(BluetoothCommandFailed):
             await vehicle.door_lock()
+
+    async def test_verify_commands_no_plan_still_raises_unconfirmed(self) -> None:
+        # An ack timeout that verify_commands could not even attempt to
+        # resolve (no plan for this command) stays genuinely ambiguous.
+        vehicle, send = self.make_vehicle(verify_commands=True)
+        send.side_effect = [BluetoothTimeout()]
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await vehicle.charge_port_door_open()
 
     async def test_handshake_timeout_raises_plain_bluetooth_timeout(self) -> None:
         vehicle, send = self.make_vehicle()

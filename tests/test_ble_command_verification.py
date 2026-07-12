@@ -4,9 +4,10 @@ A ``BluetoothTimeout`` from a mutating BLE command is inconclusive - the vehicle
 can execute the command without its ack reaching the client. With
 ``verify_commands=True``, a timed-out mutation whose expected post-state is
 derivable from its arguments is confirmed by reading the mapped prover state:
-verified-executed returns a normal success result, verified-not-executed
-re-raises the timeout, and an unverifiable command re-raises unchanged. With the
-default (``verify_commands=False``) every path is byte-identical to today, and no
+verified-executed returns a normal success result, verified-not-executed raises
+``BluetoothCommandFailed`` (proven non-application, not ambiguity), and an
+unverifiable command re-raises the timeout unchanged. With the default
+(``verify_commands=False``) every path is byte-identical to today, and no
 verification read is ever issued.
 
 The single mocked ``_send`` is scripted with a list ``side_effect``: the first
@@ -16,7 +17,7 @@ ambiguous case), and the second, when present, answers the prover read.
 
 from __future__ import annotations
 
-from tesla_fleet_api.exceptions import BluetoothTimeout
+from tesla_fleet_api.exceptions import BluetoothCommandFailed, BluetoothTimeout
 from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
     ChargeState,
     ClimateState,
@@ -57,7 +58,9 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
         # Command send + one prover read.
         self.assertEqual(send.await_count, 2)
 
-    async def test_verified_not_executed_reraises(self) -> None:
+    async def test_verified_not_executed_raises_command_failed(self) -> None:
+        # A verify-read mismatch is proof the command did not apply, not
+        # ambiguity - it raises BluetoothCommandFailed, not the timeout.
         vehicle, send = self.make_vehicle(verify_commands=True)
         send.side_effect = [
             BluetoothTimeout(),
@@ -68,7 +71,7 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
             ),
         ]
 
-        with self.assertRaises(BluetoothTimeout):
+        with self.assertRaises(BluetoothCommandFailed):
             await vehicle.door_lock()
         self.assertEqual(send.await_count, 2)
 
@@ -113,7 +116,7 @@ class InfotainmentVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         self.assertEqual(send.await_count, 2)
 
-    async def test_set_charge_limit_mismatch_reraises(self) -> None:
+    async def test_set_charge_limit_mismatch_raises_command_failed(self) -> None:
         vehicle, send = self.make_vehicle(verify_commands=True)
         send.side_effect = [
             BluetoothTimeout(),
@@ -122,7 +125,7 @@ class InfotainmentVerificationTests(MockedBleTransportTestCase):
             ),
         ]
 
-        with self.assertRaises(BluetoothTimeout):
+        with self.assertRaises(BluetoothCommandFailed):
             await vehicle.set_charge_limit(80)
 
     async def test_set_charging_amps_verified_executed(self) -> None:

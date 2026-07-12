@@ -8,7 +8,11 @@ backend instances so no real BLE hardware or network access is required.
 import asyncio
 from unittest import IsolatedAsyncioTestCase
 
-from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothUnconfirmedCommand
+from tesla_fleet_api.exceptions import (
+    BluetoothCommandFailed,
+    BluetoothTimeout,
+    BluetoothUnconfirmedCommand,
+)
 from tesla_fleet_api.router import (
     EnergySiteRouter,
     Router,
@@ -120,6 +124,21 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(primary.shared_calls, 1)
         self.assertEqual(fallback.shared_calls, 0)
+
+    async def test_primary_raises_command_failed_falls_back(self):
+        # BluetoothCommandFailed means the command was PROVEN not to have
+        # applied on the primary - unlike BluetoothUnconfirmedCommand, failing
+        # over here carries no double-execution risk, so it must fall back
+        # like any ordinary failure rather than propagate.
+        primary = _FakePrimary(exc=BluetoothCommandFailed())
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback)
+
+        result = await router.shared(13)
+
+        self.assertEqual(result, "fallback:13")
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 1)
 
     async def test_primary_raises_cancelled_error_propagates(self):
         # CancelledError is a BaseException but not a TeslaFleetError; it must
