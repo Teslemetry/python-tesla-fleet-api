@@ -82,7 +82,7 @@ class AuthorizedClient:
 
 @dataclass(frozen=True, slots=True)
 class AuthorizedClients:
-    """Parsed result of :meth:`TeslemetryEnergySite.get_authorized_clients`.
+    """Parsed result of :meth:`TeslemetryEnergySite.find_authorized_clients`.
 
     ``clients`` is always a list: a ``None`` response body, an unrecognized
     response shape, and an explicitly empty ``authorized_clients`` list all
@@ -196,7 +196,7 @@ class TeslemetryEnergySite(EnergySite):
             f"api/1/energy_sites/{self.energy_site_id}/command/authorized_clients",
         )
 
-    async def get_authorized_clients(self) -> AuthorizedClients:
+    async def find_authorized_clients(self) -> AuthorizedClients:
         """List authorized clients on the energy gateway, parsed into a typed result.
 
         Prefer this over :meth:`list_authorized_clients` for consumers that

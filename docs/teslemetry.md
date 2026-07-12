@@ -543,7 +543,7 @@ asyncio.run(main())
 ## Energy Site Authorized Clients
 
 Teslemetry energy sites support the same raw `list_authorized_clients` command
-as Fleet API energy sites, plus a typed `get_authorized_clients` helper for
+as Fleet API energy sites, plus a typed `find_authorized_clients` helper for
 consumers that need to inspect the client list. Tesla has not published a
 schema for this pairing endpoint, so the typed helper only unwraps the one
 envelope shape and models the two client fields (`public_key`, `state`)
@@ -563,7 +563,7 @@ async def main():
 
         energy_site = teslemetry.energySites.create(12345)
 
-        result = await energy_site.get_authorized_clients()
+        result = await energy_site.find_authorized_clients()
         for client in result.clients:
             print(client.public_key, client.state)
 

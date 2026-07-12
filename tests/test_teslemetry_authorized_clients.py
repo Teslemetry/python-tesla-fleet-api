@@ -1,4 +1,4 @@
-"""Tests for TeslemetryEnergySite.get_authorized_clients(), the typed accessor
+"""Tests for TeslemetryEnergySite.find_authorized_clients(), the typed accessor
 over the Teslemetry ``command/authorized_clients`` endpoint.
 
 This endpoint's schema is undocumented; the wire-shape variants covered here
@@ -71,7 +71,7 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
             }
         )
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
         matched = result.clients[0]
@@ -81,7 +81,7 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
     async def test_bare_list_payload_with_no_envelope(self) -> None:
         site = _make_site([{"public_key": PUBLIC_KEY_B64, "state": 1}])
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
         self.assertEqual(result.clients[0].state, AuthorizedClientState.PENDING)
@@ -100,7 +100,7 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
             }
         )
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
         matched = result.clients[0]
@@ -118,7 +118,7 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
             }
         )
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(result.clients[0].state, AuthorizedClientState.VERIFIED)
 
@@ -131,7 +131,7 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
             }
         )
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         # 0 is not a member of AuthorizedClientState, but it is a present
         # value - it must not be coerced to None (which means "absent").
@@ -141,21 +141,21 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
     async def test_explicitly_empty_list_returns_typed_empty_list(self) -> None:
         site = _make_site({"response": {"authorized_clients": []}})
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(result.clients, [])
 
     async def test_absent_field_returns_typed_empty_list(self) -> None:
         site = _make_site({"response": {"foo": "bar"}})
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(result.clients, [])
 
     async def test_null_body_returns_typed_empty_list_without_raising(self) -> None:
         site = _make_site(None)
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(result.clients, [])
         self.assertIsNone(result.raw)
@@ -172,6 +172,6 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
             }
         )
 
-        result = await site.get_authorized_clients()
+        result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
