@@ -139,12 +139,14 @@ or catch `BluetoothTransportError` separately when you need to distinguish a
 transport failure - the command never reached the vehicle - from a vehicle
 timeout after the command or request was written.
 
-A response-wait timeout for a *mutating* command (RKE/closure actions,
-HVAC/media/charging commands, `wake_up()`) raises `BluetoothUnconfirmedCommand`
-instead of plain `BluetoothTimeout` - see "Mutating Command Timeouts" below. A
-response-wait timeout for anything else (a state read) still raises plain
-`BluetoothTimeout`. `BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`,
-so existing `except BluetoothTimeout` handling keeps working; catch
+By default, a response-wait timeout for a *mutating* command (RKE/closure
+actions, HVAC/media/charging commands, `wake_up()`) raises
+`BluetoothUnconfirmedCommand` instead of plain `BluetoothTimeout` - see
+"Mutating Command Timeouts" below for the `verify_commands`, `optimistic`, and
+`raise_unconfirmed` knobs that can change that outcome. A response-wait timeout
+for anything else (a state read) still raises plain `BluetoothTimeout`.
+`BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`, so existing
+`except BluetoothTimeout` handling keeps working; catch
 `BluetoothUnconfirmedCommand` separately when you need to tell "the command may
 have executed" apart from "nothing happened."
 
@@ -190,14 +192,16 @@ case.
 When a mutating command times out and its expected post-state can be derived
 from its own arguments, the same held connection reads the mapped prover state
 and either returns a normal success result (`{"response": {"result": True,
-"reason": ""}}`) when the state matches or re-raises the
-`BluetoothUnconfirmedCommand` when it does not. The read rides the existing
-connection and never wakes the vehicle; if an infotainment prover cannot be
-read because the car is asleep, the unconfirmed command timeout is re-raised.
+"reason": ""}}`) when the state matches or raises
+`BluetoothUnconfirmedCommand` when a completed read does not match. The read
+rides the existing connection and never wakes the vehicle; if an infotainment
+prover cannot be read because the car is asleep, the outcome stays unresolved
+and falls through to the `raise_unconfirmed` setting.
 
-Commands whose outcome cannot be derived or read - true toggles, relative volume
-steps, and ack-only actions such as `flash_lights()` or `trigger_homelink()` -
-raise `BluetoothUnconfirmedCommand`, exactly as with verification off. Currently
+With the default `raise_unconfirmed=True`, commands whose outcome cannot be
+derived or read - true toggles, relative volume steps, and ack-only actions such
+as `flash_lights()` or `trigger_homelink()` - raise
+`BluetoothUnconfirmedCommand`, exactly as with verification off. Currently
 verified commands and their provers:
 
 | Command | Prover | Confirmed when |
