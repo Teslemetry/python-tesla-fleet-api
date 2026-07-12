@@ -10,10 +10,10 @@ library are designed to be used together to give an energy gateway (Powerwall
   gateway over the cloud. `aiopowerwall` deliberately does **not** implement
   registration - it only consumes an already-paired key.
 - **aiopowerwall holds the local, RSA-signed transport.** Its
-  `PowerwallEnergySite` adapter mirrors this repo's `EnergySite` method-for-
-  method (same names, signatures, and `dict[str, Any]` return shapes) without
-  importing this package - it is duck-typed by design so it drops straight
-  into `EnergySiteRouter`.
+  `PowerwallEnergySite` adapter implements the local subset of this repo's
+  `EnergySite` surface with matching names, signatures, and `dict[str, Any]`
+  return shapes, without importing this package - it is duck-typed by design
+  so it drops straight into `EnergySiteRouter`.
 
 `aiopowerwall` is not a dependency of this project; nothing here imports it.
 You add it to your own application alongside `tesla-fleet-api`.
@@ -91,10 +91,10 @@ asyncio.run(main())
 
 Once the key is verified, `aiopowerwall`'s `PowerwallClient` consumes the
 *same* PEM file directly - it does not need anything else from this library
-at this point. `local_energysite` then exposes the same method surface as
-this repo's `EnergySite` (`get_system_info()`, `live_status()`,
-`set_island_mode()`, etc.), but issues signed requests directly to the
-gateway over the LAN:
+at this point. `local_energysite` then exposes the locally implemented
+`EnergySite`-compatible calls (`live_status()`, `operation()`, `backup()`,
+`set_island_mode()`, `get_backup_events()`, and backup-event scheduling)
+through signed requests directly to the gateway over the LAN:
 
 ```python
 import aiohttp
@@ -137,12 +137,15 @@ async def main():
 asyncio.run(main())
 ```
 
-Commands go over the LAN when the gateway is reachable, and fail over to the
-Teslemetry cloud otherwise - the same local-primary/cloud-fallback pattern
-`VehicleRouter` uses for vehicles. See [the README's Routing and Failover
-section](../README.md#routing-and-failover) for the general `Router`
-semantics (per-command failover, the double-execution caveat, and the
-`health` check).
+Locally implemented commands go over the LAN when the gateway is reachable,
+and fail over to the Teslemetry cloud otherwise - the same
+local-primary/cloud-fallback pattern `VehicleRouter` uses for vehicles. Calls
+that aiopowerwall does not implement locally yet, including `get_system_info()`
+and most energy-device gRPC commands, raise `NotImplementedError` from the
+local adapter and then fall through to the cloud backend. See [the README's
+Routing and Failover section](../README.md#routing-and-failover) for the
+general `Router` semantics (per-command failover, the double-execution caveat,
+and the `health` check).
 
 > **Warning: island mode / off-grid actuation is not guaranteed on either
 > transport - always verify by state.**
