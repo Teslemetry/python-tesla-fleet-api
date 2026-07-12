@@ -95,18 +95,29 @@ class MockedBleTransportTestCase(IsolatedAsyncioTestCase):
     VIN = VIN
 
     def make_vehicle(
-        self, verify_commands: bool = False
+        self,
+        verify_commands: bool = False,
+        optimistic: bool = False,
+        raise_unconfirmed: bool = True,
     ) -> tuple[VehicleBluetooth[Any], AsyncMock]:
         """Build a VehicleBluetooth whose ``_send`` and connection are fully mocked.
 
         Returns the vehicle plus the ``AsyncMock`` standing in for ``_send`` -
         set ``send.return_value``/``side_effect`` to script replies. Pass
         ``verify_commands=True`` to exercise the opt-in post-timeout state
-        verification.
+        verification, ``optimistic=True`` to skip the ack wait entirely, or
+        ``raise_unconfirmed=False`` to resolve an exhausted ladder as a
+        best-effort success.
         """
         parent = MagicMock()
         parent.private_key = ec.generate_private_key(ec.SECP256R1())
-        vehicle = VehicleBluetooth(parent, self.VIN, verify_commands=verify_commands)
+        vehicle = VehicleBluetooth(
+            parent,
+            self.VIN,
+            verify_commands=verify_commands,
+            optimistic=optimistic,
+            raise_unconfirmed=raise_unconfirmed,
+        )
 
         # Mark both signed-command sessions ready so _command skips the
         # handshake round-trip (which would otherwise also go through _send).

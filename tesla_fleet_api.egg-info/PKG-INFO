@@ -197,10 +197,13 @@ disable keepalive when vehicle sleep is preferred.
 
 BLE connect/notify and GATT write failures from `VehicleBluetooth` raise
 `BluetoothTransportError`, a `TeslaFleetError` subclass, with the original
-transport exception chained as `__cause__`. A response-wait timeout from a
-mutating BLE command raises `BluetoothUnconfirmedCommand`, a
+transport exception chained as `__cause__`. By default, a response-wait timeout
+from a mutating BLE command raises `BluetoothUnconfirmedCommand`, a
 `BluetoothTimeout` subclass, because the vehicle may have executed it despite a
-lost acknowledgement. Catch `TeslaFleetError` to handle Bluetooth transport
+lost acknowledgement. The BLE-only `optimistic` and `raise_unconfirmed`
+factory options can instead resolve some ambiguous timeouts as best-effort
+successes; see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md) for the
+full confirmation ladder. Catch `TeslaFleetError` to handle Bluetooth transport
 failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
 ESPHome proxies) and response-wait timeouts through the same library error
 hierarchy.
@@ -254,7 +257,7 @@ await router.set_operation(...)  # local first, cloud on failure
 
 Enable `DEBUG` logging for `tesla_fleet_api` to see which backend served a routed call and why failover happened.
 
-> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. `BluetoothUnconfirmedCommand` is the exception: it propagates without failover because the BLE command may already have executed. When the primary is `VehicleBluetooth`, pass `verify_commands=True` to resolve supported mutating command timeouts by state before they reach the router; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
+> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. `BluetoothUnconfirmedCommand` is the exception: it propagates without failover because the BLE command may already have executed. When the primary is `VehicleBluetooth`, pass `verify_commands=True` to resolve supported mutating command timeouts by state before they reach the router, or `raise_unconfirmed=False` only when a best-effort success is acceptable; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
 > Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
 
