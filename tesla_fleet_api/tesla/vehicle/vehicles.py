@@ -48,6 +48,8 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         vin: str,
         verify_commands: bool = False,
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool = False,
+        raise_unconfirmed: bool = True,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -56,12 +58,20 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
+        ``optimistic`` returns success as soon as a mutating command's GATT
+        write is confirmed, skipping the ack wait and ``verify_commands``.
+        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
+        as a best-effort success instead of raising
+        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
+        for the full ladder and what each flag does and does not affect.
         """
         vehicle = self.Bluetooth(
             self._parent,
             vin,
             verify_commands=verify_commands,
             keepalive_interval=keepalive_interval,
+            optimistic=optimistic,
+            raise_unconfirmed=raise_unconfirmed,
         )
         self[vin] = vehicle
         return vehicle
@@ -91,6 +101,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         device: BLEDevice | None = None,
         verify_commands: bool = False,
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool = False,
+        raise_unconfirmed: bool = True,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -99,9 +111,21 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
+        ``optimistic`` returns success as soon as a mutating command's GATT
+        write is confirmed, skipping the ack wait and ``verify_commands``.
+        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
+        as a best-effort success instead of raising
+        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
+        for the full ladder and what each flag does and does not affect.
         """
         return self.createBluetooth(
-            vin, key, device, verify_commands, keepalive_interval
+            vin,
+            key,
+            device,
+            verify_commands,
+            keepalive_interval,
+            optimistic,
+            raise_unconfirmed,
         )
 
     def createBluetooth(
@@ -111,6 +135,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         device: BLEDevice | None = None,
         verify_commands: bool = False,
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool = False,
+        raise_unconfirmed: bool = True,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -119,6 +145,12 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
+        ``optimistic`` returns success as soon as a mutating command's GATT
+        write is confirmed, skipping the ack wait and ``verify_commands``.
+        ``raise_unconfirmed=False`` resolves an exhausted confirmation ladder
+        as a best-effort success instead of raising
+        ``BluetoothUnconfirmedCommand``. See ``VehicleBluetooth``'s docstring
+        for the full ladder and what each flag does and does not affect.
         """
         vehicle = self.Bluetooth(
             self._parent,
@@ -127,6 +159,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
             device,
             verify_commands=verify_commands,
             keepalive_interval=keepalive_interval,
+            optimistic=optimistic,
+            raise_unconfirmed=raise_unconfirmed,
         )
         self[vin] = vehicle
         return vehicle

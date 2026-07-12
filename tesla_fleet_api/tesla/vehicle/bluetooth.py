@@ -309,6 +309,28 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     steps, and ack-only actions - raise the unconfirmed timeout, exactly as with
     verification off (the default).
 
+    Two more knobs shape that same ladder (write -> ack wait -> ``verify_commands``
+    -> unconfirmed outcome):
+
+    - ``optimistic`` (default ``False``): a mutating command returns success as
+      soon as its GATT write is confirmed, skipping the ack wait and
+      ``verify_commands`` entirely. Only a write/transport failure
+      (``BluetoothTransportError``) still raises. This is pure speed mode - the
+      caller owns any state verification it wants afterward - and it overrides
+      ``verify_commands`` and ``raise_unconfirmed`` for every mutating send.
+    - ``raise_unconfirmed`` (default ``True``, current behavior): when ``False``,
+      an exhausted ladder - the ack wait expired and ``verify_commands`` is off,
+      has no plan for this command, or could not complete its read - resolves as
+      a best-effort success instead of raising ``BluetoothUnconfirmedCommand``.
+      A car-side rejection carried in an ack, a ``verify_commands`` state
+      mismatch (the read completed and does not show the requested value), and
+      write failures are unaffected and always raise - this flag only converts
+      the "could not determine what happened" outcome. Commands with no
+      ``verify_commands`` plan (true toggles, relative steps, and ack-only
+      actions - see the table in ``docs/bluetooth_vehicles.md``) are always
+      resolved best-effort under this flag, since there is nothing to mismatch
+      against.
+
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
     no real GATT traffic, a minimal passive characteristic read is issued to
@@ -323,6 +345,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
     ble_name: str
     verify_commands: bool
+    optimistic: bool
+    raise_unconfirmed: bool
     keepalive_interval: float | None
     device: BLEDevice | None = None
     client: BleakClient | None = None
@@ -349,10 +373,14 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         device: BLEDevice | None = None,
         verify_commands: bool = False,
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
+        optimistic: bool = False,
+        raise_unconfirmed: bool = True,
     ):
         super().__init__(parent, vin, key)
         self.verify_commands = verify_commands
         self.keepalive_interval = keepalive_interval
+        self.optimistic = optimistic
+        self.raise_unconfirmed = raise_unconfirmed
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
@@ -536,12 +564,15 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         expects_data: bool = True,
         *,
         timeout: float | None = None,
+        optimistic: bool = False,
     ) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response.
 
         When ``expects_data`` is False the reply is a single terminal ack (a
         VCSEC actuation, no data frame follows), so the ack is returned as soon
-        as it arrives and a shorter total timeout applies.
+        as it arrives and a shorter total timeout applies. ``optimistic`` skips
+        waiting for any reply at all - once the GATT write is confirmed, an
+        empty ``RoutableMessage`` is returned immediately.
         """
 
         if timeout is None:
@@ -568,6 +599,9 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             # GATT-write transport failure within TeslaFleetError.
             except (BleakError, TimeoutError) as e:
                 raise BluetoothTransportError from e
+
+            if optimistic:
+                return RoutableMessage()
 
             # Process the response
             try:
@@ -760,6 +794,45 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         if not self._sessions[domain].ready:
             raise BluetoothTimeout()
 
+    async def _send_optimistic(self, domain: Domain, command: bytes) -> dict[str, Any]:
+        """Sign and write a mutating command without waiting for any reply.
+
+        Only a write/transport failure (``BluetoothTransportError``) raises;
+        the caller owns any state verification it wants afterward.
+        """
+        session = self._sessions[domain]
+        async with session.lock:
+            if self._auth_method == "hmac":
+                msg = await self._commandHmac(session, command)
+            else:
+                msg = await self._commandAes(session, command)
+        await self._send(msg, "protobuf_message_as_bytes", optimistic=True)
+        return {"response": {"result": True, "reason": ""}}
+
+    def _unconfirmed_outcome(
+        self,
+        name: str,
+        unconfirmed: BluetoothUnconfirmedCommand,
+        *,
+        cause: BaseException,
+    ) -> dict[str, Any]:
+        """Resolve an exhausted confirmation ladder per ``raise_unconfirmed``.
+
+        Reached only once nothing could determine what happened - verification
+        is off, has no plan for this command, or its read could not complete.
+        A verify mismatch (the read completed and does not show the requested
+        value) is unambiguous negative evidence and is raised by the caller
+        directly, never routed through here.
+        """
+        if self.raise_unconfirmed:
+            raise unconfirmed from cause
+        LOGGER.debug(
+            "command=%s transport=%s raise_unconfirmed=False result=success (best-effort)",
+            name,
+            self._transport_name,
+        )
+        return {"response": {"result": True, "reason": ""}}
+
     async def _sendVehicleSecurity(self, command: UnsignedMessage) -> dict[str, Any]:
         """Send a VCSEC actuation.
 
@@ -767,90 +840,105 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         failed, so a timed-out wait raises ``BluetoothUnconfirmedCommand``
         rather than plain ``BluetoothTimeout`` - see that exception's
         docstring. With ``verify_commands`` on, that ambiguity is resolved by
-        reading back state before it can reach the caller.
+        reading back state before it can reach the caller. With
+        ``optimistic`` on, the write itself is the whole outcome and none of
+        this ladder runs. With ``raise_unconfirmed`` off, an exhausted ladder
+        resolves as a best-effort success instead of raising - see the class
+        docstring.
         """
         await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        if self.optimistic:
+            return await self._send_optimistic(
+                Domain.DOMAIN_VEHICLE_SECURITY, command.SerializeToString()
+            )
         try:
             return await super()._sendVehicleSecurity(command)
         except BluetoothTimeout as timeout:
             unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
-            if not self.verify_commands:
-                raise unconfirmed from timeout
             name = vcsec_command_name(command)
-            try:
+            if self.verify_commands:
                 result = await self._resolve_timeout(
                     _vcsec_verify_plan(command), unconfirmed
                 )
-            except BluetoothTimeout:
+                if result is not None:
+                    LOGGER.debug(
+                        "command=%s transport=%s verify_commands=resolved result=%s",
+                        name,
+                        self._transport_name,
+                        result.get("response", {}).get("result"),
+                    )
+                    return result
                 LOGGER.debug(
                     "command=%s transport=%s verify_commands=unresolved",
                     name,
                     self._transport_name,
                 )
-                raise
-            LOGGER.debug(
-                "command=%s transport=%s verify_commands=resolved result=%s",
-                name,
-                self._transport_name,
-                result.get("response", {}).get("result"),
-            )
-            return result
+            return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
 
     async def _sendInfotainment(
         self, command: Action, *, mutating: bool = True
     ) -> dict[str, Any]:
         """Send an infotainment command.
 
-        Same unconfirmed-ack semantics as ``_sendVehicleSecurity`` - see there.
+        Same unconfirmed-ack, ``optimistic``, and ``raise_unconfirmed``
+        semantics as ``_sendVehicleSecurity`` - see there. ``mutating=False``
+        (``ping()`` only) is exempt from all three: it always waits for its
+        real reply.
         """
         await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
+        if self.optimistic and mutating:
+            return await self._send_optimistic(
+                Domain.DOMAIN_INFOTAINMENT, command.SerializeToString()
+            )
         try:
             return await super()._sendInfotainment(command)
         except BluetoothTimeout as timeout:
             if not mutating:
                 raise
             unconfirmed = BluetoothUnconfirmedCommand(timeout.data, timeout.status)
-            if not self.verify_commands:
-                raise unconfirmed from timeout
             name = infotainment_command_name(command)
-            resolver = _INFOTAINMENT_VERIFY_PLANS.get(
-                command.vehicleAction.WhichOneof("vehicle_action_msg")
-            )
-            plan = resolver(command.vehicleAction) if resolver else None
-            try:
+            if self.verify_commands:
+                resolver = _INFOTAINMENT_VERIFY_PLANS.get(
+                    command.vehicleAction.WhichOneof("vehicle_action_msg")
+                )
+                plan = resolver(command.vehicleAction) if resolver else None
                 result = await self._resolve_timeout(plan, unconfirmed)
-            except BluetoothTimeout:
+                if result is not None:
+                    LOGGER.debug(
+                        "command=%s transport=%s verify_commands=resolved result=%s",
+                        name,
+                        self._transport_name,
+                        result.get("response", {}).get("result"),
+                    )
+                    return result
                 LOGGER.debug(
                     "command=%s transport=%s verify_commands=unresolved",
                     name,
                     self._transport_name,
                 )
-                raise
-            LOGGER.debug(
-                "command=%s transport=%s verify_commands=resolved result=%s",
-                name,
-                self._transport_name,
-                result.get("response", {}).get("result"),
-            )
-            return result
+            return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
 
     async def _resolve_timeout(
         self, plan: VerifyPlan | None, timeout: BluetoothTimeout
-    ) -> dict[str, Any]:
-        """Confirm a timed-out mutation by state, or re-raise if unverifiable.
+    ) -> dict[str, Any] | None:
+        """Confirm a timed-out mutation by state.
 
-        The prover read rides the same held connection. An INFO-domain prover
-        needs the vehicle awake; if the read cannot complete (e.g. the car is
-        asleep) it surfaces a ``TeslaFleetError`` and the unconfirmed timeout is
-        re-raised rather than waking the car just to verify.
+        Returns the confirmed success result, or ``None`` if verification
+        could not even be attempted - no plan for this command, or the prover
+        read itself failed (an INFO-domain prover needs the vehicle awake; a
+        ``TeslaFleetError`` from a sleeping car is not woken just to verify).
+        ``None`` leaves the caller to resolve the outcome via
+        ``raise_unconfirmed``. A verify mismatch - the read completed and does
+        not show the requested value - is unambiguous negative evidence and
+        raises ``timeout`` directly instead, regardless of that setting.
         """
         if plan is None:
-            raise timeout
+            return None
         reader_name, executed = plan
         try:
             state = await getattr(self, reader_name)()
         except TeslaFleetError:
-            raise timeout
+            return None
         if executed(state):
             return {"response": {"result": True, "reason": ""}}
         raise timeout
