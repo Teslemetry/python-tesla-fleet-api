@@ -4,10 +4,11 @@ VCSEC emits ``VehicleStatus`` broadcasts on the same notification
 subscription used for command replies (``_on_message`` in ``bluetooth.py``).
 Every leaf field of ``VehicleStatus`` is a well-defined protobuf enum or int,
 so each gets its own typed ``listen_<field>`` method here, mirroring
-python-teslemetry-stream's per-field listener surface. Anything not decoded
-into ``VehicleStatus`` - other VCSEC broadcast payloads (``CommandStatus``,
-whitelist events, faults) and any future infotainment-domain broadcast -
-falls back to the untyped ``listen_broadcast``.
+python-teslemetry-stream's per-field listener surface. The untyped
+``listen_broadcast`` receives every raw broadcast for a domain, including
+``VehicleStatus`` and payloads that have no typed listener surface: other VCSEC
+broadcast payloads (``CommandStatus``, whitelist events, faults) and any future
+infotainment-domain broadcast.
 """
 
 from __future__ import annotations
@@ -84,9 +85,8 @@ class BroadcastListeners:
     ) -> Unsubscribe:
         """Listen for any unsolicited broadcast on ``domain``.
 
-        Catch-all for broadcasts the typed listeners below don't cover:
-        non-``VehicleStatus`` VCSEC payloads (``CommandStatus``, whitelist
-        events, faults) and any infotainment-domain broadcast.
+        This is a catch-all for broadcasts the typed listeners below don't
+        cover, but it also receives typed ``VehicleStatus`` broadcasts.
         """
         return self._register(self._domain_listeners.setdefault(domain, []), callback)
 

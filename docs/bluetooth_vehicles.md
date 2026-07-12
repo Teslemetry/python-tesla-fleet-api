@@ -519,8 +519,9 @@ gives no presence tracking for a scalar enum field.
 
 Anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
 (`CommandStatus`, whitelist events, faults) and any future
-infotainment-domain broadcast - falls back to the untyped `listen_broadcast`,
-which delivers the raw `RoutableMessage` for a given `Domain`:
+infotainment-domain broadcast - has no typed listener surface. Use the untyped
+`listen_broadcast`, which delivers every raw unsolicited `RoutableMessage` for
+a given `Domain`, including decoded `VehicleStatus` broadcasts:
 
 ```python
 from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
@@ -531,6 +532,8 @@ unsubscribe = vehicle.listen_broadcast(Domain.DOMAIN_VEHICLE_SECURITY, print)
 Listeners are plain Python callables registered on the `VehicleBluetooth`
 instance - they persist across reconnects and are torn down only by calling
 the `unsubscribe()` closure returned at registration.
+Callback exceptions are logged and do not stop later listeners or normal
+message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 
 ## Media Commands
 

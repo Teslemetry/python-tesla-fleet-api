@@ -385,6 +385,12 @@ class VehicleBluetooth(
     per-command table (one source of truth), just applied to a broadcast frame
     or a follow-up read respectively.
 
+    The same unsolicited broadcast stream also feeds persistent listeners
+    inherited from ``BroadcastListeners``: typed ``listen_*`` methods for
+    decoded ``VehicleStatus`` fields and ``listen_broadcast`` for raw
+    per-domain broadcast messages. These listeners are local callables, persist
+    across reconnects, and are removed by the returned unsubscribe closure.
+
     ``raise_unconfirmed`` (default ``False``) is the orthogonal question of what
     to do once a ladder genuinely cannot resolve - the ack/broadcast wait
     (and, under ``"verify"``, the prover read) neither confirmed nor
