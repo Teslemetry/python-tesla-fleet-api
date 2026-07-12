@@ -383,6 +383,38 @@ class WriteFailureBroadcastRaceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
+    async def test_addressed_rejection_surfaces_despite_write_failure(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 5.0
+
+        async def write_raises_after_rejection(*_: Any) -> None:
+            vehicle._on_message(_addressed_rejection_ack(vehicle))
+            await asyncio.sleep(0)
+            raise BleakError("write failed")
+
+        vehicle.client.write_gatt_char = AsyncMock(
+            side_effect=write_raises_after_rejection
+        )
+
+        result = await asyncio.wait_for(vehicle.door_lock(), timeout=0.5)
+
+        self.assertEqual(result["response"]["result"], False)
+
+    async def test_addressed_ack_surfaces_despite_write_failure(self) -> None:
+        vehicle = _make_vehicle()
+        vehicle._actuation_timeout = 5.0
+
+        async def write_raises_after_ack(*_: Any) -> None:
+            vehicle._on_message(_addressed_ok_ack(vehicle))
+            await asyncio.sleep(0)
+            raise BleakError("write failed")
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_raises_after_ack)
+
+        result = await asyncio.wait_for(vehicle.door_lock(), timeout=0.5)
+
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
     async def test_write_timeout_with_no_broadcast_raises_unconfirmed(self) -> None:
         vehicle = _make_vehicle(raise_unconfirmed=True)
         vehicle._actuation_timeout = 0.05

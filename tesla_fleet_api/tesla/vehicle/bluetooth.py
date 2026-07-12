@@ -741,17 +741,26 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 # BluetoothTransportError - so a mutating command's
                 # confirmation ladder treats this like a lost ack instead of a
                 # proven miss a router could safely retry.
-                if broadcast_future is not None:
-                    try:
-                        async with asyncio.timeout(timeout):
-                            return await broadcast_future
-                    except TimeoutError:
-                        pass
-                    finally:
-                        self._disarm_broadcast_confirmation(domain, broadcast_watcher)
-                else:
+                if optimistic:
                     self._disarm_broadcast_confirmation(domain, broadcast_watcher)
-                raise BluetoothTimeout from e
+                    raise BluetoothTimeout from e
+                try:
+                    if confirm_broadcast is None:
+                        return await self._await_response(
+                            domain, msg, requires, expects_data, timeout
+                        )
+                    return await self._await_response_or_broadcast(
+                        domain,
+                        msg,
+                        requires,
+                        expects_data,
+                        timeout,
+                        broadcast_future,
+                        broadcast_watcher,
+                        mismatches,
+                    )
+                except BluetoothTimeout as timeout_exc:
+                    raise BluetoothTimeout(timeout_exc.data, timeout_exc.status) from e
 
             if optimistic:
                 return RoutableMessage()
