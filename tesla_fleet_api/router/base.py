@@ -49,13 +49,14 @@ class Router(Generic[PrimaryT, SecondaryT]):
     backend that has them.
 
     Dispatch to a callable performs *per-command* failover: the backends that
-    expose the method are attempted in order, and if one raises any exception (a
-    connection failure or a mid-command transport error such as a write/notify
-    failure or a disconnect), the same call is automatically retried on the next
-    backend that has it, with the same arguments. The error only propagates when
-    every applicable backend fails, in which case the last error is raised.
-    Each attempted backend emits a ``DEBUG`` log line with the routed command
-    name, backend class, and success/error result.
+    expose the method are attempted in order, and if one raises any exception
+    other than ``BluetoothUnconfirmedCommand`` (a connection failure or a
+    mid-command transport error such as a write/notify failure or a disconnect),
+    the same call is automatically retried on the next backend that has it, with
+    the same arguments. The error only propagates when every applicable backend
+    fails, in which case the last error is raised. Each attempted backend emits
+    a ``DEBUG`` log line with the routed command name, backend class, and
+    success/error result.
 
     .. warning::
 

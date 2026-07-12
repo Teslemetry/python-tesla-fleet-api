@@ -52,7 +52,8 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing the timeout.
+        timeouts by reading the resulting state before surfacing an unconfirmed
+        command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         """
@@ -94,7 +95,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing the timeout.
+        timeouts by reading the resulting state before surfacing an unconfirmed
+        command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         """
@@ -113,7 +115,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         """Creates a bluetooth vehicle that uses command protocol.
 
         Set ``verify_commands`` to confirm supported mutating BLE command
-        timeouts by reading the resulting state before surfacing the timeout.
+        timeouts by reading the resulting state before surfacing an unconfirmed
+        command timeout.
         ``keepalive_interval`` seconds of GATT idleness triggers a passive read
         to hold the link open (``None``/``0`` disables).
         """
