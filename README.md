@@ -193,6 +193,11 @@ failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
 ESPHome proxies) and response-wait timeouts through the same library error
 hierarchy.
 
+`VehicleBluetooth` can also register persistent BLE broadcast listeners for
+unsolicited VCSEC `VehicleStatus` updates. Use typed `listen_*` helpers for the
+decoded vehicle-status fields, or `listen_broadcast(domain, callback)` for raw
+per-domain broadcast messages.
+
 ### Routing and Failover
 
 The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on most errors. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:

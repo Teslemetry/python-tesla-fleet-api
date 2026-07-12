@@ -478,6 +478,69 @@ endpoint, because requesting multiple endpoints together can exceed the
 vehicle's signed-command response-size cap and raise
 `TeslaFleetMessageFaultResponseSizeExceedsMTU`.
 
+## Broadcast Listeners
+
+The vehicle's VCSEC computer emits unsolicited `VehicleStatus` broadcasts on
+the same BLE notification subscription used for command replies, independent
+of any command you send. `VehicleBluetooth` fans these out to persistent
+per-field listeners, so you can receive vehicle-state changes passively
+instead of polling the state readers above.
+
+Every `VehicleStatus` leaf field is a well-defined protobuf enum or int, so
+each has its own typed listener method, similar in spirit to
+[python-teslemetry-stream](https://github.com/Teslemetry/python-teslemetry-stream)'s
+`listen_<Field>` surface:
+
+- `listen_vehicle_lock_state(callback)` - `VehicleLockState_E`
+- `listen_vehicle_sleep_status(callback)` - `VehicleSleepStatus_E`
+- `listen_user_presence(callback)` - `UserPresence_E`
+- `listen_front_driver_door(callback)` - `ClosureState_E`
+- `listen_front_passenger_door(callback)` - `ClosureState_E`
+- `listen_rear_driver_door(callback)` - `ClosureState_E`
+- `listen_rear_passenger_door(callback)` - `ClosureState_E`
+- `listen_front_trunk(callback)` - `ClosureState_E`
+- `listen_rear_trunk(callback)` - `ClosureState_E`
+- `listen_charge_port(callback)` - `ClosureState_E`
+- `listen_tonneau(callback)` - `ClosureState_E`
+- `listen_tonneau_percent_open(callback)` - `int`
+
+Each `listen_*` method takes a synchronous `callback(value)` and returns an
+`unsubscribe()` closure:
+
+```python
+def on_lock_state(state):
+    print(f"Lock state: {state}")
+
+unsubscribe = vehicle.listen_vehicle_lock_state(on_lock_state)
+...
+unsubscribe()
+```
+
+The door/trunk/charge-port/tonneau listeners and `listen_tonneau_percent_open`
+only fire on broadcasts that actually carry the corresponding submessage
+(`closureStatuses`/`detailedClosureStatus`) - not every status broadcast
+includes them. `listen_vehicle_lock_state`, `listen_vehicle_sleep_status`, and
+`listen_user_presence` fire on every `VehicleStatus` broadcast, since proto3
+gives no presence tracking for a scalar enum field.
+
+Anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
+(`CommandStatus`, whitelist events, faults) and any future
+infotainment-domain broadcast - has no typed listener surface. Use the untyped
+`listen_broadcast`, which delivers every raw unsolicited `RoutableMessage` for
+a given `Domain`, including decoded `VehicleStatus` broadcasts:
+
+```python
+from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
+
+unsubscribe = vehicle.listen_broadcast(Domain.DOMAIN_VEHICLE_SECURITY, print)
+```
+
+Listeners are plain Python callables registered on the `VehicleBluetooth`
+instance - they persist across reconnects and are torn down only by calling
+the `unsubscribe()` closure returned at registration.
+Callback exceptions are logged and do not stop later listeners or normal
+message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
+
 ## Media Commands
 
 `VehicleBluetooth` inherits the signed media commands from `Commands`, so media

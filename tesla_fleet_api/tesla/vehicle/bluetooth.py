@@ -26,6 +26,7 @@ from tesla_fleet_api.exceptions import (
     TeslaFleetError,
     WhitelistOperationStatus,
 )
+from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners
 from tesla_fleet_api.tesla.vehicle.commands import (
     Commands,
     infotainment_command_name,
@@ -298,7 +299,9 @@ _INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | Non
 }
 
 
-class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
+class VehicleBluetooth(
+    BroadcastListeners, Commands[BluetoothParentT], Generic[BluetoothParentT]
+):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing.
 
     Callers can catch failures from this class with a single ``TeslaFleetError``,
@@ -381,6 +384,12 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
     Both rungs above derive their expected-end-state predicate from the same
     per-command table (one source of truth), just applied to a broadcast frame
     or a follow-up read respectively.
+
+    The same unsolicited broadcast stream also feeds persistent listeners
+    inherited from ``BroadcastListeners``: typed ``listen_*`` methods for
+    decoded ``VehicleStatus`` fields and ``listen_broadcast`` for raw
+    per-domain broadcast messages. These listeners are local callables, persist
+    across reconnects, and are removed by the returned unsubscribe closure.
 
     ``raise_unconfirmed`` (default ``False``) is the orthogonal question of what
     to do once a ladder genuinely cannot resolve - the ack/broadcast wait
@@ -489,6 +498,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
         self._broadcast_watchers = {}
+        self._init_broadcast_listeners()
         self.device = device
         self._connect_lock = asyncio.Lock()
         self._buffer = ReassemblingBuffer(self._on_message)
@@ -655,9 +665,15 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
         if msg.to_destination.routing_address != self._from_destination:
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
-            watcher = self._broadcast_watchers.get(msg.from_destination.domain)
+            domain = msg.from_destination.domain
+            watcher = self._broadcast_watchers.get(domain)
             if watcher is not None:
                 watcher(msg)
+            self._dispatch_domain_listeners(domain, msg)
+            if domain == Domain.DOMAIN_VEHICLE_SECURITY and self._status_listeners:
+                status = _decode_vcsec_status(msg)
+                if status is not None:
+                    self._dispatch_status_listeners(status)
             return
 
         queue = self._queues.get(msg.from_destination.domain)
