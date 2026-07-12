@@ -55,10 +55,10 @@ class BluetoothCommandFailed(TeslaFleetError):
     """A mutating Bluetooth command was proven NOT to have taken effect.
 
     Unlike ``BluetoothUnconfirmedCommand`` (ack lost, outcome unknown), this
-    means a state check - a ``verify_commands`` post-timeout read, or the
-    vehicle's own status broadcast still showing a different value once the
-    whole confirmation window elapsed - actively contradicted the requested
-    end state. That makes it safe to fail over: a router replaying the
+    means a state check - a ``confirmation="verify"`` post-timeout read, or
+    the vehicle's own status broadcast still showing a different value once
+    the whole confirmation window elapsed - actively contradicted the
+    requested end state. That makes it safe to fail over: a router replaying the
     command on a fallback transport is not at risk of double-executing an
     already-applied command, because this one demonstrably did not apply.
     Deliberately does NOT subclass ``BluetoothTimeout``/

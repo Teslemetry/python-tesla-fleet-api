@@ -211,13 +211,14 @@ class ReassemblingBuffer:
 # Optional post-timeout command verification.
 #
 # A lost ack from a mutating BLE command is inconclusive: the vehicle may have
-# executed it anyway. When ``verify_commands`` is on, a timed-out mutation whose
-# outcome can be derived from its own arguments is confirmed by reading the
-# mapped state instead of surfacing the ambiguous unconfirmed timeout. A verify
-# "plan" pairs the state reader to call with a predicate that checks the
-# observed state against the requested value. Commands absent from these tables
-# - true toggles, relative steps, and ack-only actions whose outcome cannot be
-# derived from the request - have no plan and raise the unconfirmed timeout.
+# executed it anyway. Under ``confirmation="verify"``, a timed-out mutation
+# whose outcome can be derived from its own arguments is confirmed by reading
+# the mapped state instead of falling through to the ambiguous unconfirmed
+# outcome. A verify "plan" pairs the state reader to call with a predicate that
+# checks the observed state against the requested value. Commands absent from
+# these tables - true toggles, relative steps, and ack-only actions whose
+# outcome cannot be derived from the request - have no plan and fall through to
+# ``raise_unconfirmed``.
 VerifyPlan = tuple[str, Callable[[Any], bool]]
 
 
@@ -350,17 +351,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
       addressed ack, if it arrives first, still wins and still raises a real
       car-side rejection. A command with no derivable end state - true
       toggles, relative steps, and ack-only actions - has no broadcast to
-      race and simply waits for the ack, raising ``BluetoothUnconfirmedCommand``
-      on timeout.
+      race and simply waits for the ack, falling through to
+      ``raise_unconfirmed`` on timeout.
     - ``"verify"``: same as ``"ack"``, plus one more rung - an ack/broadcast
       timeout for a command whose expected post-state is derivable from its
       arguments reads the mapped prover state over the same held connection
       and either returns a normal success result (the command executed),
       raises ``BluetoothCommandFailed`` (the read proves it did not), or
-      re-raises ``BluetoothUnconfirmedCommand`` (the read itself could not be
+      falls through to ``raise_unconfirmed`` (the read itself could not be
       attempted, e.g. an INFO-domain prover needs the car awake). Commands
-      with no derivable prover raise the unconfirmed timeout exactly as under
-      ``"ack"``.
+      with no derivable prover fall through to ``raise_unconfirmed`` exactly
+      as under ``"ack"``.
 
     Both rungs above derive their expected-end-state predicate from the same
     per-command table (one source of truth), just applied to a broadcast frame
@@ -1085,7 +1086,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         any value passed here.
 
         A lost ack after the write reached the vehicle is unconfirmed, not
-        failed, so a timed-out wait raises ``BluetoothUnconfirmedCommand``
+        failed; when the ladder remains unresolved,
+        ``raise_unconfirmed=True`` raises ``BluetoothUnconfirmedCommand``
         rather than plain ``BluetoothTimeout`` - see that exception's
         docstring. For a command with a verify plan (lock/unlock), the same
         wait window also races a matching VCSEC status broadcast against the

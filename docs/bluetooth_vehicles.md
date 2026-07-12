@@ -119,10 +119,11 @@ async def main():
 asyncio.run(main())
 ```
 
-`wake_up()` is best-effort over BLE: a `BluetoothUnconfirmedCommand` from the
-wake request can be a false negative even when the vehicle wakes successfully
-(and still matches `except BluetoothTimeout`). Confirm readiness by retrying a
-cheap INFO-domain read, such as `charge_state()`, with backoff. The
+`wake_up()` is best-effort over BLE: with `raise_unconfirmed=True`, a
+`BluetoothUnconfirmedCommand` from the wake request can be a false negative
+even when the vehicle wakes successfully (and still matches
+`except BluetoothTimeout`). Confirm readiness by retrying a cheap INFO-domain
+read, such as `charge_state()`, with backoff. The
 infotainment computer can also take longer to become ready than the
 vehicle-security computer, so INFO-domain reads immediately after waking should
 retry `BluetoothTimeout` with backoff. Keep one BLE connection open across
@@ -140,8 +141,10 @@ transport failure - the command never reached the vehicle - from a vehicle
 timeout after the command or request was written.
 
 A response-wait timeout for a *mutating* command (RKE/closure actions,
-HVAC/media/charging commands, `wake_up()`) that stays genuinely unresolved
-raises `BluetoothUnconfirmedCommand` instead of plain `BluetoothTimeout` - see
+HVAC/media/charging commands, `wake_up()`) that stays genuinely unresolved is
+handled by the `raise_unconfirmed` knob: the default best-effort mode returns a
+success-shaped response, while `raise_unconfirmed=True` raises
+`BluetoothUnconfirmedCommand` instead of plain `BluetoothTimeout` - see
 "Mutating Command Timeouts" below for the `confirmation` and
 `raise_unconfirmed` knobs that shape that outcome. A response-wait timeout for
 anything else (a state read) still raises plain `BluetoothTimeout`.
@@ -163,7 +166,9 @@ the next response, but it does not change command acknowledgement timeouts.
 ## Mutating Command Timeouts
 
 A `BluetoothUnconfirmedCommand` from a mutating BLE command is unconfirmed, not
-proof that the command failed. The vehicle can apply the command even when its
+proof that the command failed. It is raised only when `raise_unconfirmed=True`;
+with the default `False`, the same still-ambiguous outcome returns a
+best-effort success. The vehicle can apply the command even when its
 acknowledgement does not reach the client - `door_lock()`/`door_unlock()` have
 both been observed to execute despite this exception. Never blind-retry the
 same command, and never replay it on a fallback transport (e.g. a
@@ -266,10 +271,11 @@ vehicle = tesla_bluetooth.vehicles.create(
 ```
 
 `verify_commands`/`optimistic` booleans are still accepted as deprecated
-keyword-only constructor/factory aliases for
-`confirmation="verify"`/`confirmation="optimistic"` - passing either emits a
-`DeprecationWarning` and maps onto `confirmation`. Prefer `confirmation`
-directly in new code.
+constructor/factory aliases for `confirmation="verify"` /
+`confirmation="optimistic"` - passing either emits a `DeprecationWarning` and
+maps onto `confirmation`. A positional boolean in the `confirmation` slot is
+also treated as the old positional `verify_commands` value. Prefer
+`confirmation` directly in new code.
 
 ## Climate Commands
 
@@ -464,9 +470,10 @@ such as `now_playing_artist`, `now_playing_title`, and the
 so track/favorite navigation is best verified by the command acknowledgement and
 paired with the inverse command when an exact state fingerprint is unavailable.
 
-If a BLE command times out after the write, re-read the relevant state before
-assuming whether the command applied. A `BluetoothUnconfirmedCommand` is not
-enough to prove either failure or success.
+If a BLE command is still ambiguous after the write, re-read the relevant state
+before assuming whether the command applied. A `BluetoothUnconfirmedCommand`
+(when `raise_unconfirmed=True`) is not enough to prove either failure or
+success.
 
 `remote_boombox(sound)` also uses the INFO-domain signed-command transport and
 plays through the vehicle external speaker. Use it only when someone is present
