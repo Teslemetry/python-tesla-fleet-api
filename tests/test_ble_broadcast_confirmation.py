@@ -228,6 +228,21 @@ class StatelessCommandUnaffectedTests(IsolatedAsyncioTestCase):
 
 
 class MismatchedBroadcastTests(IsolatedAsyncioTestCase):
+    async def test_prewrite_stale_mismatch_stays_unconfirmed(self) -> None:
+        vehicle = _make_vehicle(raise_unconfirmed=True)
+        vehicle._actuation_timeout = 0.05
+
+        async def write_after_stale_broadcast(*_: Any) -> None:
+            vehicle._on_message(_unlocked_broadcast())
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(
+            side_effect=write_after_stale_broadcast
+        )
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await asyncio.wait_for(vehicle.door_lock(), timeout=1.0)
+
     async def test_mismatch_standing_at_window_end_raises_command_failed(self) -> None:
         # If the whole window elapses with a mismatching broadcast as the
         # last word and nothing else confirming, that is now-final proof the

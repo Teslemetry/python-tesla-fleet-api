@@ -687,15 +687,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
 
             await self.connect_if_needed()
             assert self.client is not None
+            write_complete = False
             mismatches: list[VehicleStatus] = []
             broadcast_future: asyncio.Future[RoutableMessage] | None = None
             broadcast_watcher: _BroadcastWatcher | None = None
             if confirm_broadcast is not None and not optimistic:
                 broadcast_future, broadcast_watcher = self._arm_broadcast_confirmation(
-                    domain, confirm_broadcast, mismatches
+                    domain, confirm_broadcast, mismatches, lambda: write_complete
                 )
             try:
                 await self.client.write_gatt_char(WRITE_UUID, payload, True)
+                write_complete = True
                 self._last_activity = time.monotonic()
             # bleak-esphome converts an aioesphomeapi write timeout into a
             # builtin TimeoutError, not a BleakError, so catch both to keep the
@@ -789,8 +791,8 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         window could still confirm success. Only the addressed-reply path can
         raise a rejection while the race is live. If the whole window elapses
         with neither an ack nor a confirming broadcast, but at least one
-        mismatching broadcast was observed, that mismatch is now-final proof
-        the command did not reach the requested state:
+        post-write mismatching broadcast was observed, that mismatch is
+        now-final proof the command did not reach the requested state:
         ``BluetoothCommandFailed`` is raised instead of the ambiguous
         ``BluetoothTimeout``/``BluetoothUnconfirmedCommand``, so a fallback
         transport can fail over safely instead of risking a double-apply on a
@@ -836,16 +838,17 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
         domain: Domain,
         confirm_broadcast: Callable[[VehicleStatus], bool],
         mismatches: list[VehicleStatus],
+        write_complete: Callable[[], bool],
     ) -> tuple[asyncio.Future[RoutableMessage], _BroadcastWatcher]:
         """Arm a watcher for broadcasts satisfying ``confirm_broadcast``.
 
         Live-verified: a VCSEC actuation's addressed ack can be lost while the
         vehicle keeps emitting its status broadcast on the same notification
         subscription, carrying the very state change the actuation caused. A
-        broadcast that decodes but doesn't match is appended to ``mismatches``
-        instead of resolving anything here - the caller only treats it as
-        proof of failure once the whole wait window elapses with nothing else
-        confirming.
+        post-write broadcast that decodes but doesn't match is appended to
+        ``mismatches`` instead of resolving anything here - the caller only
+        treats it as proof of failure once the whole wait window elapses with
+        nothing else confirming.
         """
         future: asyncio.Future[RoutableMessage] = (
             asyncio.get_running_loop().create_future()
@@ -859,7 +862,7 @@ class VehicleBluetooth(Commands[BluetoothParentT], Generic[BluetoothParentT]):
                 return
             if confirm_broadcast(status):
                 future.set_result(broadcast)
-            else:
+            elif write_complete():
                 mismatches.append(status)
 
         self._broadcast_watchers[domain] = on_broadcast
