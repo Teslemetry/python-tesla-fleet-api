@@ -1,10 +1,12 @@
 """Tests for TeslemetryEnergySite.get_authorized_clients(), the typed accessor
 over the Teslemetry ``command/authorized_clients`` endpoint.
 
-Covers the two upstream-review-flagged correctness points: a falsy field
-value (e.g. an enum ``0``) must survive parsing, and an explicitly present
-but empty ``authorized_clients`` list must be treated as authoritative
-(zero clients) rather than as "field missing, keep looking".
+This endpoint's schema is undocumented; the wire-shape variants covered here
+(null body, bare list, wrapper envelope, key-name casing) are pinned from the
+Home Assistant Teslemetry integration's own defensive parsing of it. No site
+has been observed with a populated client list yet, so the per-entry shape
+is not live-sample-confirmed - see ``AuthorizedClient`` in
+``tesla_fleet_api/teslemetry/energysite.py``.
 """
 
 from __future__ import annotations
@@ -14,32 +16,12 @@ from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
+from tesla_fleet_api.const import AuthorizedClientState
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
 _UNSET = object()
 
-# A realistic sanitized fixture shape, matching what the Home Assistant
-# Teslemetry integration's config flow (PR #176328) exercises against this
-# endpoint.
 PUBLIC_KEY_B64 = "MIIBCgKCAQEAsomeBase64EncodedRsaPublicKeyBytes=="
-
-
-def _verified_clients_response() -> dict[str, Any]:
-    return {
-        "response": {
-            "authorized_clients": [
-                "not-a-dict",
-                {"public_key": "some-other-key", "state": 3},
-                {
-                    "public_key": PUBLIC_KEY_B64,
-                    "state": 3,
-                    "description": "Home Assistant",
-                    "key_type": 1,
-                    "authorized_client_type": 0,
-                },
-            ]
-        }
-    }
 
 
 def _fake_response(*, json_body: object = _UNSET) -> MagicMock:
@@ -75,59 +57,121 @@ def _make_site(json_body: object):
 
 class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
     async def test_normal_payload_round_trips(self) -> None:
-        site = _make_site(_verified_clients_response())
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [
+                        "not-a-dict",
+                        {
+                            "public_key": PUBLIC_KEY_B64,
+                            "state": 3,
+                        },
+                    ]
+                }
+            }
+        )
 
         result = await site.get_authorized_clients()
 
-        self.assertIsNotNone(result.clients)
-        assert result.clients is not None
-        self.assertEqual(len(result.clients), 2)
-        matched = result.clients[1]
+        self.assertEqual(len(result.clients), 1)
+        matched = result.clients[0]
         self.assertEqual(matched.public_key, PUBLIC_KEY_B64)
-        self.assertEqual(matched.state, 3)
-        self.assertEqual(matched.description, "Home Assistant")
-        self.assertEqual(matched.key_type, 1)
+        self.assertEqual(matched.state, AuthorizedClientState.VERIFIED)
 
-    async def test_falsy_zero_field_is_preserved(self) -> None:
-        site = _make_site(_verified_clients_response())
+    async def test_bare_list_payload_with_no_envelope(self) -> None:
+        site = _make_site([{"public_key": PUBLIC_KEY_B64, "state": 1}])
 
         result = await site.get_authorized_clients()
 
-        assert result.clients is not None
-        matched = result.clients[1]
-        # authorized_client_type=0 (AuthorizedClientType.INVALID) is a legal
-        # value, not a stand-in for "field absent".
-        self.assertEqual(matched.authorized_client_type, 0)
-        self.assertIsNotNone(matched.authorized_client_type)
+        self.assertEqual(len(result.clients), 1)
+        self.assertEqual(result.clients[0].state, AuthorizedClientState.PENDING)
 
-    async def test_explicitly_empty_list_is_authoritative(self) -> None:
+    async def test_camel_case_entry_fields_are_recognized(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [
+                        {
+                            "publicKey": PUBLIC_KEY_B64,
+                            "authorized_client_state": 3,
+                        }
+                    ]
+                }
+            }
+        )
+
+        result = await site.get_authorized_clients()
+
+        self.assertEqual(len(result.clients), 1)
+        matched = result.clients[0]
+        self.assertEqual(matched.public_key, PUBLIC_KEY_B64)
+        self.assertEqual(matched.state, AuthorizedClientState.VERIFIED)
+
+    async def test_state_as_string_is_typed_via_enum(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [
+                        {"public_key": PUBLIC_KEY_B64, "state": "verified"}
+                    ]
+                }
+            }
+        )
+
+        result = await site.get_authorized_clients()
+
+        self.assertEqual(result.clients[0].state, AuthorizedClientState.VERIFIED)
+
+    async def test_unrecognized_present_state_is_preserved_not_dropped(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [{"public_key": PUBLIC_KEY_B64, "state": 0}]
+                }
+            }
+        )
+
+        result = await site.get_authorized_clients()
+
+        # 0 is not a member of AuthorizedClientState, but it is a present
+        # value - it must not be coerced to None (which means "absent").
+        self.assertEqual(result.clients[0].state, 0)
+        self.assertIsNotNone(result.clients[0].state)
+
+    async def test_explicitly_empty_list_returns_typed_empty_list(self) -> None:
         site = _make_site({"response": {"authorized_clients": []}})
 
         result = await site.get_authorized_clients()
 
         self.assertEqual(result.clients, [])
-        self.assertIsNotNone(result.clients)
 
-    async def test_absent_field_is_distinct_from_empty_list(self) -> None:
+    async def test_absent_field_returns_typed_empty_list(self) -> None:
         site = _make_site({"response": {"foo": "bar"}})
 
         result = await site.get_authorized_clients()
 
-        self.assertIsNone(result.clients)
+        self.assertEqual(result.clients, [])
 
-    async def test_null_body_is_handled_without_raising(self) -> None:
+    async def test_null_body_returns_typed_empty_list_without_raising(self) -> None:
         site = _make_site(None)
 
         result = await site.get_authorized_clients()
 
-        self.assertIsNone(result.clients)
+        self.assertEqual(result.clients, [])
         self.assertIsNone(result.raw)
 
     async def test_non_dict_entries_are_skipped(self) -> None:
-        site = _make_site(_verified_clients_response())
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [
+                        "not-a-dict",
+                        {"public_key": PUBLIC_KEY_B64, "state": 3},
+                    ]
+                }
+            }
+        )
 
         result = await site.get_authorized_clients()
 
-        assert result.clients is not None
-        # The "not-a-dict" entry in the fixture is dropped, not raised on.
-        self.assertTrue(all(hasattr(c, "public_key") for c in result.clients))
+        self.assertEqual(len(result.clients), 1)

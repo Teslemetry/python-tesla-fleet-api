@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from tesla_fleet_api.const import (
     AuthorizedClientKeyType,
+    AuthorizedClientState,
     AuthorizedClientType,
     Method,
 )
@@ -24,15 +25,40 @@ def _field(payload: dict[str, Any], *keys: str) -> Any:
     return None
 
 
+def _normalize_state(value: Any) -> AuthorizedClientState | int | str | None:
+    """Type a raw ``state`` value against ``AuthorizedClientState``.
+
+    Tesla has not published an OpenAPI schema for this pairing endpoint, so
+    ``const.py``'s enum is the schema of record. A recognized int or member
+    name (case-insensitive) becomes the enum member; a present-but-
+    unrecognized value is returned unchanged rather than dropped to
+    ``None``, since only a genuinely absent field means ``None``. ``bool``
+    is excluded from the int branch since it subclasses ``int`` but is
+    never a legal state code.
+    """
+    if (
+        value is None
+        or isinstance(value, AuthorizedClientState)
+        or isinstance(value, bool)
+    ):
+        return value
+    if isinstance(value, int):
+        try:
+            return AuthorizedClientState(value)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        try:
+            return AuthorizedClientState[value.strip().upper()]
+        except KeyError:
+            return value
+    return value
+
+
 def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
     return AuthorizedClient(
         public_key=_field(payload, "public_key", "publicKey"),
-        description=_field(payload, "description"),
-        key_type=_field(payload, "key_type", "keyType"),
-        authorized_client_type=_field(
-            payload, "authorized_client_type", "authorizedClientType"
-        ),
-        state=_field(payload, "state", "authorized_client_state"),
+        state=_normalize_state(_field(payload, "state", "authorized_client_state")),
         raw=payload,
     )
 
@@ -41,16 +67,16 @@ def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
 class AuthorizedClient:
     """One entry from a Teslemetry ``list_authorized_clients`` response.
 
-    Tesla has not published this response shape, so fields are read
-    defensively (snake_case and camelCase key variants). ``raw`` keeps the
-    original entry for any field not modeled here.
+    Only ``public_key`` and ``state`` are modeled - the two fields a
+    pairing flow needs to confirm a registered key. Tesla has not
+    published this response's schema, so anything else on an entry is
+    available via ``raw`` rather than guessed at. Each field accepts the
+    two key-name variants observed for it (``public_key``/``publicKey``,
+    ``state``/``authorized_client_state``).
     """
 
     public_key: str | None
-    description: str | None
-    key_type: int | None
-    authorized_client_type: int | None
-    state: int | None
+    state: AuthorizedClientState | int | str | None
     raw: dict[str, Any]
 
 
@@ -58,55 +84,47 @@ class AuthorizedClient:
 class AuthorizedClients:
     """Parsed result of :meth:`TeslemetryEnergySite.get_authorized_clients`.
 
-    ``clients`` is ``None`` when the outcome is genuinely unknown: the
-    response body itself was ``None`` (Teslemetry may return a null body),
-    or no ``authorized_clients``/``authorizedClients`` key could be found in
-    it. An explicitly present but empty client list is authoritative and
-    distinct from that - it means the gateway reports zero authorized
-    clients, not "keep looking elsewhere in the payload" - so it is
-    returned as ``[]``, never coerced to ``None``.
+    ``clients`` is always a list: a ``None`` response body, an unrecognized
+    response shape, and an explicitly empty ``authorized_clients`` list all
+    mean "no authorized clients to report" for this endpoint and collapse
+    to ``[]`` rather than being distinguished.
+
+    The envelope this unwraps (``{"response": {"authorized_clients": [...]}}``)
+    is pinned from the pairing flow's own defensive handling of this
+    undocumented endpoint. No site has been observed with a populated
+    client list yet, so that per-entry shape is unconfirmed by a live
+    sample - see :class:`AuthorizedClient`.
     """
 
-    clients: list[AuthorizedClient] | None
+    clients: list[AuthorizedClient]
     raw: Any
 
 
-def _find_authorized_clients_list(payload: Any) -> tuple[bool, list[Any]]:
-    """Locate the raw authorized-clients list in a command response.
+def _authorized_clients_list(payload: Any) -> list[Any]:
+    """Return the raw authorized-clients list from a command response, or [].
 
-    Returns ``(found, entries)``. ``found`` is ``False`` only when no
-    ``authorized_clients``/``authorizedClients`` key exists anywhere
-    checked (the payload itself, or its ``response`` wrapper) - an unknown
-    outcome, never conflated with a found-but-empty list.
+    A precise, single-path unwrap of the one documented envelope - not a
+    search across candidate wrapper keys.
     """
-    body: Any = payload
-    if isinstance(body, dict):
-        body = cast("dict[str, Any]", body)
-        wrapped = _field(body, "response")
-        if isinstance(wrapped, dict):
-            body = cast("dict[str, Any]", wrapped)
-    if isinstance(body, list):
-        return True, cast("list[Any]", body)
-    if not isinstance(body, dict):
-        return False, []
-    body = cast("dict[str, Any]", body)
-    for key in ("authorized_clients", "authorizedClients"):
-        if key in body:
-            value = body[key]
-            return True, cast("list[Any]", value) if isinstance(value, list) else []
-    return False, []
+    if payload is None:
+        return []
+    if isinstance(payload, list):
+        return cast("list[Any]", payload)
+    if not isinstance(payload, dict):
+        return []
+    body = cast("dict[str, Any]", payload)
+    response = body.get("response")
+    if isinstance(response, dict):
+        body = cast("dict[str, Any]", response)
+    value = body.get("authorized_clients")
+    return cast("list[Any]", value) if isinstance(value, list) else []
 
 
 def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
     """Parse a raw ``list_authorized_clients()`` response into typed clients."""
-    if payload is None:
-        return AuthorizedClients(clients=None, raw=None)
-    found, entries = _find_authorized_clients_list(payload)
-    if not found:
-        return AuthorizedClients(clients=None, raw=payload)
     clients = [
         _parse_client(cast("dict[str, Any]", entry))
-        for entry in entries
+        for entry in _authorized_clients_list(payload)
         if isinstance(entry, dict)
     ]
     return AuthorizedClients(clients=clients, raw=payload)
@@ -183,7 +201,7 @@ class TeslemetryEnergySite(EnergySite):
 
         Prefer this over :meth:`list_authorized_clients` for consumers that
         need to inspect the client list - it centralizes the response
-        parsing (including the null-body and empty-vs-absent-list cases)
+        parsing (envelope unwrap, null-body handling, ``state`` typing)
         here instead of in the caller. See :class:`AuthorizedClients` for
         the exact semantics.
         """
