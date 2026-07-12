@@ -33,7 +33,13 @@ def _normalize_query_value(value: Any) -> Any:
     return value
 
 
-def _log_request_result(command: str, transport: str, data: dict[str, Any]) -> None:
+def _log_request_result(command: str, transport: str, data: Any) -> None:
+    """Log the outcome of a completed request; a logging convenience that must
+    never raise, since the request it describes has already succeeded."""
+    if not isinstance(data, dict):
+        LOGGER.debug("command=%s transport=%s result=success", command, transport)
+        return
+    data = cast("dict[str, Any]", data)
     response = data.get("response")
     if isinstance(response, dict) and "result" in response:
         result_data = cast("dict[str, Any]", response)
