@@ -124,8 +124,9 @@ class EnergySite:
         registration the key may be in PENDING or PENDING_VERIFICATION state
         until the gateway confirms it - see ``AuthorizedClientState``. The
         gateway may auto-verify via cloud, otherwise a physical breaker
-        toggle is required to confirm. Use ``list_authorized_clients`` to
-        poll for VERIFIED state.
+        toggle is required to confirm. Verify readiness with a signed local
+        read through the paired LAN client; ``list_authorized_clients`` is
+        only a secondary, best-effort cloud check.
 
         Args:
             public_key: The public key to register. Either raw DER PKCS1
