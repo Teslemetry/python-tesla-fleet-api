@@ -548,9 +548,11 @@ consumers that need to inspect the client list. The helper returns an
 `AuthorizedClients` result. Tesla has not published a schema for this pairing
 endpoint, so the typed helper only unwraps the one envelope shape and models
 the two client fields (`public_key`, `state`) confirmed by the endpoint's own
-known consumer; `clients` is always a list - a null response body, an
-unrecognized response shape, and an explicitly empty client list all mean "no
-authorized clients" and return `[]`. `state` is typed as
+known consumer; `clients` is always a list. Only an explicitly empty
+`authorized_clients` list parses to `clients == []`; a null response body or
+an unrecognized response shape raises
+`tesla_fleet_api.exceptions.InvalidResponse` instead, so malformed data is
+never mistaken for "no authorized clients". `state` is typed as
 `AuthorizedClientState`. The raw response is still available on `raw` for
 anything not modeled.
 
