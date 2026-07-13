@@ -133,11 +133,16 @@ Tesla's cloud endpoint for this is undocumented, and Teslemetry's
 JSON `null` with a `200` status rather than an envelope; that behavior may
 recur, so do not treat this endpoint as authoritative, and never let it
 override a signed local read that already succeeded or failed.
-`TeslemetryEnergySite.find_authorized_clients()` parses this defensively
-(null body, list vs. dict envelope, `state` typing) and always returns a
-typed `AuthorizedClients` with `clients == []` rather than raising, which
-keeps a "not verified yet" read from looking like an error - but a `null`
-response here still tells you nothing about whether the key actually works.
+`TeslemetryEnergySite.find_authorized_clients()` parses the recognized
+shapes (list vs. dict envelope, `state` typing) into a typed
+`AuthorizedClients`, but raises
+`tesla_fleet_api.exceptions.InvalidResponse` on a null body or any other
+unrecognized response shape so that malformed data is distinguishable from
+a genuinely empty client list. Catch `InvalidResponse` (or
+`TeslaFleetError`) around this call and treat it as "no signal" - note that
+`TeslaFleetError` subclasses `BaseException`, so a bare `except Exception`
+will not catch it. Either way, a `null` response here tells you nothing
+about whether the key actually works.
 
 ## 5. Compose local + cloud with EnergySiteRouter
 
