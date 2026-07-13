@@ -192,9 +192,9 @@ and the `health` check).
 > moved, and `Router` has no way to detect that on its own - a call that
 > returns without raising looks identical whether it actuated or not, so
 > failover to the cloud secondary will not trigger. Always confirm the
-> actual outcome with a status read (e.g. `live_status()`'s grid/island
-> fields, or aiopowerwall's `get_status()` `islanding.contactorClosed`)
-> before trusting either path's response for anything actuation-critical.
+> actual outcome with a signed local status read (for example
+> `live_status()`'s grid/island fields) before trusting either path's
+> response for anything actuation-critical.
 
 ## See also
 

@@ -245,7 +245,7 @@ By default the router attempts the primary and fails over on any error, with no 
 from tesla_fleet_api.router import EnergySiteRouter
 
 router = EnergySiteRouter(local_energysite, teslemetry_energysite)
-await router.set_operation(...)  # local first, cloud on failure
+await router.operation(...)  # local first, cloud on failure
 ```
 
 `Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
