@@ -357,6 +357,14 @@ asyncio.run(main())
 
 Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
 
+These commands are unsigned and cloud-only - the actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods on `EnergySite` are documented as accepted by the gateway without physically taking effect for that reason. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+
+Use `list_authorized_clients()` only as a secondary, best-effort cloud check
+while pairing a local key. The reliable verification is a successful signed
+local read through the paired LAN client; the cloud list endpoint can return
+an empty or `null` response even when it is not useful for proving local key
+readiness.
+
 `get_rsa_private_key(path)` loads an existing RSA private key for gateway
 client registration or creates a new unencrypted PEM key file. Newly created
 key files are created owner-readable and owner-writable only (`0600`) from the
@@ -371,7 +379,8 @@ reading the file that won the create race.
 | `get_networking_status()` | Common | WiFi, Ethernet, and cellular connectivity status |
 | `wifi_scan()` | Common | Scan for available WiFi networks |
 | `get_device_cert()` | Common | Device certificate (subject, issuer, validity) |
-| `list_authorized_clients()` | Authorization | Paired keys with roles, state, and verification |
+| `list_authorized_clients()` | Authorization | Best-effort cloud listing of paired keys; not authoritative for local key verification |
+| `add_authorized_client()` | Authorization | Register a public key for local signed LAN control |
 | `get_signed_commands_public_key()` | Authorization | Gateway's public key for signed commands |
 | `get_backup_events()` | TEG | Backup event history (may timeout on some firmware) |
 | `schedule_backup_event()` | TEG | Schedule a manual backup event |

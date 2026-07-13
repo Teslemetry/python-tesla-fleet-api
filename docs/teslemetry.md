@@ -554,6 +554,11 @@ authorized clients" and return `[]`. `state` is typed as
 `AuthorizedClientState`. The raw response is still available on `raw` for
 anything not modeled.
 
+Use these cloud helpers only as secondary, best-effort checks during local key
+pairing. They are not authoritative verification that a key can make signed
+LAN requests; the reliable proof is a successful signed local read through the
+paired client, as shown in [Energy: Local Control](energy_local_control.md).
+
 ```python
 async def main():
     async with aiohttp.ClientSession() as session:

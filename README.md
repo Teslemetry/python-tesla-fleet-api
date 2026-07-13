@@ -114,6 +114,11 @@ asyncio.run(main())
 
 For more detailed examples, see [Fleet API for Energy Sites](docs/fleet_api_energy_sites.md).
 
+To pair an energy gateway's RSA key over the cloud and compose the resulting
+signed local LAN control (via the sibling `aiopowerwall` library) with a
+cloud fallback through `EnergySiteRouter`, see [Energy: Local
+Control](docs/energy_local_control.md).
+
 ### Fleet API with Signed Vehicle Commands
 
 The `VehicleSigned` class provides methods to interact with the Fleet API using signed vehicle commands. Here's a basic example:
@@ -240,7 +245,7 @@ By default the router attempts the primary and fails over on any error, with no 
 from tesla_fleet_api.router import EnergySiteRouter
 
 router = EnergySiteRouter(local_energysite, teslemetry_energysite)
-await router.set_operation(...)  # local first, cloud on failure
+await router.operation(...)  # local first, cloud on failure
 ```
 
 `Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).

@@ -15,5 +15,5 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
     Example::
 
         router = EnergySiteRouter(local_energysite, teslemetry_energysite)
-        await router.set_operation(...)  # local first, cloud on failure
+        await router.operation(...)  # local first, cloud on failure
     """

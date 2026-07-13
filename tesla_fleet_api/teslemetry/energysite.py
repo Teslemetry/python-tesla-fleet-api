@@ -202,8 +202,10 @@ class TeslemetryEnergySite(EnergySite):
         Prefer this over :meth:`list_authorized_clients` for consumers that
         need to inspect the client list - it centralizes the response
         parsing (envelope unwrap, null-body handling, ``state`` typing)
-        here instead of in the caller. See :class:`AuthorizedClients` for
-        the exact semantics.
+        here instead of in the caller. Treat it as a secondary, best-effort
+        cloud check during local key pairing; a successful signed local read
+        through the paired LAN client is the authoritative verification. See
+        :class:`AuthorizedClients` for the exact parsing semantics.
         """
         return _parse_authorized_clients(await self.list_authorized_clients())
 
