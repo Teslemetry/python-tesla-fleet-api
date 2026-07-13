@@ -34,68 +34,33 @@ the gateway. After registration the key sits in `PENDING`/
 confirms it - either auto-verified via cloud, or by a physical breaker toggle
 at the gateway.
 
-Poll `list_authorized_clients()` (or, on `Teslemetry`,
-`find_authorized_clients()`) until the key shows `VERIFIED`. Keep the wording
-of that check resilient: Tesla's cloud endpoint for this is undocumented, and
-Teslemetry's `list_authorized_clients` in particular has been observed
-returning a bare JSON `null` with a `200` status rather than an envelope -
-treat that as "not verified yet, keep polling," not as an error.
-`TeslemetryEnergySite.find_authorized_clients()` already does this parsing
-for you (null body, list vs. dict envelope, `state` typing) and always
-returns a typed `AuthorizedClients` with `clients == []` rather than raising.
-(`find_authorized_clients` is only on `TeslemetryEnergySite`. Plain
-`TeslaFleetApi`/`Tessie` callers use the untyped `list_authorized_clients()`
-and should apply the same "null/unrecognized shape means not-yet" tolerance
-themselves.)
-
-Steps 1 and 2 together:
-
 ```python
-import asyncio
 import aiohttp
 from tesla_fleet_api import Teslemetry
-from tesla_fleet_api.const import AuthorizedClientState
 
-async def pair_key(session: aiohttp.ClientSession, energy_site_id: int) -> None:
+async def register_key(session: aiohttp.ClientSession, energy_site_id: int):
     api = Teslemetry(access_token="<access_token>", session=session)
 
     # Creates tedapi_rsa_private.pem (mode 0600) on first run, or loads
     # the existing key on subsequent runs.
     await api.get_rsa_private_key("tedapi_rsa_private.pem")
-    public_key_b64 = api.rsa_public_der_pkcs1_b64
 
     energy_site = api.energySites.create(energy_site_id)
     await energy_site.add_authorized_client(
-        public_key_b64,
+        api.rsa_public_der_pkcs1_b64,
         description="My local control client",
     )
-
-    for _ in range(30):
-        result = await energy_site.find_authorized_clients()
-        if any(
-            c.public_key == public_key_b64
-            and c.state == AuthorizedClientState.VERIFIED
-            for c in result.clients
-        ):
-            return
-        await asyncio.sleep(10)
-    raise TimeoutError("Key was not verified in time")
-
-async def main():
-    async with aiohttp.ClientSession() as session:
-        await pair_key(session, energy_site_id=12345)  # id from api.products()
-
-asyncio.run(main())
+    return api, energy_site
 ```
 
 ## 3. Hand the paired key to aiopowerwall
 
-Once the key is verified, `aiopowerwall`'s `PowerwallClient` consumes the
-*same* PEM file directly - it does not need anything else from this library
-at this point. `local_energysite` then exposes the locally implemented
-`EnergySite`-compatible calls (`live_status()`, `operation()`, `backup()`,
-`set_island_mode()`, `get_backup_events()`, and backup-event scheduling)
-through signed requests directly to the gateway over the LAN:
+`aiopowerwall`'s `PowerwallClient` consumes the *same* PEM file directly - it
+does not need anything else from this library at this point. `local_energysite`
+then exposes the locally implemented `EnergySite`-compatible calls
+(`live_status()`, `operation()`, `backup()`, `set_island_mode()`,
+`get_backup_events()`, and backup-event scheduling) through signed requests
+directly to the gateway over the LAN:
 
 ```python
 import aiohttp
@@ -115,20 +80,77 @@ async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEner
     return PowerwallEnergySite(powerwall_client)
 ```
 
-## 4. Compose local + cloud with EnergySiteRouter
+## 4. Verify the key is paired by using it
+
+The gateway takes registration (step 2) and confirmation (auto-verify, or a
+physical breaker toggle) as two separate events, and there is a window
+between them where the key exists but is not yet usable. **The reliable way
+to tell that window has closed is to attempt a signed local read through
+`aiopowerwall` and retry until it succeeds** - a successful signed response
+*is* proof the key is `VERIFIED`, because the gateway would otherwise reject
+it.
+
+`get_system_info()`/`get_status()`-style reads are the natural choice for
+this, but `PowerwallEnergySite` does not implement them locally yet (they
+raise `NotImplementedError` and would tell you nothing about the key - see
+the `EnergySiteRouter` note in step 5). Use `live_status()` instead: it is
+already implemented locally and, under the hood, issues a signed v1r
+request, so it fails exactly the way an unverified key would fail.
+
+Before verification, every signed request rejects with
+`aiopowerwall.PowerwallAuthenticationError` (the gateway's "unknown key id"
+or "authorization not verified" fault) - **that failure is expected and not
+a bug**; treat it as "not yet, keep retrying" and back off between attempts:
+
+```python
+import asyncio
+from aiopowerwall import PowerwallAuthenticationError
+from aiopowerwall.energysite import PowerwallEnergySite
+
+async def wait_until_verified(
+    local_energysite: PowerwallEnergySite,
+    attempts: int = 10,
+    initial_delay: float = 5.0,
+    max_delay: float = 60.0,
+) -> None:
+    delay = initial_delay
+    for attempt in range(attempts):
+        try:
+            await local_energysite.live_status()
+            return  # a successful signed read proves the key is VERIFIED
+        except PowerwallAuthenticationError:
+            if attempt == attempts - 1:
+                raise
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, max_delay)
+```
+
+Only fall back to polling the cloud `list_authorized_clients()` (or, on
+`Teslemetry`, `find_authorized_clients()`) as a **secondary, best-effort**
+check - for example while you have no local network path to the gateway yet.
+Tesla's cloud endpoint for this is undocumented, and Teslemetry's
+`list_authorized_clients` in particular has been observed returning a bare
+JSON `null` with a `200` status rather than an envelope; that behavior may
+recur, so do not treat this endpoint as authoritative, and never let it
+override a signed local read that already succeeded or failed.
+`TeslemetryEnergySite.find_authorized_clients()` parses this defensively
+(null body, list vs. dict envelope, `state` typing) and always returns a
+typed `AuthorizedClients` with `clients == []` rather than raising, which
+keeps a "not verified yet" read from looking like an error - but a `null`
+response here still tells you nothing about whether the key actually works.
+
+## 5. Compose local + cloud with EnergySiteRouter
 
 ```python
 import asyncio
 import aiohttp
-from tesla_fleet_api import Teslemetry
 from tesla_fleet_api.router import EnergySiteRouter
 
 async def main():
     async with aiohttp.ClientSession() as session:
+        api, teslemetry_energysite = await register_key(session, energy_site_id=12345)
         local_energysite = await make_local_energysite(session)
-
-        api = Teslemetry(access_token="<access_token>", session=session)
-        teslemetry_energysite = api.energySites.create(12345)
+        await wait_until_verified(local_energysite)
 
         router = EnergySiteRouter(local_energysite, teslemetry_energysite)
 
