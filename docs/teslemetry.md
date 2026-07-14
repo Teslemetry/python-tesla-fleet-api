@@ -585,6 +585,44 @@ async def main():
 asyncio.run(main())
 ```
 
+## Energy Site Gateway Address
+
+Teslemetry energy sites expose the raw `get_networking_status` command, plus
+a typed `find_gateway_address` helper that discovers the gateway's LAN IPv4
+address - for example to pre-fill the host for the signed local control path
+shown in [Energy: Local Control](energy_local_control.md). The `ipv4_config`
+fields in a `networking_status` response are raw big-endian uint32 integers,
+not dotted-quad strings; the helper decodes them and selects an interface for
+you. Only the `eth` and `wifi` interfaces are considered (never `gsm` -
+cellular is not a LAN path): the helper prefers whichever has `active_route`
+set and a decodable address, then falls back to the first of the two (in
+`eth`, `wifi` order) with any decodable address. A null response body or an
+unrecognized response shape raises
+`tesla_fleet_api.exceptions.InvalidResponse`, so malformed data is never
+mistaken for "no address"; a well-formed response where no interface yields a
+usable address returns `None` instead.
+
+```python
+async def main():
+    async with aiohttp.ClientSession() as session:
+        teslemetry = Teslemetry(
+            session=session,
+            access_token="<access_token>",
+        )
+
+        energy_site = teslemetry.energySites.create(12345)
+
+        address = await energy_site.find_gateway_address()
+        print(address)  # e.g. "192.168.1.138", or None
+
+        # The untyped response is still available when callers need the exact
+        # Teslemetry payload.
+        raw = await energy_site.get_networking_status()
+        print(raw)
+
+asyncio.run(main())
+```
+
 ## Migrate to OAuth
 
 The `migrate_to_oauth` method migrates from an access token to OAuth.
