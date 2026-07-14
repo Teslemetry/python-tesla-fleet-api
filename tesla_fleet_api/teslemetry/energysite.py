@@ -87,18 +87,17 @@ class AuthorizedClients:
 
     ``clients`` is a list of typed entries parsed from a well-formed
     response. A ``None`` response body or a response whose shape doesn't
-    match the one confirmed envelope raises
+    match the confirmed envelope raises
     :class:`~tesla_fleet_api.exceptions.InvalidResponse` instead of being
     silently collapsed to "no clients" - Tesla's endpoint intermittently
     returns HTTP 200 with a null body, which is malformed data, not zero
-    clients. A genuinely empty ``authorized_clients`` list is not malformed
-    and parses to ``[]``.
+    clients. A genuinely empty list under either accepted key is not
+    malformed and parses to ``[]``.
 
-    The envelope this unwraps (``{"response": {"authorized_clients": [...]}}``)
-    is pinned from the pairing flow's own defensive handling of this
-    undocumented endpoint. No site has been observed with a populated
-    client list yet, so that per-entry shape is unconfirmed by a live
-    sample - see :class:`AuthorizedClient`.
+    The envelope this unwraps (``{"response": {"authorized_clients": [...]}}``
+    or ``{"response": {"clients": [...]}}``) is pinned from the pairing
+    flow's own defensive handling of this undocumented endpoint - see
+    :class:`AuthorizedClient`.
     """
 
     clients: list[AuthorizedClient]
@@ -108,13 +107,14 @@ class AuthorizedClients:
 def _authorized_clients_list(payload: Any) -> list[Any]:
     """Return the raw authorized-clients list from a command response.
 
-    A precise, single-path unwrap of the one confirmed envelope (a bare
-    list, or ``{"response": {"authorized_clients": [...]}}``) - not a
-    search across candidate wrapper keys for this undocumented endpoint.
-    Raises :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null
-    body or any other shape, since a 200 that doesn't carry the expected
-    envelope is malformed, not "zero clients". A genuinely empty
-    ``authorized_clients`` list is not malformed and returns ``[]``.
+    A precise, single-path unwrap of the confirmed envelope (a bare list,
+    or ``{"response": {"authorized_clients": [...]}}`` /
+    ``{"response": {"clients": [...]}}``) - not a search across candidate
+    wrapper keys for this undocumented endpoint. Raises
+    :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null body or
+    any other shape, since a 200 that doesn't carry either expected key is
+    malformed, not "zero clients". A genuinely empty list under either key
+    is not malformed and returns ``[]``.
     """
     if payload is None:
         raise InvalidResponse("authorized_clients response body was null")
@@ -126,7 +126,7 @@ def _authorized_clients_list(payload: Any) -> list[Any]:
     response = body.get("response")
     if isinstance(response, dict):
         body = cast("dict[str, Any]", response)
-    value = body.get("authorized_clients")
+    value = _field(body, "authorized_clients", "clients")
     if not isinstance(value, list):
         raise InvalidResponse(cast("dict[str, Any]", payload))
     return cast("list[Any]", value)

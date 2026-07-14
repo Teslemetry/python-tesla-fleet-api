@@ -2,11 +2,11 @@
 over the Teslemetry ``command/authorized_clients`` endpoint.
 
 This endpoint's schema is undocumented; the wire-shape variants covered here
-(null body, bare list, wrapper envelope, key-name casing) are pinned from the
-Home Assistant Teslemetry integration's own defensive parsing of it. No site
-has been observed with a populated client list yet, so the per-entry shape
-is not live-sample-confirmed - see ``AuthorizedClient`` in
-``tesla_fleet_api/teslemetry/energysite.py``.
+(null body, bare list, wrapper envelope, key-name casing, and the
+``authorized_clients``/``clients`` list-key variants) are pinned from the
+Home Assistant Teslemetry integration's own defensive parsing of it plus a
+real captured response (see ``ClientsKeyVariantTests`` below) - see
+``AuthorizedClient`` in ``tesla_fleet_api/teslemetry/energysite.py``.
 
 Tesla's upstream endpoint intermittently returns HTTP 200 with a null body;
 a null body or any other unrecognized 200 shape is malformed data and must
@@ -187,3 +187,127 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
         result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
+
+
+class ClientsKeyVariantTests(IsolatedAsyncioTestCase):
+    """Tesla's live endpoint (Release 953) carries the list under ``clients``,
+    not ``authorized_clients`` - captured 2026-07-14 from a Powerwall 3 site
+    with five real, fully-populated entries (see the ``clients`` key in the
+    ``ListAuthorizedClientsResponse`` payload). ``_authorized_clients_list``
+    must accept both key names, symmetric to the ``public_key``/``publicKey``
+    handling in ``_parse_client``.
+    """
+
+    REAL_CAPTURE_ENTRIES = [
+        {
+            "type": 1,
+            "description": "Teslemetry.com",
+            "key_type": 1,
+            "public_key": "SYNTHETIC_PUBLIC_KEY_1",
+            "roles": [1],
+            "state": 3,
+            "verification": 1,
+            "added_time": {"seconds": 1777328846},
+        },
+        {
+            "type": 1,
+            "description": "PowerSync Cloud",
+            "key_type": 1,
+            "public_key": "SYNTHETIC_PUBLIC_KEY_2",
+            "roles": [1],
+            "state": 2,
+            "verification": 1,
+            "added_time": {"seconds": 1777288515},
+        },
+        {
+            "type": 1,
+            "description": "Powerwall V1R",
+            "key_type": 1,
+            "public_key": "SYNTHETIC_PUBLIC_KEY_3",
+            "roles": [1],
+            "state": 2,
+            "verification": 1,
+            "added_time": {"seconds": 1778476550},
+        },
+        {
+            "type": 1,
+            "description": "Pixel 10 Pro",
+            "key_type": 1,
+            "public_key": "SYNTHETIC_PUBLIC_KEY_4",
+            "roles": [1],
+            "state": 3,
+            "verification": 1,
+            "added_time": {"seconds": 1780101174},
+        },
+        {
+            "type": 1,
+            "description": "Home Assistant",
+            "key_type": 1,
+            "public_key": "SYNTHETIC_PUBLIC_KEY_5",
+            "roles": [1],
+            "state": 2,
+            "verification": 1,
+            "added_time": {"seconds": 1783984580},
+        },
+    ]
+
+    async def test_real_captured_sample_parses_to_five_clients(self) -> None:
+        site = _make_site({"response": {"clients": self.REAL_CAPTURE_ENTRIES}})
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(len(result.clients), 5)
+        self.assertEqual(
+            [c.public_key for c in result.clients],
+            [e["public_key"] for e in self.REAL_CAPTURE_ENTRIES],
+        )
+        self.assertEqual(result.clients[0].state, AuthorizedClientState.VERIFIED)
+        self.assertEqual(
+            result.clients[1].state, AuthorizedClientState.PENDING_VERIFICATION
+        )
+
+    async def test_clients_key_variant_is_recognized(self) -> None:
+        site = _make_site(
+            {"response": {"clients": [{"public_key": PUBLIC_KEY_B64, "state": 3}]}}
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(len(result.clients), 1)
+        self.assertEqual(result.clients[0].public_key, PUBLIC_KEY_B64)
+        self.assertEqual(result.clients[0].state, AuthorizedClientState.VERIFIED)
+
+    async def test_authorized_clients_key_variant_still_recognized(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "authorized_clients": [{"public_key": PUBLIC_KEY_B64, "state": 3}]
+                }
+            }
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(len(result.clients), 1)
+        self.assertEqual(result.clients[0].public_key, PUBLIC_KEY_B64)
+
+    async def test_explicitly_empty_list_under_clients_key_returns_empty(
+        self,
+    ) -> None:
+        site = _make_site({"response": {"clients": []}})
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(result.clients, [])
+
+    async def test_neither_key_present_still_raises_invalid_response(self) -> None:
+        site = _make_site({"response": {"foo": "bar"}})
+
+        with self.assertRaises(InvalidResponse):
+            await site.find_authorized_clients()
+
+    async def test_null_body_still_raises_invalid_response(self) -> None:
+        site = _make_site(None)
+
+        with self.assertRaises(InvalidResponse):
+            await site.find_authorized_clients()
