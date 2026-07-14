@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import socket
+import struct
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -147,6 +149,84 @@ def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
     return AuthorizedClients(clients=clients, raw=payload)
 
 
+_GATEWAY_INTERFACES = ("eth", "wifi")
+
+
+def _decode_ipv4(value: Any) -> str | None:
+    """Decode a raw big-endian uint32 into dotted-quad form.
+
+    ``ipv4_config.address``/``subnet_mask``/``gateway`` in a
+    ``networking_status`` response are network-byte-order uint32 integers,
+    not strings - confirmed against a live Powerwall 3 capture where
+    ``3232235914`` decodes to ``192.168.1.138``. ``bool`` is excluded since
+    it subclasses ``int``; an out-of-range or non-int value returns
+    ``None`` rather than raising, since a single bad address shouldn't
+    fail the whole lookup.
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    if not 0 <= value <= 0xFFFFFFFF:
+        return None
+    return socket.inet_ntoa(struct.pack(">I", value))
+
+
+def _interface_address(interface: Any) -> str | None:
+    if not isinstance(interface, dict):
+        return None
+    ipv4 = cast("dict[str, Any]", interface).get("ipv4_config")
+    if not isinstance(ipv4, dict) or "address" not in ipv4:
+        return None
+    return _decode_ipv4(cast("dict[str, Any]", ipv4)["address"])
+
+
+def _networking_status_body(payload: Any) -> dict[str, Any]:
+    """Unwrap a ``networking_status`` response into its interface-block dict.
+
+    Raises :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null
+    body or a shape that isn't a dict (with or without a ``response``
+    envelope) - anything else is a well-formed body, even if it carries no
+    usable interface.
+    """
+    if payload is None:
+        raise InvalidResponse("networking_status response body was null")
+    if not isinstance(payload, dict):
+        raise InvalidResponse(str(payload))
+    body = cast("dict[str, Any]", payload)
+    response = body.get("response")
+    if isinstance(response, dict):
+        body = cast("dict[str, Any]", response)
+    return body
+
+
+def _parse_gateway_address(payload: Any) -> str | None:
+    """Pick the gateway's LAN IPv4 from a ``networking_status`` response.
+
+    Considers only ``eth``/``wifi`` (never ``gsm`` - cellular isn't a LAN
+    path): prefers whichever of those has ``active_route`` set and a
+    decodable address, then falls back to the first of the two (in
+    ``eth``, ``wifi`` order) that has any decodable address. Returns
+    ``None`` when neither yields one - a well-formed response can simply
+    lack a usable interface.
+    """
+    body = _networking_status_body(payload)
+    interfaces = [body.get(name) for name in _GATEWAY_INTERFACES]
+
+    for interface in interfaces:
+        if (
+            isinstance(interface, dict)
+            and cast("dict[str, Any]", interface).get("active_route")
+            and (address := _interface_address(interface)) is not None
+        ):
+            return address
+
+    for interface in interfaces:
+        address = _interface_address(interface)
+        if address is not None:
+            return address
+
+    return None
+
+
 class TeslemetryEnergySite(EnergySite):
     """Teslemetry specific energy site."""
 
@@ -200,6 +280,22 @@ class TeslemetryEnergySite(EnergySite):
             Method.GET,
             f"api/1/energy_sites/{self.energy_site_id}/command/networking_status",
         )
+
+    async def find_gateway_address(self) -> str | None:
+        """Discover the gateway's LAN IPv4 address, for pre-filling a local
+        control host.
+
+        Prefer this over :meth:`get_networking_status` for consumers that
+        just need a host to connect to - it centralizes the ``eth``/``wifi``
+        interface selection and uint32-to-dotted-quad decoding here instead
+        of in the caller. Raises
+        :class:`~tesla_fleet_api.exceptions.InvalidResponse` on a null
+        response body or an unrecognized response shape; returns ``None``
+        when the response is well-formed but no interface yields an
+        address. See :func:`_parse_gateway_address` for the exact selection
+        rule.
+        """
+        return _parse_gateway_address(await self.get_networking_status())
 
     async def list_authorized_clients(self) -> dict[str, Any]:
         """List authorized clients on the energy gateway via the Teslemetry
