@@ -161,11 +161,14 @@ def _decode_ipv4(value: Any) -> str | None:
     ``3232235914`` decodes to ``192.168.1.138``. ``bool`` is excluded since
     it subclasses ``int``; an out-of-range or non-int value returns
     ``None`` rather than raising, since a single bad address shouldn't
-    fail the whole lookup.
+    fail the whole lookup. ``0`` and ``0xFFFFFFFF`` are also rejected -
+    ``0.0.0.0``/``255.255.255.255`` are never a usable host address, and an
+    unconfigured interface reporting ``address: 0`` must not shadow a real
+    address on another interface in the fallback selection.
     """
     if not isinstance(value, int) or isinstance(value, bool):
         return None
-    if not 0 <= value <= 0xFFFFFFFF:
+    if not 0 < value < 0xFFFFFFFF:
         return None
     return socket.inet_ntoa(struct.pack(">I", value))
 
@@ -183,17 +186,20 @@ def _networking_status_body(payload: Any) -> dict[str, Any]:
     """Unwrap a ``networking_status`` response into its interface-block dict.
 
     Raises :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null
-    body or a shape that isn't a dict (with or without a ``response``
-    envelope) - anything else is a well-formed body, even if it carries no
-    usable interface.
+    body, a shape that isn't a dict, or a ``response`` envelope whose value
+    isn't a dict (``{"response": null}`` is the endpoint's known
+    intermittent malformed mode, not "no address") - anything else is a
+    well-formed body, even if it carries no usable interface.
     """
     if payload is None:
         raise InvalidResponse("networking_status response body was null")
     if not isinstance(payload, dict):
         raise InvalidResponse(str(payload))
     body = cast("dict[str, Any]", payload)
-    response = body.get("response")
-    if isinstance(response, dict):
+    if "response" in body:
+        response = body["response"]
+        if not isinstance(response, dict):
+            raise InvalidResponse(cast("dict[str, Any]", payload))
         body = cast("dict[str, Any]", response)
     return body
 

@@ -173,6 +173,49 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "192.168.1.138")
 
+    async def test_zero_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"active_route": True, "ipv4_config": {"address": 0}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_broadcast_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": 4294967295},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_fallback_skips_eth_with_zero_address(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"ipv4_config": {"address": 0}},
+                    "wifi": {"ipv4_config": {"address": 3232235914}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertEqual(result, "192.168.1.138")
+
     async def test_gsm_only_returns_none(self) -> None:
         site = _make_site(
             {
@@ -218,6 +261,12 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
 class GatewayAddressInvalidResponseTests(IsolatedAsyncioTestCase):
     async def test_null_body_raises_invalid_response(self) -> None:
         site = _make_site(None)
+
+        with self.assertRaises(InvalidResponse):
+            await site.find_gateway_address()
+
+    async def test_null_response_envelope_raises_invalid_response(self) -> None:
+        site = _make_site({"response": None})
 
         with self.assertRaises(InvalidResponse):
             await site.find_gateway_address()
