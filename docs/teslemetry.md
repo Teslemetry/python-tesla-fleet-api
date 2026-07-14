@@ -546,10 +546,12 @@ Teslemetry energy sites support the same raw `list_authorized_clients` command
 as Fleet API energy sites, plus a typed `find_authorized_clients` helper for
 consumers that need to inspect the client list. The helper returns an
 `AuthorizedClients` result. Tesla has not published a schema for this pairing
-endpoint, so the typed helper only unwraps the one envelope shape and models
+endpoint, so the typed helper only unwraps the confirmed envelope shape - the
+client list may arrive under either the `authorized_clients` key or the
+`clients` key (the latter observed live from Tesla Release 953) - and models
 the two client fields (`public_key`, `state`) confirmed by the endpoint's own
-known consumer; `clients` is always a list. Only an explicitly empty
-`authorized_clients` list parses to `clients == []`; a null response body or
+known consumer; `clients` is always a list. Only an explicitly empty list
+under either accepted key parses to `clients == []`; a null response body or
 an unrecognized response shape raises
 `tesla_fleet_api.exceptions.InvalidResponse` instead, so malformed data is
 never mistaken for "no authorized clients". `state` is typed as
