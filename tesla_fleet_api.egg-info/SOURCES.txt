@@ -26,6 +26,7 @@ tesla_fleet_api/tesla/tesla.py
 tesla_fleet_api/tesla/user.py
 tesla_fleet_api/tesla/vehicle/__init__.py
 tesla_fleet_api/tesla/vehicle/bluetooth.py
+tesla_fleet_api/tesla/vehicle/broadcast.py
 tesla_fleet_api/tesla/vehicle/commands.py
 tesla_fleet_api/tesla/vehicle/fleet.py
 tesla_fleet_api/tesla/vehicle/signed.py
@@ -62,6 +63,7 @@ tesla_fleet_api/tessie/tessie.py
 tesla_fleet_api/tessie/vehicle.py
 tests/test_auto_seat_climate.py
 tests/test_ble_broadcast_confirmation.py
+tests/test_ble_broadcast_listeners.py
 tests/test_ble_charging_commands.py
 tests/test_ble_climate_commands.py
 tests/test_ble_command_verification.py
@@ -89,4 +91,5 @@ tests/test_fleet_auth_refresh.py
 tests/test_power_mode_commands.py
 tests/test_router.py
 tests/test_tesla_private_key.py
+tests/test_teslemetry_authorized_clients.py
 tests/test_tessie_vehicle_params.py

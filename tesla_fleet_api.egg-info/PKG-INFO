@@ -137,6 +137,11 @@ asyncio.run(main())
 
 For more detailed examples, see [Fleet API for Energy Sites](docs/fleet_api_energy_sites.md).
 
+To pair an energy gateway's RSA key over the cloud and compose the resulting
+signed local LAN control (via the sibling `aiopowerwall` library) with a
+cloud fallback through `EnergySiteRouter`, see [Energy: Local
+Control](docs/energy_local_control.md).
+
 ### Fleet API with Signed Vehicle Commands
 
 The `VehicleSigned` class provides methods to interact with the Fleet API using signed vehicle commands. Here's a basic example:
@@ -216,6 +221,11 @@ failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
 ESPHome proxies) and response-wait timeouts through the same library error
 hierarchy.
 
+`VehicleBluetooth` can also register persistent BLE broadcast listeners for
+unsolicited VCSEC `VehicleStatus` updates. Use typed `listen_*` helpers for the
+decoded vehicle-status fields, or `listen_broadcast(domain, callback)` for raw
+per-domain broadcast messages.
+
 ### Routing and Failover
 
 The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on most errors. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
@@ -258,7 +268,7 @@ By default the router attempts the primary and fails over on any error, with no 
 from tesla_fleet_api.router import EnergySiteRouter
 
 router = EnergySiteRouter(local_energysite, teslemetry_energysite)
-await router.set_operation(...)  # local first, cloud on failure
+await router.operation(...)  # local first, cloud on failure
 ```
 
 `Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
@@ -286,6 +296,8 @@ Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
 Routers also emit `backend=<ClassName>` lines for each backend tried. See
 [Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
 for examples and the signed-command naming details.
+REST responses that are valid JSON but not objects, such as `null`, lists, or
+scalars, are returned unchanged and log as `result=success`.
 
 ### Teslemetry
 
