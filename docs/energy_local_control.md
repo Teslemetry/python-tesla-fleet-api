@@ -80,6 +80,14 @@ async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEner
     return PowerwallEnergySite(powerwall_client)
 ```
 
+The example uses `192.168.91.1`, the gateway's own WiFi access point. When
+your client connects over your own LAN instead, you can discover the
+gateway's LAN IP over the cloud with
+`TeslemetryEnergySite.find_gateway_address()`, which reads the gateway's
+`networking_status` and returns the decoded IPv4 of its active `eth`/`wifi`
+interface (or `None` when no usable interface is reported) - see
+[Teslemetry](teslemetry.md#energy-site-gateway-address).
+
 ## 4. Verify the key is paired by using it
 
 The gateway takes registration (step 2) and confirmation (auto-verify, or a

@@ -92,4 +92,5 @@ tests/test_power_mode_commands.py
 tests/test_router.py
 tests/test_tesla_private_key.py
 tests/test_teslemetry_authorized_clients.py
+tests/test_teslemetry_gateway_address.py
 tests/test_tessie_vehicle_params.py
