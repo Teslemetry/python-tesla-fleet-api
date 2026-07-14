@@ -230,7 +230,7 @@ router = EnergySiteRouter(local_energysite, teslemetry_energysite)
 await router.set_operation(...)  # local first, cloud on failure
 ```
 
-`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` (and, for backward compatibility, from `tesla_fleet_api.tesla`).
+`Router`, `VehicleRouter`, and `EnergySiteRouter` are all importable from `tesla_fleet_api.router` or from the top-level `tesla_fleet_api` package.
 
 Enable `DEBUG` logging for `tesla_fleet_api` to see which backend served a routed call and why failover happened.
 
