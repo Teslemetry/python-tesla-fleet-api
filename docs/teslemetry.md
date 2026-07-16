@@ -558,10 +558,10 @@ never mistaken for "no authorized clients". `state` is typed as
 `AuthorizedClientState`. The raw response is still available on `raw` for
 anything not modeled.
 
-Use these cloud helpers only as secondary, best-effort checks during local key
-pairing. They are not authoritative verification that a key can make signed
-LAN requests; the reliable proof is a successful signed local read through the
-paired client, as shown in [Energy: Local Control](energy_local_control.md).
+These cloud helpers report the gateway's registered-client state as returned
+by the Teslemetry API. Confirming that a key can actually make signed LAN
+requests requires a successful signed local read through the paired client,
+as shown in [Energy: Local Control](energy_local_control.md).
 
 ```python
 async def main():
