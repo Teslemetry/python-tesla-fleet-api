@@ -324,11 +324,8 @@ class TeslemetryEnergySite(EnergySite):
         caller. Raises
         :class:`~tesla_fleet_api.exceptions.InvalidResponse` on a null
         response body or an unrecognized response shape rather than
-        treating either as "no clients". Treat it as a secondary,
-        best-effort cloud check during local key pairing; a successful
-        signed local read through the paired LAN client is the
-        authoritative verification. See :class:`AuthorizedClients` for the
-        exact parsing semantics.
+        treating either as "no clients". See :class:`AuthorizedClients` for
+        the exact parsing semantics.
         """
         return _parse_authorized_clients(await self.list_authorized_clients())
 
