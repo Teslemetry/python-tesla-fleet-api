@@ -194,12 +194,13 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         )
 
     async def navigation_gps_request(
-        self, lat: float, lon: float, order: int | None = None
+        self, lat: float, lon: float, order: int = 0
     ) -> dict[str, Any]:
         """Start navigation to coordinates.
 
         ``order`` is the Tesla remote-nav order integer: 1 replaces the trip,
-        2 prepends a stop, and 3 appends a stop.
+        2 prepends a stop, and 3 appends a stop. Defaults to 0
+        (``REMOTE_NAV_TRIP_ORDER_UNKNOWN``) when omitted, matching the BLE path.
         """
         return await self._request(
             Method.POST,

@@ -122,3 +122,42 @@ class AdjustVolumeParityTests(MockedBleTransportTestCase):
         await ble.adjust_volume(5.0)
         action = _sent_vehicle_action(ble, send)
         self.assertAlmostEqual(action.mediaUpdateVolume.volume_absolute_float, 5.0)
+
+
+class NavigationGpsRequestParityTests(MockedBleTransportTestCase):
+    """``navigation_gps_request``'s ``order`` must default identically on
+    both transports.
+
+    Regression: cloud's ``order`` was optional (omitted -> ``null`` on the
+    wire) while BLE's was a required int - a signature mismatch. Both now
+    default to ``0`` (``REMOTE_NAV_TRIP_ORDER_UNKNOWN``) when omitted.
+    """
+
+    async def test_omitted_order_defaults_to_zero_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.navigation_gps_request(37.3230, -122.0322)
+        assert request.await_args is not None
+        self.assertEqual(
+            request.await_args.kwargs["json"],
+            {"lat": 37.3230, "lon": -122.0322, "order": 0},
+        )
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.navigation_gps_request(37.3230, -122.0322)
+        action = _sent_vehicle_action(ble, send)
+        self.assertEqual(action.navigationGpsRequest.order, 0)
+
+    async def test_explicit_order_passes_through_unchanged_on_both_transports(
+        self,
+    ) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.navigation_gps_request(37.3230, -122.0322, order=2)
+        assert request.await_args is not None
+        self.assertEqual(request.await_args.kwargs["json"]["order"], 2)
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.navigation_gps_request(37.3230, -122.0322, order=2)
+        action = _sent_vehicle_action(ble, send)
+        self.assertEqual(action.navigationGpsRequest.order, 2)
