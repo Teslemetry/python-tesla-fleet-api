@@ -183,31 +183,33 @@ Routing and Failover section](../README.md#routing-and-failover) for the
 general `Router` semantics (per-command failover, the double-execution caveat,
 and the `health` check).
 
-> **Warning: island mode / off-grid actuation is not guaranteed on either
-> transport - always verify by state.**
+> **Warning: island mode / off-grid actuation is not guaranteed, and the
+> cloud path cannot do it at all.**
 >
 > This repo's cloud `EnergySite.set_island_mode()` / `go_off_grid()` /
-> `reconnect_grid()` send an **unsigned** `grpc_command`. Per their own
-> docstrings and the commits that added them, the gateway accepts this
-> command but does **not** physically operate the grid contactor over that
-> transport - a plain cloud-only `EnergySite` (no router, no local backend)
-> gets a silent no-op with an OK-looking response.
+> `reconnect_grid()` can only send an **unsigned** `grpc_command`, and
+> gateways have been observed accepting that command without physically
+> operating the grid contactor. Rather than ship that as a silent no-op with
+> an OK-looking response, these three methods unconditionally raise
+> `tesla_fleet_api.exceptions.SignedCommandRequired` - there is no cloud-only
+> way to actuate the contactor.
 >
 > Routing through `EnergySiteRouter` with an `aiopowerwall` local primary is
 > the intended way to actually operate the contactor, since it sends a
-> signed request over the LAN. But `aiopowerwall`'s own docs carry an
-> unresolved, firmware-dependent caveat for its local `set_island_mode`
-> too - some gateways acknowledge it without acting on it, and
+> signed request over the LAN. If the local primary fails and `Router` fails
+> over to the cloud secondary, the call now raises `SignedCommandRequired`
+> from the cloud side instead of returning a false success - the router
+> semantics don't change (the local backend is still tried first), but a
+> total failure now surfaces as a clear error. `aiopowerwall`'s own docs also
+> carry an unresolved, firmware-dependent caveat for its local
+> `set_island_mode` - some gateways acknowledge it without acting on it, and
 > `trigger_islanding()` (the explicit black-start command) may be needed as
 > a fallback.
 >
-> In both cases a success-shaped response does not prove the contactor
-> moved, and `Router` has no way to detect that on its own - a call that
-> returns without raising looks identical whether it actuated or not, so
-> failover to the cloud secondary will not trigger. Always confirm the
-> actual outcome with a signed local status read (for example
-> `live_status()`'s grid/island fields) before trusting either path's
-> response for anything actuation-critical.
+> Even on the signed local path, a success-shaped response does not prove
+> the contactor moved. Always confirm the actual outcome with a signed local
+> status read (for example `live_status()`'s grid/island fields) before
+> trusting the response for anything actuation-critical.
 
 ## See also
 
