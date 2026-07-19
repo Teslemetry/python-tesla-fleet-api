@@ -13,6 +13,7 @@ from tesla_fleet_api.const import (
     Method,
     TeslaEnergyPeriod,
 )
+from tesla_fleet_api.exceptions import SignedCommandRequired
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
@@ -208,12 +209,12 @@ class EnergySite:
     ) -> dict[str, Any]:
         """Set the island mode on the energy gateway.
 
-        This cloud method sends an unsigned ``grpc_command``. Gateways have
-        been observed accepting that request without physically operating
-        the grid contactor, so callers must verify the resulting state
-        rather than trusting a success-shaped response. For a signed local
-        LAN control path, pair an RSA key with ``add_authorized_client`` and
-        compose an aiopowerwall local backend with ``EnergySiteRouter``.
+        Always raises ``SignedCommandRequired``: this cloud method can only
+        send an unsigned ``grpc_command``, and gateways have been observed
+        accepting that request without physically operating the grid
+        contactor. For a signed local LAN control path, pair an RSA key with
+        ``add_authorized_client`` and compose an aiopowerwall local backend
+        with ``EnergySiteRouter``.
 
         Args:
             mode: EnergyIslandMode.OFF_GRID (6) to island,
@@ -223,29 +224,19 @@ class EnergySite:
                    off-grid - without force=True the gateway acknowledges
                    the command but does not physically open the contactor.
         """
-        if force is None:
-            force = int(mode) == EnergyIslandMode.OFF_GRID
-        return await self._command(
-            "teg",
-            "set_island_mode_request",
-            {"mode": int(mode), "force": force},
-        )
+        raise SignedCommandRequired
 
     async def go_off_grid(self) -> dict[str, Any]:
         """Request off-grid mode through the cloud ``grpc_command`` path.
 
-        Convenience wrapper around set_island_mode(OFF_GRID, force=True).
-        This may be accepted without physically opening the contactor; verify
-        state after the call.
+        Always raises ``SignedCommandRequired`` - see ``set_island_mode``.
         """
         return await self.set_island_mode(EnergyIslandMode.OFF_GRID)
 
     async def reconnect_grid(self) -> dict[str, Any]:
         """Request on-grid mode through the cloud ``grpc_command`` path.
 
-        Convenience wrapper around set_island_mode(ON_GRID). This may be
-        accepted without physically closing the contactor; verify state
-        after the call.
+        Always raises ``SignedCommandRequired`` - see ``set_island_mode``.
         """
         return await self.set_island_mode(EnergyIslandMode.ON_GRID)
 
