@@ -373,7 +373,7 @@ a plugged-in vehicle unless someone can reseat the cable if needed.
 commands over BLE:
 
 - `navigation_request(value)`
-- `navigation_gps_request(lat, lon, order)`
+- `navigation_gps_request(lat, lon, order=0)`
 - `navigation_sc_request(order)`
 - `navigation_waypoints_request(waypoints)`
 - `navigation_gps_destination_request(lat, lon, destination, order)`
@@ -384,6 +384,8 @@ commands over BLE:
 
 For the GPS navigation methods, `order` is the Tesla/protobuf remote-nav order
 integer: `1` replaces the trip, `2` prepends a stop, and `3` appends a stop.
+`navigation_gps_request`'s `order` defaults to `0`
+(`REMOTE_NAV_TRIP_ORDER_UNKNOWN`) when omitted, matching the cloud path.
 These commands are ACK-only over BLE; the library returns the vehicle's command
 acknowledgement, but there is no separate BLE state prover for the navigation
 destination, dashcam clip save, flash-lights action, or power-mode toggle.
