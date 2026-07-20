@@ -217,12 +217,10 @@ class EnergySite:
         with ``EnergySiteRouter``.
 
         Args:
-            mode: EnergyIslandMode.OFF_GRID (6) to island,
-                  EnergyIslandMode.ON_GRID (1) to reconnect.
-            force: Whether to force the contactor operation. Defaults to
-                   True for OFF_GRID, False for ON_GRID. Required for
-                   off-grid - without force=True the gateway acknowledges
-                   the command but does not physically open the contactor.
+            mode: Unused - the call raises before inspecting it. Kept for
+                  signature compatibility.
+            force: Unused - the call raises before inspecting it. Kept for
+                   signature compatibility.
         """
         raise SignedCommandRequired
 
