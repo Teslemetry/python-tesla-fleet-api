@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ManagedCharging;
 
+import "google/protobuf/wrappers.proto";
+
 option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/managedcharging";
 
 // The reasons why the site controller may recommend no charge.
@@ -19,4 +21,41 @@ enum ChargeOnSolarNoChargeReason {
     CHARGE_ON_SOLAR_NO_CHARGE_REASON_GRID_EXPORT_PRIORITY = 3;
     // Another vehicle is charging on solar at this location and has priority.
     CHARGE_ON_SOLAR_NO_CHARGE_REASON_ALTERNATE_VEHICLE_CHARGE_PRIORITY = 4;
+}
+
+message ChargeOnSolarLimits {
+    float max_excess_solar_power_w = 1;
+}
+
+message ChargeOnSolarNoChargeRecommended {
+    ChargeOnSolarNoChargeReason reason = 1;
+}
+
+message ChargeOnSolarResponse {
+    ChargeOnSolarLimits solar_limits = 1;
+    ChargeOnSolarNoChargeRecommended no_charge_recommended = 2;
+}
+
+enum ErrorCode {
+    ERROR_CODE_INVALID = 0;
+    ERROR_CODE_FEATURE_NOT_SUPPORTED = 1;
+    ERROR_CODE_INTERNAL = 2;
+}
+
+message ErrorResponse {
+    ErrorCode error_code = 1;
+}
+
+message SessionConfigs {
+    google.protobuf.Int32Value poll_interval_ms = 1;
+}
+
+message ManageVehicleChargingResponse {
+    SessionConfigs session_configs = 1;
+    ChargeOnSolarResponse charge_on_solar = 2;
+}
+
+message ManagedChargingAction {
+    ErrorResponse error_response = 1;
+    ManageVehicleChargingResponse manage_vehicle_charging_response = 2;
 }

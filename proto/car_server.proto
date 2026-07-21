@@ -137,18 +137,34 @@ message VehicleAction {
     StopLightShowAction stopLightShowAction = 116;
     StartLightShowAction startLightShowAction = 117;
     SetSuspensionLevelAction setSuspensionLevelAction = 118;
+    SetDischargeLimitAction setDischargeLimitAction = 129;
     SetLowPowerModeAction setLowPowerModeAction = 130;
+    SetTemperatureUnitAction setTemperatureUnitAction = 132;
+    SetDistanceUnitAction setDistanceUnitAction = 133;
+    SetTimeDisplayFormatAction setTimeDisplayFormatAction = 134;
+    SetTirePressureUnitAction setTirePressureUnitAction = 135;
+    SetEnergyDisplayFormatAction setEnergyDisplayFormatAction = 136;
     SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
+    SetupCloudProfileWithLocalProfileUuidAction setupCloudProfileWithLocalProfileUuidAction = 139;
+    GetLocalProfilesForVaultUuidAction getLocalProfilesForVaultUuidAction = 140;
+    FetchKeysInfoAction fetchKeysInfoAction = 142;
+    DeleteDashcamClipsAction deleteDashcamClipsAction = 144;
+    FormatUSBAction formatUsbAction = 146;
+    BandwidthTest bandwidthTest = 149;
+    SetPhoneSettingPreferencesAction setPhoneSettingPreferencesAction = 151;
+    CancelVehicleDataSubscription cancelVehicleDataSubscription = 171;
   }
 }
 
 message GetVehicleData {
+  GetGuiSettings getGuiSettings = 1;
   GetChargeState getChargeState = 2;
   GetClimateState getClimateState = 3;
   GetDriveState getDriveState = 4;
   reserved 5, 6;
   GetLocationState getLocationState = 7;
   GetClosuresState getClosuresState = 8;
+  GetParkedAccessoryState getParkedAccessoryState = 9;
   GetChargeScheduleState getChargeScheduleState = 10;
   GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
   reserved 12, 13;
@@ -156,7 +172,46 @@ message GetVehicleData {
   GetMediaState getMediaState = 15;
   GetMediaDetailState getMediaDetailState = 16;
   GetSoftwareUpdateState getSoftwareUpdateState = 17;
+  GetVehicleState getVehicleState = 18;
   GetParentalControlsState getParentalControlsState = 19;
+  GetAlertState getAlertState = 20;
+  GetLightShowState getLightShowState = 21;
+  GetVehicleImageState getVehicleImageState = 22;
+  GetSuspensionState getSuspensionState = 23;
+  GetChildPresenceDetectionState getChildPresenceDetectionState = 25;
+}
+
+message GetGuiSettings {}
+
+message GetParkedAccessoryState {}
+
+message GetVehicleState {}
+
+message GetAlertState {}
+
+message GetLightShowState {}
+
+message GetVehicleImageState {
+  repeated VehicleImageRequest imageRequests = 1;
+}
+
+message GetSuspensionState {}
+
+message GetChildPresenceDetectionState {}
+
+message VehicleImageDataChunkRequest {
+  uint32 chunk_offset = 1;
+  uint32 chunk_size = 2;
+}
+
+message VehicleImageRequest {
+  enum Type {
+    ID = 0;
+    DATA = 1;
+  }
+  Type dataType = 1;
+  VehicleImageStateType imageType = 2;
+  VehicleImageDataChunkRequest chunkRequest = 3;
 }
 
 message GetTirePressureState {}
@@ -185,6 +240,7 @@ message GetParentalControlsState {}
 
 message EraseUserDataAction {
   string reason = 1;
+  bool trigger_on_park = 2;
 }
 
 message Response {
@@ -222,6 +278,7 @@ message EncryptedData {
 
 message ChargingSetLimitAction {
   int32 percent = 1;
+  bool one_time = 2;
 }
 
 message ChargingStartStopAction {
@@ -290,6 +347,8 @@ message HvacSeatCoolerActions {
     HvacSeatCoolerPosition_Unknown = 0;
     HvacSeatCoolerPosition_FrontLeft = 1;
     HvacSeatCoolerPosition_FrontRight = 2;
+    HvacSeatCoolerPosition_SecondRowLeft = 3;
+    HvacSeatCoolerPosition_SecondRowRight = 4;
   }
   message HvacSeatCoolerAction {
     HvacSeatCoolerLevel_E seat_cooler_level = 1;
@@ -346,8 +405,16 @@ message GetNearbyChargingSites {
 
 message NearbyChargingSites {
   google.protobuf.Timestamp timestamp = 1;
+  repeated DestinationCharging destination_charging = 2;
   repeated Superchargers superchargers = 3;
   int64 congestion_sync_time_utc_secs = 4;
+}
+
+message DestinationCharging {
+  float distance_miles = 5;
+  string postal_code = 9;
+  string street_address = 11;
+  bool within_range = 12;
 }
 
 message Superchargers {
@@ -483,9 +550,14 @@ message HvacClimateKeeperAction {
     ClimateKeeperAction_Dog = 2;
     ClimateKeeperAction_Camp = 3;
   }
+  enum ManualOverrideMode_E {
+    Soc = 0;
+    Cpd = 1;
+  }
 
   ClimateKeeperAction_E ClimateKeeperAction = 1;
   bool manual_override = 2;
+  repeated ManualOverrideMode_E manual_override_mode = 3;
 }
 
 message HvacRecirculationAction {
@@ -597,6 +669,7 @@ message VehicleDataSubscription {
   int32 preconditioning_schedule_state_max_update_rate_ms = 16;
   int32 alert_state_max_update_rate_ms = 17;
   int32 suspension_state_max_update_rate_ms = 18;
+  int32 child_presence_detection_state_max_update_rate_ms = 19;
 }
 
 message VehicleDataAck {
@@ -648,7 +721,70 @@ message NavigationGpsRequest {
   RemoteNavTripOrder order = 3;
 }
 
-message SetRateTariffRequest {}
+// The wire payload at VehicleAction tag 55 is a rate-tariff document; only the
+// structurally recovered parts of that document are declared here.
+message SetRateTariffRequest {
+  message TOUPeriod {
+    int32 from_day_of_week = 1;
+    int32 to_day_of_week = 2;
+    int32 from_hour = 3;
+    int32 from_minute = 4;
+    int32 to_hour = 5;
+    int32 to_minute = 6;
+  }
+
+  message TOUPeriods {
+    repeated TOUPeriod ON_PEAK = 1;
+    repeated TOUPeriod PARTIAL_PEAK = 2;
+    repeated TOUPeriod OFF_PEAK = 3;
+    repeated TOUPeriod SUPER_OFF_PEAK = 4;
+  }
+
+  message Season {
+    int32 from_day = 1;
+    int32 to_day = 2;
+    int32 from_month = 3;
+    int32 to_month = 4;
+    TOUPeriods tou_periods = 5;
+  }
+
+  message Seasons {
+    Season Summer = 1;
+    Season Winter = 2;
+    Season Season3 = 3;
+    Season Season4 = 4;
+    Season Season5 = 5;
+  }
+
+  message FixedCharge {
+    double ALL = 1;
+  }
+
+  message RateBand {
+    double ALL = 1;
+    double ON_PEAK = 2;
+    double PARTIAL_PEAK = 3;
+    double OFF_PEAK = 4;
+    double SUPER_OFF_PEAK = 5;
+  }
+
+  message Charges {
+    FixedCharge ALL = 1;
+    RateBand Summer = 2;
+    RateBand Winter = 3;
+    RateBand Season3 = 4;
+    RateBand Season4 = 5;
+    RateBand Season5 = 6;
+  }
+
+  // secondary tariff document embedded in the primary one
+  message Tariff {
+    Seasons seasons = 13;
+  }
+
+  Seasons seasons = 13;
+  Tariff tariff = 14;
+}
 
 message GetRateTariffRequest {}
 
@@ -666,8 +802,20 @@ message BluetoothClassicPairingRequest {
 }
 
 message AddManagedChargingSiteRequest {
-  //ManagedChargingSite site = 1;
+  ManagedChargingSite site = 1;
 }
+
+message ManagedChargingSite {
+  string public_key = 1;
+  ManagerType manager_type = 2;
+  LatLong lat_lon = 3;
+}
+
+message ManagerType {
+  SiteController site_controller = 1;
+}
+
+message SiteController {}
 
 message RemoveManagedChargingSiteRequest {
   string public_key = 1;
@@ -902,3 +1050,93 @@ message SetLowPowerModeAction {
 message SetKeepAccessoryPowerModeAction {
   bool keep_accessory_power_mode = 1;
 }
+
+message SetDischargeLimitAction {
+  int32 discharge_limit = 1;
+}
+
+message SetTemperatureUnitAction {
+  enum Unit {
+    UNIT_FAHRENHEIT = 0;
+    UNIT_CELSIUS = 1;
+  }
+
+  Unit unit = 1;
+}
+
+message SetDistanceUnitAction {
+  enum Unit {
+    UNIT_MILES = 0;
+    UNIT_KILOMETERS = 1;
+  }
+
+  Unit unit = 1;
+}
+
+message SetTimeDisplayFormatAction {
+  enum Format {
+    FORMAT_12_HOUR = 0;
+    FORMAT_24_HOUR = 1;
+  }
+
+  Format format = 1;
+}
+
+message SetTirePressureUnitAction {
+  enum Unit {
+    UNIT_PSI = 0;
+    UNIT_BAR = 1;
+  }
+
+  Unit unit = 1;
+}
+
+message SetEnergyDisplayFormatAction {
+  enum Format {
+    FORMAT_PERCENTAGE = 0;
+    FORMAT_DISTANCE = 1;
+  }
+
+  Format format = 1;
+}
+
+message SetupCloudProfileWithLocalProfileUuidAction {
+  string cloud_vault_uuid = 1;
+  string local_profile_uuid = 2;
+  bool delete_local_profile_after_setup = 3;
+}
+
+message GetLocalProfilesForVaultUuidAction {
+  string vault_uuid = 1;
+}
+
+message FetchKeysInfoAction {}
+
+message DeleteDashcamClipsAction {
+  bool delete_clips = 1;
+}
+
+message FormatUSBAction {
+  bool format_usb = 1;
+}
+
+message BandwidthTest {
+  uint32 requested_size = 1;
+}
+
+message PhoneUnitPreferences {
+  SetDistanceUnitAction.Unit distance_unit = 1;
+  SetTemperatureUnitAction.Unit temperature_unit = 2;
+}
+
+message SetPhoneSettingPreferencesAction {
+  enum FontSize {
+    FONT_SIZE_STANDARD = 0;
+    FONT_SIZE_LARGE = 1;
+  }
+
+  FontSize font_size = 1;
+  PhoneUnitPreferences unit_preferences = 3;
+}
+
+message CancelVehicleDataSubscription {}

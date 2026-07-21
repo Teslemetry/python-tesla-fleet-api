@@ -22,9 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ctesla/managed_charging.proto\x12\x0fManagedCharging*\xc7\x02\n\x1b\x43hargeOnSolarNoChargeReason\x12,\n(CHARGE_ON_SOLAR_NO_CHARGE_REASON_INVALID\x10\x00\x12>\n:CHARGE_ON_SOLAR_NO_CHARGE_REASON_POWERWALL_CHARGE_PRIORITY\x10\x01\x12\x37\n3CHARGE_ON_SOLAR_NO_CHARGE_REASON_INSUFFICIENT_SOLAR\x10\x02\x12\x39\n5CHARGE_ON_SOLAR_NO_CHARGE_REASON_GRID_EXPORT_PRIORITY\x10\x03\x12\x46\nBCHARGE_ON_SOLAR_NO_CHARGE_REASON_ALTERNATE_VEHICLE_CHARGE_PRIORITY\x10\x04\x42NZLgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/managedchargingb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ctesla/managed_charging.proto\x12\x0fManagedCharging\x1a\x1egoogle/protobuf/wrappers.proto\"7\n\x13\x43hargeOnSolarLimits\x12 \n\x18max_excess_solar_power_w\x18\x01 \x01(\x02\"`\n ChargeOnSolarNoChargeRecommended\x12<\n\x06reason\x18\x01 \x01(\x0e\x32,.ManagedCharging.ChargeOnSolarNoChargeReason\"\xa5\x01\n\x15\x43hargeOnSolarResponse\x12:\n\x0csolar_limits\x18\x01 \x01(\x0b\x32$.ManagedCharging.ChargeOnSolarLimits\x12P\n\x15no_charge_recommended\x18\x02 \x01(\x0b\x32\x31.ManagedCharging.ChargeOnSolarNoChargeRecommended\"?\n\rErrorResponse\x12.\n\nerror_code\x18\x01 \x01(\x0e\x32\x1a.ManagedCharging.ErrorCode\"G\n\x0eSessionConfigs\x12\x35\n\x10poll_interval_ms\x18\x01 \x01(\x0b\x32\x1b.google.protobuf.Int32Value\"\x9a\x01\n\x1dManageVehicleChargingResponse\x12\x38\n\x0fsession_configs\x18\x01 \x01(\x0b\x32\x1f.ManagedCharging.SessionConfigs\x12?\n\x0f\x63harge_on_solar\x18\x02 \x01(\x0b\x32&.ManagedCharging.ChargeOnSolarResponse\"\xa9\x01\n\x15ManagedChargingAction\x12\x36\n\x0e\x65rror_response\x18\x01 \x01(\x0b\x32\x1e.ManagedCharging.ErrorResponse\x12X\n manage_vehicle_charging_response\x18\x02 \x01(\x0b\x32..ManagedCharging.ManageVehicleChargingResponse*\xc7\x02\n\x1b\x43hargeOnSolarNoChargeReason\x12,\n(CHARGE_ON_SOLAR_NO_CHARGE_REASON_INVALID\x10\x00\x12>\n:CHARGE_ON_SOLAR_NO_CHARGE_REASON_POWERWALL_CHARGE_PRIORITY\x10\x01\x12\x37\n3CHARGE_ON_SOLAR_NO_CHARGE_REASON_INSUFFICIENT_SOLAR\x10\x02\x12\x39\n5CHARGE_ON_SOLAR_NO_CHARGE_REASON_GRID_EXPORT_PRIORITY\x10\x03\x12\x46\nBCHARGE_ON_SOLAR_NO_CHARGE_REASON_ALTERNATE_VEHICLE_CHARGE_PRIORITY\x10\x04*b\n\tErrorCode\x12\x16\n\x12\x45RROR_CODE_INVALID\x10\x00\x12$\n ERROR_CODE_FEATURE_NOT_SUPPORTED\x10\x01\x12\x17\n\x13\x45RROR_CODE_INTERNAL\x10\x02\x42NZLgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/managedchargingb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,6 +33,22 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tesla.managed_charging_pb2'
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'ZLgithub.com/teslamotors/vehicle-command/pkg/protocol/protobuf/managedcharging'
-  _globals['_CHARGEONSOLARNOCHARGEREASON']._serialized_start=50
-  _globals['_CHARGEONSOLARNOCHARGEREASON']._serialized_end=377
+  _globals['_CHARGEONSOLARNOCHARGEREASON']._serialized_start=872
+  _globals['_CHARGEONSOLARNOCHARGEREASON']._serialized_end=1199
+  _globals['_ERRORCODE']._serialized_start=1201
+  _globals['_ERRORCODE']._serialized_end=1299
+  _globals['_CHARGEONSOLARLIMITS']._serialized_start=81
+  _globals['_CHARGEONSOLARLIMITS']._serialized_end=136
+  _globals['_CHARGEONSOLARNOCHARGERECOMMENDED']._serialized_start=138
+  _globals['_CHARGEONSOLARNOCHARGERECOMMENDED']._serialized_end=234
+  _globals['_CHARGEONSOLARRESPONSE']._serialized_start=237
+  _globals['_CHARGEONSOLARRESPONSE']._serialized_end=402
+  _globals['_ERRORRESPONSE']._serialized_start=404
+  _globals['_ERRORRESPONSE']._serialized_end=467
+  _globals['_SESSIONCONFIGS']._serialized_start=469
+  _globals['_SESSIONCONFIGS']._serialized_end=540
+  _globals['_MANAGEVEHICLECHARGINGRESPONSE']._serialized_start=543
+  _globals['_MANAGEVEHICLECHARGINGRESPONSE']._serialized_end=697
+  _globals['_MANAGEDCHARGINGACTION']._serialized_start=700
+  _globals['_MANAGEDCHARGINGACTION']._serialized_end=869
 # @@protoc_insertion_point(module_scope)
