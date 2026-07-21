@@ -17,6 +17,7 @@ MODELS = {
     "T": "Semi",
 }
 
+
 class Vehicle(Generic[ParentT]):
     """Base class describing a Tesla vehicle."""
 
@@ -30,7 +31,10 @@ class Vehicle(Generic[ParentT]):
     @property
     def pre2021(self) -> bool:
         """Checks if a vehicle is a pre-2021 model S or X."""
-        return self.vin[3] in ["S", "X"] and (self.vin[9] <= "L" or (self.vin[9] == "M" and self.vin[7] in ['1', '2', '3', '4']))
+        return self.vin[3] in ["S", "X"] and (
+            self.vin[9] <= "L"
+            or (self.vin[9] == "M" and self.vin[7] in ["1", "2", "3", "4"])
+        )
 
     @property
     def model(self) -> str:
