@@ -132,7 +132,9 @@ class SpeedLimitClearPinTests(MockedBleTransportTestCase):
             action.vehicleAction.WhichOneof("vehicle_action_msg"),
             "drivingClearSpeedLimitPinAction",
         )
-        self.assertEqual(action.vehicleAction.drivingClearSpeedLimitPinAction.pin, "1234")
+        self.assertEqual(
+            action.vehicleAction.drivingClearSpeedLimitPinAction.pin, "1234"
+        )
 
 
 class ChargeStateTypedReplyTests(MockedBleTransportTestCase):
