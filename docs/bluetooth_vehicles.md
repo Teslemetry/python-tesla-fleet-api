@@ -488,8 +488,8 @@ of any command you send. `VehicleBluetooth` fans these out to persistent
 per-field listeners, so you can receive vehicle-state changes passively
 instead of polling the state readers above.
 
-Every `VehicleStatus` leaf field is a well-defined protobuf enum or int, so
-each has its own typed listener method, similar in spirit to
+Each modeled `VehicleStatus` leaf field has its own typed listener method,
+similar in spirit to
 [python-teslemetry-stream](https://github.com/Teslemetry/python-teslemetry-stream)'s
 `listen_<Field>` surface:
 
@@ -525,9 +525,10 @@ includes them. `listen_vehicle_lock_state`, `listen_vehicle_sleep_status`, and
 `listen_user_presence` fire on every `VehicleStatus` broadcast, since proto3
 gives no presence tracking for a scalar enum field.
 
-Anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
+`VehicleStatus`'s `uiDesire` and `gear` fields (added by a later proto sync)
+and anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
 (`CommandStatus`, whitelist events, faults) and any future
-infotainment-domain broadcast - has no typed listener surface. Use the untyped
+infotainment-domain broadcast - have no typed listener surface. Use the untyped
 `listen_broadcast`, which delivers every raw unsolicited `RoutableMessage` for
 a given `Domain`, including decoded `VehicleStatus` broadcasts:
 

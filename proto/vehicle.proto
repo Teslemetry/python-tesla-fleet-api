@@ -12,18 +12,32 @@ option java_package = "com.tesla.generated.carserver.vehicle";
 option java_outer_classname = "Vehicle";
 
 message VehicleData {
+    GuiSettings gui_settings = 2;
     ChargeState charge_state = 3;
     ClimateState climate_state = 4;
     DriveState drive_state = 5;
+    VehicleState legacy_vehicle_state = 6; // VehicleState carries the legacy vehicle-state surface
+    VehicleConfig vehicle_config = 7;
     LocationState location_state = 8;
     ClosuresState closures_state = 9;
+    oneof optional_proto_json_version { int32 proto_json_version = 10; }
+    oneof optional_upload_reason { string upload_reason = 12; }
+    ParkedAccessoryState parked_accessory_state = 14;
     ChargeScheduleState charge_schedule_state = 15;
     PreconditioningScheduleState preconditioning_schedule_state = 16;
+    SohState soh_state = 17;
     TirePressureState tire_pressure_state = 19;
     MediaState media_state = 20;
     MediaDetailState media_detail_state = 21;
+    VehicleDetailState vehicle_detail_state = 22;
     SoftwareUpdateState software_update_state = 23;
     ParentalControlsState parental_controls_state = 24;
+    AlertState alert_state = 25;
+    LightShowState light_show_state = 26;
+    VehicleImageState vehicle_image_state = 27;
+    SuspensionState suspension_state = 29;
+    ChildPresenceDetectionState child_presence_detection_state = 30;
+    oneof optional_supports_optional_fields { bool supports_optional_fields = 999; }
 }
 
 message ClosuresState {
@@ -96,6 +110,10 @@ message ClosuresState {
     oneof optional_tonneau_state { VCSEC.ClosureState_E tonneau_state = 23; }
     oneof optional_tonneau_percent_open { uint32 tonneau_percent_open = 24; }
     oneof optional_tonneau_in_motion { bool tonneau_in_motion = 25; }
+    oneof optional_has_automatic_tonneau { bool has_automatic_tonneau = 26; }
+    oneof optional_has_side_storage_doors { bool has_side_storage_doors = 27; }
+    oneof optional_door_open_side_storage_left { bool door_open_side_storage_left = 28; }
+    oneof optional_door_open_side_storage_right { bool door_open_side_storage_right = 29; }
 
     google.protobuf.Timestamp timestamp = 2000;
 }
@@ -137,6 +155,9 @@ message ParentalControlsSettings {
     oneof optional_curfew_enabled { bool curfew_enabled = 7; }
     oneof optional_curfew_start_time { int32 curfew_start_time = 8; }
     oneof optional_curfew_end_time { int32 curfew_end_time = 9; }
+    oneof optional_browser_blocked { bool browser_blocked = 10; }
+    oneof optional_theater_blocked { bool theater_blocked = 11; }
+    oneof optional_arcade_blocked { bool arcade_blocked = 12; }
 }
 
 message ParentalControlsState {
@@ -167,6 +188,8 @@ message SoftwareUpdateState {
     oneof optional_version { string version = 107; }
 
     google.protobuf.Timestamp timestamp = 108;
+
+    oneof optional_auto_scheduled { bool auto_scheduled = 109; }
 }
 
 
@@ -190,6 +213,28 @@ message DriveState {
     google.protobuf.Timestamp last_traffic_update = 15;
 
     LatLong active_route_coordinates = 12;
+
+    message FsdMonthlyMileage {
+        string year_month  = 1;
+        float  fsd_miles   = 2;
+        float  total_miles = 3;
+    }
+
+    message FsdLast7DaysUsage {
+        bool          week_starts_on_sunday = 1;
+        repeated bool day_usage             = 2; // one entry per day, most recent first
+    }
+
+    oneof optional_fsd_user_total_miles_travelled { float fsd_user_total_miles_travelled = 16; }
+    oneof optional_fsd_user_total_miles { float fsd_user_total_miles = 17; }
+    oneof optional_fsd_user_miles_hands_free_current { float fsd_user_miles_hands_free_current = 18; }
+    oneof optional_fsd_user_miles_hands_free_max { float fsd_user_miles_hands_free_max = 19; }
+    oneof optional_fsd_total_miles_this_month { float fsd_total_miles_this_month = 20; }
+    repeated FsdMonthlyMileage fsd_monthly_history = 21;
+    oneof optional_fsd_streak_days { int32 fsd_streak_days = 22; }
+    FsdLast7DaysUsage fsd_last_7_days_usage = 23;
+    oneof optional_rainbow_road_enabled { bool rainbow_road_enabled = 24; }
+    oneof optional_fsd_active { bool fsd_active = 25; }
 }
 
 message ChargeState {
@@ -264,6 +309,7 @@ message ChargeState {
         ChargeLimitReasonBattTempLow = 3;
         ChargeLimitReasonHighSoc = 4;
         ChargeLimitReasonCabin = 5;
+        ChargeLimitReasonEvseRelocationRecommended = 6;
     }
 
     enum OutletState {
@@ -291,6 +337,7 @@ message ChargeState {
         PowershareTypeNone = 0;
         PowershareTypeLoad = 1;
         PowershareTypeHome = 2;
+        PowershareTypeGrid = 3;
     }
 
     enum PowershareStopReason {
@@ -301,6 +348,8 @@ message ChargeState {
         PowershareStopReasonUser = 4;
         PowershareStopReasonReconnecting = 5;
         PowershareStopReasonAuthentication = 6;
+        PowershareStopReasonAdapterUpdating = 7;
+        PowershareStopReasonAdapterInitializationFailed = 8;
     }
 
     ChargingState charging_state = 1;
@@ -402,6 +451,22 @@ message ChargeState {
     oneof optional_home_location { LatLong home_location = 176; }
     oneof optional_work_location { LatLong work_location = 177; }
     oneof optional_outlet_max_timer_minutes { int32 outlet_max_timer_minutes = 178; }
+    oneof optional_batt_heat_min_to_start_charge { int32 batt_heat_min_to_start_charge = 179; }
+    oneof optional_batt_heat_min_to_start_charge_calculating { bool batt_heat_min_to_start_charge_calculating = 180; }
+    oneof optional_has_ac_outlets { bool has_ac_outlets = 181; }
+    oneof optional_paid_session_fee { float paid_session_fee = 183; }
+    oneof optional_paid_session_fee_currency { string paid_session_fee_currency = 184; }
+    oneof optional_paid_session_kwh_rate { float paid_session_kwh_rate = 185; }
+    oneof optional_discharge_limit_soe { int32 discharge_limit_soe = 186; }
+    oneof optional_is_roaming { bool is_roaming = 187; }
+    oneof optional_paid_session_location_guid { string paid_session_location_guid = 188; }
+    oneof optional_paid_session_pricebook_guid { string paid_session_pricebook_guid = 189; }
+    google.protobuf.Timestamp paid_session_start_time = 190;
+    oneof optional_low_power_mode { bool low_power_mode = 191; }
+    oneof optional_low_power_mode_forced_on { bool low_power_mode_forced_on = 192; }
+    oneof optional_convenience_features { uint32 convenience_features = 193; }
+    oneof optional_keep_accessory_power_mode { bool keep_accessory_power_mode = 194; }
+    oneof optional_should_hide_range_info { bool should_hide_range_info = 198; }
 }
 
 message ManagedChargingState {
@@ -518,14 +583,156 @@ message LocationState {
     oneof optional_geo_accuracy  { float geo_accuracy = 118; }
     oneof optional_estimated_gps_valid { bool estimated_gps_valid  = 119; }
     oneof optional_estimated_to_raw_distance  { float estimated_to_raw_distance  = 120; } // the distance between the estimated and raw coordinates in meters
+
+    oneof optional_supercharger_trt_id { int32 supercharger_trt_id = 121; }
+
+    // double-precision variants of the corresponding float coordinate fields
+    oneof optional_native_latitude_d { double native_latitude_d = 122; }
+    oneof optional_native_longitude_d { double native_longitude_d = 123; }
+    oneof optional_geo_latitude_d { double geo_latitude_d = 124; }
+    oneof optional_geo_longitude_d { double geo_longitude_d = 125; }
+    oneof optional_geo_hw_raw_latitude_d { double geo_hw_raw_latitude_d = 126; }
+    oneof optional_geo_hw_raw_longitude_d { double geo_hw_raw_longitude_d = 127; }
+    oneof optional_geo_horizontal_accuracy { float geo_horizontal_accuracy = 128; }
 } // LocationState
 
+
+enum AutopilotBase {
+    AutopilotBase_NONE         = 0;
+    AutopilotBase_HIGHWAY      = 1;
+    AutopilotBase_ENHANCED     = 2;
+    AutopilotBase_SELF_DRIVING = 3;
+    AutopilotBase_BASIC        = 4;
+}
+
+enum AutopilotOverrideState {
+    AutopilotOverrideState_BASE                   = 0;
+    AutopilotOverrideState_SUBSCRIPTION           = 1;
+    AutopilotOverrideState_TRIAL                  = 2;
+    AutopilotOverrideState_TIMEBOUND_SUBSCRIPTION = 3;
+    AutopilotOverrideState_TIMEBOUND_TRIAL        = 4;
+    AutopilotOverrideState_OPTION_CODE            = 5;
+    AutopilotOverrideState_OPTION_OVERRIDE        = 6;
+    AutopilotOverrideState_VEHICLE_MANAGED        = 7;
+    AutopilotOverrideState_UNKNOWN                = 8;
+}
+
+enum DashCamState {
+    DashCamState_UNAVAILABLE = 0;
+    DashCamState_AVAILABLE = 1;
+    DashCamState_RECORDING = 2;
+    DashCamState_SAVED = 3;
+    DashCamState_STREAMING = 4;
+    DashCamState_NO_SPACE = 5;
+    DashCamState_SAVING = 6;
+    DashCamState_PAUSED = 7;
+}
+
+message LegacyMediaState {
+    oneof optional_remote_control_enabled { bool remote_control_enabled = 101; }
+}
+
+message LegacyMediaInfo {
+    MediaPlaybackStatus media_playback_status = 1;
+    float audio_volume = 2;
+    int32 now_playing_duration = 3;
+    int32 now_playing_elapsed = 4;
+    MediaSourceType now_playing_source = 5;
+    string now_playing_source_string = 6;
+    string now_playing_artist = 7;
+    string now_playing_title = 8;
+    string now_playing_album = 9;
+    string now_playing_station = 10;
+    float audio_volume_increment = 11;
+    float audio_volume_max = 12;
+    string a2dp_source_name = 15;
+}
 
 message VehicleState {
     message GuestMode {
         bool GuestModeActive = 1;
     }
+
+    SoftwareUpdateState software_update_state = 38;
+    LegacyMediaState legacy_media_state = 39;
+
+    google.protobuf.Timestamp timestamp = 43;
+
+    repeated uint32 feature_bitmask = 55;
+
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_fl = 58;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_fr = 59;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_rl = 60;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_rr = 61;
+
+    LegacyMediaInfo legacy_media_info = 72;
+    oneof optional_allow_authorized_mobile_devices_only { bool allow_authorized_mobile_devices_only = 73; }
     GuestMode guestMode = 74;
+    oneof optional_drive_rail_on { bool drive_rail_on = 75; }
+    oneof optional_pin_to_drive_enabled { bool pin_to_drive_enabled = 76; }
+    oneof optional_pin_to_drive_pin_set { bool pin_to_drive_pin_set = 77; }
+    oneof optional_frontfoglights_on { bool frontfoglights_on = 78; }
+    oneof optional_rearfoglights_on { bool rearfoglights_on = 79; }
+    oneof optional_headlights_on { bool headlights_on = 80; }
+    oneof optional_highbeamlights_on { bool highbeamlights_on = 81; }
+    oneof optional_trailer_mode_on { bool trailer_mode_on = 82; }
+    oneof optional_trailer_light_test_available { bool trailer_light_test_available = 83; }
+    oneof optional_trailer_light_test_requested { bool trailer_light_test_requested = 84; }
+    oneof optional_truck_bed_lights_brightness { uint32 truck_bed_lights_brightness = 86; }
+    oneof optional_signed_cmd_service_mode { bool signed_cmd_service_mode = 87; }
+    oneof optional_accessory_lightbar_middle_on { bool accessory_lightbar_middle_on = 88; }
+    oneof optional_transport_mode { bool transport_mode = 89; }
+    oneof optional_truck_bed_lights_auto_brightness { uint32 truck_bed_lights_auto_brightness = 90; }
+    oneof optional_truck_bed_lights_auto_state { bool truck_bed_lights_auto_state = 91; }
+    oneof optional_truck_bed_lights_controls_disabled { bool truck_bed_lights_controls_disabled = 92; }
+    oneof optional_service_mode_auth { string service_mode_auth = 93; }
+    oneof optional_service_gtw_diag_session_active { bool service_gtw_diag_session_active = 94; }
+    oneof optional_factory_mode { bool factory_mode = 95; }
+    oneof optional_training_wheels_mode { bool training_wheels_mode = 96; }
+    oneof optional_gtw_diag_level { GtwDiagLevel gtw_diag_level = 97; }
+    oneof optional_parental_controls_active { bool parental_controls_active = 98; }
+    oneof optional_parental_controls_pin_set { bool parental_controls_pin_set = 99; }
+    ParentalControlsSettings parental_controls_settings = 100;
+    oneof optional_api_version { uint32 api_version = 101; }
+    oneof optional_car_version { string car_version = 108; }
+    oneof optional_detailed_version { string detailed_version = 109; }
+    oneof optional_autopilot_hash { string autopilot_hash = 110; }
+    oneof optional_vehicle_name { string vehicle_name = 118; }
+    oneof optional_notifications_supported { bool notifications_supported = 120; }
+    oneof optional_remote_start_supported { bool remote_start_supported = 121; }
+    oneof optional_remote_start_enabled { bool remote_start_enabled = 122; }
+    oneof optional_last_autopark_error { string last_autopark_error = 131; }
+    oneof optional_homelink_device_count { uint32 homelink_device_count = 133; }
+    oneof optional_smart_summon_available { bool smart_summon_available = 135; }
+    oneof optional_summon_standby_mode_enabled { bool summon_standby_mode_enabled = 136; }
+    oneof optional_patsy_mode { bool patsy_mode = 141; }
+    oneof optional_webcam_available { bool webcam_available = 142; }
+    oneof optional_vehicle_self_test_requested { bool vehicle_self_test_requested = 144; }
+    oneof optional_vehicle_self_test_progress { uint32 vehicle_self_test_progress = 145; }
+    oneof optional_calendar_supported { bool calendar_supported = 148; }
+    oneof optional_dashcam_clip_save_available { bool dashcam_clip_save_available = 149; }
+    oneof optional_dashcam_state { DashCamState dashcam_state = 150; }
+    oneof optional_tpms_pressure_fl { float tpms_pressure_fl = 151; }
+    oneof optional_tpms_pressure_fr { float tpms_pressure_fr = 152; }
+    oneof optional_tpms_pressure_rl { float tpms_pressure_rl = 153; }
+    oneof optional_tpms_pressure_rr { float tpms_pressure_rr = 154; }
+    oneof optional_service_mode { bool service_mode = 156; }
+    oneof optional_service_mode_plus { bool service_mode_plus = 157; }
+    oneof optional_tpms_hard_warning_fl { bool tpms_hard_warning_fl = 162; }
+    oneof optional_tpms_hard_warning_fr { bool tpms_hard_warning_fr = 163; }
+    oneof optional_tpms_hard_warning_rl { bool tpms_hard_warning_rl = 164; }
+    oneof optional_tpms_hard_warning_rr { bool tpms_hard_warning_rr = 165; }
+    oneof optional_tpms_soft_warning_fl { bool tpms_soft_warning_fl = 166; }
+    oneof optional_tpms_soft_warning_fr { bool tpms_soft_warning_fr = 167; }
+    oneof optional_tpms_soft_warning_rl { bool tpms_soft_warning_rl = 168; }
+    oneof optional_tpms_soft_warning_rr { bool tpms_soft_warning_rr = 169; }
+    oneof optional_tpms_rcp_front_value { float tpms_rcp_front_value = 170; }
+    oneof optional_tpms_rcp_rear_value { float tpms_rcp_rear_value = 171; }
+    oneof optional_fsd_software_version { string fsd_software_version = 172; }
+
+    AutopilotBase autopilot_base = 196;
+    AutopilotOverrideState autopilot_override_state = 197;
+    oneof optional_autopilot_override_expire_time { int64 autopilot_override_expire_time = 198; }
 }
 
 message ClimateState {
@@ -589,6 +796,15 @@ message ClimateState {
         COPNotRunningReasonCabinBelowThreshold = 6;
     }
 
+    enum DogModeState {
+        DogModeStateUnavailableFault = 0;
+        DogModeStateUnavailableTooHot = 1;
+        DogModeStateAvailable = 2;
+        DogModeStateRunningNominal = 3;
+        DogModeStateRunningFault = 4;
+        DogModeStateRunningTemperatureMonitorTrip = 5;
+    }
+
     oneof optional_inside_temp_celsius { float inside_temp_celsius = 101; }
     oneof optional_outside_temp_celsius { float outside_temp_celsius = 102; }
     oneof optional_driver_temp_setting { float driver_temp_setting = 103; }
@@ -644,6 +860,9 @@ message ClimateState {
 
     oneof optional_hvac_auto_request { HvacAutoRequest hvac_auto_request = 150; }
     oneof optional_cop_not_running_reason { COPNotRunningReason cop_not_running_reason = 151; }
+    oneof optional_seat_fan_second_row_left { int32 seat_fan_second_row_left = 152; } // Values in 'SeatCoolingLevel_E'.
+    oneof optional_seat_fan_second_row_right { int32 seat_fan_second_row_right = 153; } // Values in 'SeatCoolingLevel_E'.
+    oneof optional_dog_mode_state { DogModeState dog_mode_state = 154; }
 }
 
 message TirePressureState {
@@ -668,6 +887,77 @@ message TirePressureState {
     // rcp values in bar
     oneof optional_tpms_rcp_front_value { float tpms_rcp_front_value = 18; }
     oneof optional_tpms_rcp_rear_value { float tpms_rcp_rear_value = 19; }
+
+    // rear-axle (re1/re2) positions, only set on vehicles with dual rear axles
+    oneof optional_tpms_pressure_re1_l0 { float tpms_pressure_re1_l0 = 20; }
+    oneof optional_tpms_pressure_re1_l1 { float tpms_pressure_re1_l1 = 21; }
+    oneof optional_tpms_pressure_re1_r0 { float tpms_pressure_re1_r0 = 22; }
+    oneof optional_tpms_pressure_re1_r1 { float tpms_pressure_re1_r1 = 23; }
+    oneof optional_tpms_pressure_re2_l0 { float tpms_pressure_re2_l0 = 24; }
+    oneof optional_tpms_pressure_re2_l1 { float tpms_pressure_re2_l1 = 25; }
+    oneof optional_tpms_pressure_re2_r0 { float tpms_pressure_re2_r0 = 26; }
+    oneof optional_tpms_pressure_re2_r1 { float tpms_pressure_re2_r1 = 27; }
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re1_l0 = 28;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re1_l1 = 29;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re1_r0 = 30;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re1_r1 = 31;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re2_l0 = 32;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re2_l1 = 33;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re2_r0 = 34;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_re2_r1 = 35;
+    oneof optional_tpms_hard_warning_re1_l0 { bool tpms_hard_warning_re1_l0 = 36; }
+    oneof optional_tpms_hard_warning_re1_l1 { bool tpms_hard_warning_re1_l1 = 37; }
+    oneof optional_tpms_hard_warning_re1_r0 { bool tpms_hard_warning_re1_r0 = 38; }
+    oneof optional_tpms_hard_warning_re1_r1 { bool tpms_hard_warning_re1_r1 = 39; }
+    oneof optional_tpms_hard_warning_re2_l0 { bool tpms_hard_warning_re2_l0 = 40; }
+    oneof optional_tpms_hard_warning_re2_l1 { bool tpms_hard_warning_re2_l1 = 41; }
+    oneof optional_tpms_hard_warning_re2_r0 { bool tpms_hard_warning_re2_r0 = 42; }
+    oneof optional_tpms_hard_warning_re2_r1 { bool tpms_hard_warning_re2_r1 = 43; }
+    oneof optional_tpms_soft_warning_re1_l0 { bool tpms_soft_warning_re1_l0 = 44; }
+    oneof optional_tpms_soft_warning_re1_l1 { bool tpms_soft_warning_re1_l1 = 45; }
+    oneof optional_tpms_soft_warning_re1_r0 { bool tpms_soft_warning_re1_r0 = 46; }
+    oneof optional_tpms_soft_warning_re1_r1 { bool tpms_soft_warning_re1_r1 = 47; }
+    oneof optional_tpms_soft_warning_re2_l0 { bool tpms_soft_warning_re2_l0 = 48; }
+    oneof optional_tpms_soft_warning_re2_l1 { bool tpms_soft_warning_re2_l1 = 49; }
+    oneof optional_tpms_soft_warning_re2_r0 { bool tpms_soft_warning_re2_r0 = 50; }
+    oneof optional_tpms_soft_warning_re2_r1 { bool tpms_soft_warning_re2_r1 = 51; }
+    // tpms temperature values in celsius
+    oneof optional_tpms_temperature_fl { float tpms_temperature_fl = 52; }
+    oneof optional_tpms_temperature_fr { float tpms_temperature_fr = 53; }
+    oneof optional_tpms_temperature_rl { float tpms_temperature_rl = 54; }
+    oneof optional_tpms_temperature_rr { float tpms_temperature_rr = 55; }
+    oneof optional_tpms_temperature_re1_l0 { float tpms_temperature_re1_l0 = 56; }
+    oneof optional_tpms_temperature_re1_l1 { float tpms_temperature_re1_l1 = 57; }
+    oneof optional_tpms_temperature_re1_r0 { float tpms_temperature_re1_r0 = 58; }
+    oneof optional_tpms_temperature_re1_r1 { float tpms_temperature_re1_r1 = 59; }
+    oneof optional_tpms_temperature_re2_l0 { float tpms_temperature_re2_l0 = 60; }
+    oneof optional_tpms_temperature_re2_l1 { float tpms_temperature_re2_l1 = 61; }
+    oneof optional_tpms_temperature_re2_r0 { float tpms_temperature_re2_r0 = 62; }
+    oneof optional_tpms_temperature_re2_r1 { float tpms_temperature_re2_r1 = 63; }
+    oneof optional_tpms_temperature_hard_warning_fl { bool tpms_temperature_hard_warning_fl = 64; }
+    oneof optional_tpms_temperature_hard_warning_fr { bool tpms_temperature_hard_warning_fr = 65; }
+    oneof optional_tpms_temperature_hard_warning_rl { bool tpms_temperature_hard_warning_rl = 66; }
+    oneof optional_tpms_temperature_hard_warning_rr { bool tpms_temperature_hard_warning_rr = 67; }
+    oneof optional_tpms_temperature_hard_warning_re1_l0 { bool tpms_temperature_hard_warning_re1_l0 = 68; }
+    oneof optional_tpms_temperature_hard_warning_re1_l1 { bool tpms_temperature_hard_warning_re1_l1 = 69; }
+    oneof optional_tpms_temperature_hard_warning_re1_r0 { bool tpms_temperature_hard_warning_re1_r0 = 70; }
+    oneof optional_tpms_temperature_hard_warning_re1_r1 { bool tpms_temperature_hard_warning_re1_r1 = 71; }
+    oneof optional_tpms_temperature_hard_warning_re2_l0 { bool tpms_temperature_hard_warning_re2_l0 = 72; }
+    oneof optional_tpms_temperature_hard_warning_re2_l1 { bool tpms_temperature_hard_warning_re2_l1 = 73; }
+    oneof optional_tpms_temperature_hard_warning_re2_r0 { bool tpms_temperature_hard_warning_re2_r0 = 74; }
+    oneof optional_tpms_temperature_hard_warning_re2_r1 { bool tpms_temperature_hard_warning_re2_r1 = 75; }
+    oneof optional_tpms_temperature_soft_warning_fl { bool tpms_temperature_soft_warning_fl = 76; }
+    oneof optional_tpms_temperature_soft_warning_fr { bool tpms_temperature_soft_warning_fr = 77; }
+    oneof optional_tpms_temperature_soft_warning_rl { bool tpms_temperature_soft_warning_rl = 78; }
+    oneof optional_tpms_temperature_soft_warning_rr { bool tpms_temperature_soft_warning_rr = 79; }
+    oneof optional_tpms_temperature_soft_warning_re1_l0 { bool tpms_temperature_soft_warning_re1_l0 = 80; }
+    oneof optional_tpms_temperature_soft_warning_re1_l1 { bool tpms_temperature_soft_warning_re1_l1 = 81; }
+    oneof optional_tpms_temperature_soft_warning_re1_r0 { bool tpms_temperature_soft_warning_re1_r0 = 82; }
+    oneof optional_tpms_temperature_soft_warning_re1_r1 { bool tpms_temperature_soft_warning_re1_r1 = 83; }
+    oneof optional_tpms_temperature_soft_warning_re2_l0 { bool tpms_temperature_soft_warning_re2_l0 = 84; }
+    oneof optional_tpms_temperature_soft_warning_re2_l1 { bool tpms_temperature_soft_warning_re2_l1 = 85; }
+    oneof optional_tpms_temperature_soft_warning_re2_r0 { bool tpms_temperature_soft_warning_re2_r0 = 86; }
+    oneof optional_tpms_temperature_soft_warning_re2_r1 { bool tpms_temperature_soft_warning_re2_r1 = 87; }
 }
 
 message MediaState {
@@ -690,6 +980,29 @@ message MediaDetailState {
     oneof optional_now_playing_album { string now_playing_album = 5; }
     oneof optional_now_playing_station { string now_playing_station = 6; }
     oneof optional_a2dp_source_name { string a2dp_source_name = 7; }
+    oneof optional_recent_theater_source { TheaterSource recent_theater_source = 8; }
+    oneof optional_recent_theater_source_string { string recent_theater_source_string = 9; }
+    oneof optional_theater_source_is_playing { bool theater_source_is_playing = 10; }
+}
+
+enum TheaterSource {
+    TheaterSource_None = 0;
+    TheaterSource_YouTube = 1;
+    TheaterSource_TeslaTutorials = 2;
+    TheaterSource_Netflix = 3;
+    TheaterSource_Twitch = 4;
+    TheaterSource_TikTok = 5;
+    TheaterSource_Hulu = 7;
+    TheaterSource_BiliBili = 10;
+    TheaterSource_Disney = 13;
+    TheaterSource_Douyin = 14;
+    TheaterSource_MontyPython = 19;
+    TheaterSource_Tencent = 28;
+    TheaterSource_Youku = 32;
+    TheaterSource_iQiyi = 33;
+    TheaterSource_ThunderStone = 34;
+    TheaterSource_MangoTV = 35;
+    TheaterSource_Kuaishou = 36;
 }
 
 message ShiftState {
@@ -732,6 +1045,7 @@ enum MediaSourceType {
     MediaSourceType_OnlineRadio = 24;
     MediaSourceType_OnlineRadio2 = 25;
     MediaSourceType_NetEaseMusic = 26;
+    MediaSourceType_AppleMusic = 27;
 
     // Entertainment sources
     MediaSourceType_Browser = 28;
@@ -743,4 +1057,317 @@ enum MediaSourceType {
     MediaSourceType_RecentsFavorites = 33;
     MediaSourceType_HomeApps = 34;
     MediaSourceType_Search = 35;
+
+    MediaSourceType_ApplePodcasts = 36;
+    MediaSourceType_Audible = 37;
+    MediaSourceType_AmazonMusic = 38;
+    MediaSourceType_YouTubeMusic = 39;
+    MediaSourceType_SiriusXmWeb = 40;
+    MediaSourceType_Yunting = 41;
+    MediaSourceType_TuneInWeb = 42;
+    MediaSourceType_Kugou = 43;
+    MediaSourceType_Vohico = 44;
+}
+
+message GuiSettings {
+    enum TirePressureUnit {
+        TirePressureUnitPsi = 0;
+        TirePressureUnitBar = 1;
+    }
+
+    google.protobuf.Timestamp timestamp = 7;
+
+    oneof optional_gui_24_hour_time { bool gui_24_hour_time = 104; }
+    oneof optional_show_range_units { bool show_range_units = 106; }
+    oneof optional_gui_tirepressure_units { TirePressureUnit gui_tirepressure_units = 108; }
+}
+
+message VehicleConfig {
+    enum AuxParkLamps_E {
+        AuxParkLampsNaBase = 0;
+        AuxParkLampsNaPremium = 1;
+        AuxParkLampsEu = 2;
+        AuxParkLampsNone = 3;
+    }
+
+    enum BadgingMaterialType {
+        BadgingMaterialTypeChromeSilver = 0;
+        BadgingMaterialTypeBlackMatte = 1;
+    }
+
+    enum BedLightingType {
+        BedLightingTypeBase = 0;
+        BedLightingTypePremium = 1;
+    }
+
+    enum DrivetrainType {
+        DrivetrainTypeRWD = 0;
+        DrivetrainTypeAWD = 1;
+        DrivetrainTypeAWDTriMotor = 2;
+    }
+
+    enum FrontFasciaCameraType {
+        FrontFasciaCameraTypeNone = 0;
+        FrontFasciaCameraTypeIMX963 = 1;
+        FrontFasciaCameraTypeIMX00N = 2;
+    }
+
+    enum HeadlampType_E {
+        HeadlampTypePremium = 0;
+        HeadlampTypeGlobal = 1;
+        HeadlampTypeHalogen = 2;
+        HeadlampTypeHid = 3;
+        HeadlampTypeLed = 4;
+        HeadlampTypeBase = 5;
+    }
+
+    enum InteriorUpperTrimType {
+        InteriorUpperTrimTypePolarGrey = 0;
+        InteriorUpperTrimTypeMammothBlack = 1;
+    }
+
+    enum RearLightHardwareVariant {
+        RearLightHardwareVariantUnknown = 0;
+        RearLightHardwareVariantBase = 1;
+        RearLightHardwareVariantPremiumV1 = 2;
+        RearLightHardwareVariantPremiumV2 = 3;
+    }
+
+    enum RearLightType {
+        RearLightTypeNA = 0;
+        RearLightTypeEuCn = 1;
+        RearLightTypeGlobal = 2;
+    }
+
+    enum SeatTrimType {
+        SeatTrimTypeBase = 0;
+        SeatTrimTypeSport = 1;
+        SeatTrimTypeBaseTextile = 2;
+    }
+
+    enum TurnIndicatorControlType {
+        TurnIndicatorControlTypeUnknown = 0;
+        TurnIndicatorControlTypeSingleDetentStalk = 1;
+        TurnIndicatorControlTypeSWSButton = 2;
+    }
+
+    message InteriorTrimType {
+        oneof type {
+            Void BLACKCONSOLE2 = 6;
+            Void WHITECONSOLE2 = 7;
+            Void ALLBLACK = 8;
+            Void BLACKANDWHITE = 9;
+            Void WALNUTCREAM = 12;
+            Void WALNUTWHITE = 13;
+            Void EBONYBLACK = 14;
+            Void CARBONCREAM = 15;
+            Void CARBONWHITE = 16;
+            Void CARBONBLACK = 17;
+            Void TACTICALGREY = 18;
+        }
+    }
+
+    message ExteriorTrimType {
+        oneof type {
+            Void STANDARDCHROME = 3;
+            Void SATINBLACK = 4;
+        }
+    }
+
+    InteriorTrimType interior_trim_type = 28;
+    ExteriorTrimType exterior_trim_type = 35;
+    oneof optional_red_brake_calipers { bool red_brake_calipers = 61; }
+    oneof optional_use_range_badging { bool use_range_badging = 103; }
+    oneof optional_range_plus_badging { bool range_plus_badging = 104; }
+    oneof optional_has_ludicrous_mode { bool has_ludicrous_mode = 105; }
+    oneof optional_can_actuate_trunks { bool can_actuate_trunks = 106; }
+    oneof optional_has_air_suspension { bool has_air_suspension = 110; }
+    oneof optional_ece_restrictions { bool ece_restrictions = 120; }
+    oneof optional_eu_vehicle { bool eu_vehicle = 121; }
+    oneof optional_motorized_charge_port { bool motorized_charge_port = 122; }
+    oneof optional_can_accept_navigation_requests { bool can_accept_navigation_requests = 124; }
+    oneof optional_key_version { uint32 key_version = 125; }
+    oneof optional_mobile_enabled { bool mobile_enabled = 126; }
+    oneof optional_default_charge_to_max { bool default_charge_to_max = 134; }
+    oneof optional_steering_wheel_heater_installed { bool steering_wheel_heater_installed = 136; }
+    oneof optional_sentry_mode_supported { bool sentry_mode_supported = 137; }
+    oneof optional_homelink_supported { bool homelink_supported = 138; }
+    oneof optional_webcam_supported { bool webcam_supported = 139; }
+    oneof optional_bioweapon_mode_supported { bool bioweapon_mode_supported = 141; }
+    oneof optional_dashcam_clip_save_supported { bool dashcam_clip_save_supported = 142; }
+    oneof optional_has_pws { bool has_pws = 143; }
+    oneof optional_utc_offset { sint32 utc_offset = 144; }
+    oneof optional_has_seat_cooling { bool has_seat_cooling = 145; }
+    oneof optional_paint_color_override { string paint_color_override = 146; }
+    oneof optional_tpms_pressures_supported { bool tpms_pressures_supported = 147; }
+    oneof optional_vehicle_badging { uint32 vehicle_badging = 148; }
+    oneof optional_exterior_trim_override { string exterior_trim_override = 149; }
+    oneof optional_headlamp_type { HeadlampType_E headlamp_type = 150; }
+    oneof optional_aux_park_lamps { AuxParkLamps_E aux_park_lamps = 154; }
+    oneof optional_is_raven { bool is_raven = 155; }
+    oneof optional_has_auto_seat_climate { bool has_auto_seat_climate = 156; }
+    oneof optional_has_front_row_seat_heaters { bool has_front_row_seat_heaters = 157; }
+    oneof optional_has_third_row_seat_heaters { bool has_third_row_seat_heaters = 158; }
+    oneof optional_supports_qr_pairing { bool supports_qr_pairing = 159; }
+    oneof optional_disable_window_vent_close { bool disable_window_vent_close = 161; }
+    oneof optional_webcam_selfie_supported { bool webcam_selfie_supported = 162; }
+    oneof optional_cop_user_set_temp_supported { bool cop_user_set_temp_supported = 163; }
+    oneof optional_has_auto_stw_heat { bool has_auto_stw_heat = 164; }
+    oneof optional_rearlight_type { RearLightType rearlight_type = 165; }
+    oneof optional_rear_seat_heater_type { RearSeatHeaterType rear_seat_heater_type = 166; }
+    oneof optional_webcam_grid_supported { bool webcam_grid_supported = 167; }
+    oneof optional_has_tesla_badge { bool has_tesla_badge = 168; }
+    oneof optional_has_tesla_wordmark { bool has_tesla_wordmark = 169; }
+    oneof optional_fascia_type { FasciaType fascia_type = 170; }
+    oneof optional_accessory_lightbar_type { AccessoryLightbarType accessory_lightbar_type = 171; }
+    oneof optional_sentry_preview_supported { bool sentry_preview_supported = 172; }
+    oneof optional_seat_trim_type { SeatTrimType seat_trim_type = 173; }
+    oneof optional_drivetrain_type { DrivetrainType drivetrain_type = 174; }
+    oneof optional_lightshow_supported { bool lightshow_supported = 175; }
+    oneof optional_mobile_dashcam_viewer_version { uint32 mobile_dashcam_viewer_version = 176; }
+    oneof optional_has_premium_connectivity { bool has_premium_connectivity = 177; }
+    oneof optional_car_wrap_enabled { bool car_wrap_enabled = 178; }
+    oneof optional_supports_ride_height { bool supports_ride_height = 179; }
+    oneof optional_supports_set_arrival_energy { bool supports_set_arrival_energy = 180; }
+    oneof optional_supports_pillar_camera_metadata { bool supports_pillar_camera_metadata = 181; }
+    oneof optional_chassis_type { ChassisType chassis_type = 182; }
+    oneof optional_is_china_vehicle { bool is_china_vehicle = 183; }
+    oneof optional_is_using_unreal_apviz { bool is_using_unreal_apviz = 184; }
+    oneof optional_supports_flexible_dashcam_bitrate { bool supports_flexible_dashcam_bitrate = 185; }
+    oneof optional_front_fascia_camera_type { FrontFasciaCameraType front_fascia_camera_type = 186; }
+    oneof optional_turn_indicator_control_type { TurnIndicatorControlType turn_indicator_control_type = 187; }
+    oneof optional_has_rear_display { bool has_rear_display = 188; }
+    oneof optional_window_tint_color { string window_tint_color = 189; }
+    oneof optional_interior_upper_trim_type { InteriorUpperTrimType interior_upper_trim_type = 190; }
+    oneof optional_badging_material_type { BadgingMaterialType badging_material_type = 191; }
+    oneof optional_webcam_interior_only { bool webcam_interior_only = 192; }
+    oneof optional_country_code { string country_code = 193; }
+    oneof optional_bed_lighting_type { BedLightingType bed_lighting_type = 194; }
+    oneof optional_rear_light_hardware_variant { RearLightHardwareVariant rear_light_hardware_variant = 195; }
+    AutopilotBase autopilot_base = 196;
+    AutopilotOverrideState autopilot_override_state = 197;
+    oneof optional_autopilot_override_expire_time { int64 autopilot_override_expire_time = 198; }
+}
+
+message ParkedAccessoryState {
+    oneof optional_tent_mode_request { bool tent_mode_request = 1; }
+    oneof optional_horizon_leveling_state { bool horizon_leveling_state = 2; }
+    oneof optional_front_zone_light_request { ZoneLightRequest front_zone_light_request = 3; }
+    oneof optional_rear_zone_light_request { ZoneLightRequest rear_zone_light_request = 4; }
+    oneof optional_truck_bed_lights_brightness { uint32 truck_bed_lights_brightness = 5; }
+    oneof optional_truck_bed_lights_auto_brightness { uint32 truck_bed_lights_auto_brightness = 6; }
+    oneof optional_truck_bed_lights_auto_state { bool truck_bed_lights_auto_state = 7; }
+    oneof optional_truck_bed_lights_controls_disabled { bool truck_bed_lights_controls_disabled = 8; }
+    oneof optional_accessory_lightbar_middle_on { bool accessory_lightbar_middle_on = 9; }
+    oneof optional_accessory_lightbar_ditch_on { bool accessory_lightbar_ditch_on = 10; }
+    oneof optional_accessory_lightbar_brightness { uint32 accessory_lightbar_brightness = 11; }
+    oneof optional_accessory_lightbar_low { uint32 accessory_lightbar_low = 12; }
+    oneof optional_accessory_lightbar_med { uint32 accessory_lightbar_med = 13; }
+    oneof optional_accessory_lightbar_high { uint32 accessory_lightbar_high = 14; }
+    oneof optional_has_tent_mode { bool has_tent_mode = 15; }
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message SohState {
+    enum WarrantyServiceResult {
+        SOH_OK = 0;
+        SOH_REDUCED = 1;
+        SOH_NO_INTERNET = 2;
+        SOH_UNKNOWN = 3;
+    }
+
+    message SohTestState {
+        oneof optional_soh_time_estimate { float soh_time_estimate = 2; }
+        oneof optional_soh_time_remaining { float soh_time_remaining = 3; }
+    }
+
+    message SohResult {
+        oneof optional_soh_calibrated { bool soh_calibrated = 4; }
+        oneof optional_soh_last_test_time { uint32 soh_last_test_time = 5; }
+        oneof optional_soh_health_result { WarrantyServiceResult soh_health_result = 6; }
+        oneof optional_soh_distance_since_soh_test { uint32 soh_distance_since_soh_test = 7; }
+        oneof optional_soh_regulated { bool soh_regulated = 8; }
+    }
+
+    SohTestState soh_test_state = 1;
+    SohResult soh_result = 3;
+    google.protobuf.Timestamp timestamp = 4;
+}
+
+message AlertState {
+    repeated ChargingAlert charging_alerts = 1;
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message LightShowOption {
+    string light_show_name = 1;
+    string light_show_duration = 2;
+}
+
+message LightShowSettings {
+    float light_show_volume_min = 1;
+    float light_show_volume_max = 2;
+    float light_show_volume_step = 3;
+    repeated LightShowOption light_show_options = 4;
+    repeated uint64 light_show_schedule_times = 5;
+}
+
+message LightShowState {
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_light_show_active { bool light_show_active = 2; }
+    oneof optional_light_show_selected_name { string light_show_selected_name = 3; }
+    oneof optional_light_show_start_time { uint64 light_show_start_time = 4; }
+    LightShowSettings light_show_settings = 5;
+}
+
+enum VehicleImageStateType {
+    APVIZ_INVALID = 0;
+    APVIZ_WRAP = 1;
+    APVIZ_LICENSE_PLATE = 2;
+}
+
+message VehicleImageData {
+    bytes image_id = 1;
+    bytes data = 2;
+    uint32 data_chunk_size = 3;
+    uint32 start_offset = 4;
+}
+
+message VehicleImage {
+    bytes image_id = 1;
+    VehicleImageData asset_data = 2;
+    bool is_local_image = 4;
+    uint32 total_image_size = 5;
+}
+
+message VehicleImageState {
+    repeated VehicleImage vehicle_images = 1;
+    google.protobuf.Timestamp timestamp = 2;
+}
+
+message SuspensionState {
+    oneof optional_current_level { SuspensionLevel current_level = 2; }
+    oneof optional_target_level { SuspensionLevel target_level = 3; }
+    oneof optional_movement_state { SuspensionActuationState movement_state = 4; }
+    oneof optional_offroad_on { bool offroad_on = 5; }
+    oneof optional_disabled_reason { string disabled_reason = 6; }
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message ChildPresenceDetectionState {
+    oneof optional_cpd_disable_notification_required { bool cpd_disable_notification_required = 1; }
+    oneof optional_cpd_hvac_active { bool cpd_hvac_active = 2; }
+    oneof optional_cpd_supports_critical_alerts { bool cpd_supports_critical_alerts = 3; }
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message VehicleDetailState {
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_vehicle_name { string vehicle_name = 2; }
+    oneof optional_car_version { string car_version = 3; }
+    oneof optional_detailed_version { string detailed_version = 4; }
+    oneof optional_autopilot_hash { string autopilot_hash = 5; }
+    oneof optional_fsd_software_version { string fsd_software_version = 6; }
+    oneof optional_current_profile_name { string current_profile_name = 7; }
+    oneof optional_china_autopilot_software_version { string china_autopilot_software_version = 8; }
 }

@@ -34,12 +34,22 @@ class KeyFormFactor(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     KEY_FORM_FACTOR_NFC_CARD_METAL_CARD: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_NFC_CARD_PLASTIC_CARD: _ClassVar[KeyFormFactor]
     KEY_FORM_FACTOR_APPLE_WATCH: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_NFC_CARD_WD_PLASTIC_CARD: _ClassVar[KeyFormFactor]
+    KEY_FORM_FACTOR_HARMONY_OS_NEXT_DEVICE: _ClassVar[KeyFormFactor]
 
 class InformationRequestType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     INFORMATION_REQUEST_TYPE_GET_STATUS: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_TOKEN: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_COUNTER: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_EPHEMERAL_PUBLIC_KEY: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_SESSION_DATA: _ClassVar[InformationRequestType]
     INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO: _ClassVar[InformationRequestType]
     INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_PERSONALIZATION_INFO: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_KEYSTATUS_INFO: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_ACTIVE_KEY: _ClassVar[InformationRequestType]
+    INFORMATION_REQUEST_TYPE_GET_CAPABILITIES: _ClassVar[InformationRequestType]
 
 class RKEAction_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -54,6 +64,7 @@ class RKEAction_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RKE_ACTION_REMOTE_DRIVE: _ClassVar[RKEAction_E]
     RKE_ACTION_AUTO_SECURE_VEHICLE: _ClassVar[RKEAction_E]
     RKE_ACTION_WAKE_VEHICLE: _ClassVar[RKEAction_E]
+    RKE_ACTION_UNLOCK_AND_REMOTE_DRIVE: _ClassVar[RKEAction_E]
 
 class ClosureMoveType_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -62,6 +73,8 @@ class ClosureMoveType_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     CLOSURE_MOVE_TYPE_STOP: _ClassVar[ClosureMoveType_E]
     CLOSURE_MOVE_TYPE_OPEN: _ClassVar[ClosureMoveType_E]
     CLOSURE_MOVE_TYPE_CLOSE: _ClassVar[ClosureMoveType_E]
+    CLOSURE_MOVE_TYPE_OVERRIDE_OPEN: _ClassVar[ClosureMoveType_E]
+    CLOSURE_MOVE_TYPE_OVERRIDE_CLOSE: _ClassVar[ClosureMoveType_E]
 
 class OperationStatus_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -123,6 +136,10 @@ class WhitelistOperation_information_E(int, metaclass=_enum_type_wrapper.EnumTyp
     WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_UI_ACK: _ClassVar[WhitelistOperation_information_E]
     WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_VALET_MODE: _ClassVar[WhitelistOperation_information_E]
     WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_CANCELLED: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_RIDER_KEY: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_RIDER_KEY_OUTSIDE_FLEET_MODE: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_PREDELIVERY_KEY: _ClassVar[WhitelistOperation_information_E]
+    WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_PREDELIVERY_KEY_WHEN_ALREADY_DELIVERED: _ClassVar[WhitelistOperation_information_E]
 
 class ClosureState_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -152,6 +169,19 @@ class UserPresence_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     VEHICLE_USER_PRESENCE_UNKNOWN: _ClassVar[UserPresence_E]
     VEHICLE_USER_PRESENCE_NOT_PRESENT: _ClassVar[UserPresence_E]
     VEHICLE_USER_PRESENCE_PRESENT: _ClassVar[UserPresence_E]
+
+class UIDesire_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    UI_DESIRE_NONE: _ClassVar[UIDesire_E]
+    UI_DESIRE_HAS_DATA: _ClassVar[UIDesire_E]
+
+class Gear_E(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    GEAR_UNKNOWN: _ClassVar[Gear_E]
+    GEAR_PARK: _ClassVar[Gear_E]
+    GEAR_DRIVE: _ClassVar[Gear_E]
+    GEAR_REVERSE: _ClassVar[Gear_E]
+    GEAR_NEUTRAL: _ClassVar[Gear_E]
 SIGNATURE_TYPE_NONE: SignatureType
 SIGNATURE_TYPE_PRESENT_KEY: SignatureType
 KEY_FORM_FACTOR_UNKNOWN: KeyFormFactor
@@ -172,9 +202,19 @@ KEY_FORM_FACTOR_NFC_CARD_P71: KeyFormFactor
 KEY_FORM_FACTOR_NFC_CARD_METAL_CARD: KeyFormFactor
 KEY_FORM_FACTOR_NFC_CARD_PLASTIC_CARD: KeyFormFactor
 KEY_FORM_FACTOR_APPLE_WATCH: KeyFormFactor
+KEY_FORM_FACTOR_NFC_CARD_WD_PLASTIC_CARD: KeyFormFactor
+KEY_FORM_FACTOR_HARMONY_OS_NEXT_DEVICE: KeyFormFactor
 INFORMATION_REQUEST_TYPE_GET_STATUS: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_TOKEN: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_COUNTER: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_EPHEMERAL_PUBLIC_KEY: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_SESSION_DATA: InformationRequestType
 INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO: InformationRequestType
 INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_PERSONALIZATION_INFO: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_KEYSTATUS_INFO: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_ACTIVE_KEY: InformationRequestType
+INFORMATION_REQUEST_TYPE_GET_CAPABILITIES: InformationRequestType
 RKE_ACTION_UNLOCK: RKEAction_E
 RKE_ACTION_LOCK: RKEAction_E
 RKE_ACTION_OPEN_TRUNK: RKEAction_E
@@ -186,11 +226,14 @@ RKE_ACTION_UNKNOWN: RKEAction_E
 RKE_ACTION_REMOTE_DRIVE: RKEAction_E
 RKE_ACTION_AUTO_SECURE_VEHICLE: RKEAction_E
 RKE_ACTION_WAKE_VEHICLE: RKEAction_E
+RKE_ACTION_UNLOCK_AND_REMOTE_DRIVE: RKEAction_E
 CLOSURE_MOVE_TYPE_NONE: ClosureMoveType_E
 CLOSURE_MOVE_TYPE_MOVE: ClosureMoveType_E
 CLOSURE_MOVE_TYPE_STOP: ClosureMoveType_E
 CLOSURE_MOVE_TYPE_OPEN: ClosureMoveType_E
 CLOSURE_MOVE_TYPE_CLOSE: ClosureMoveType_E
+CLOSURE_MOVE_TYPE_OVERRIDE_OPEN: ClosureMoveType_E
+CLOSURE_MOVE_TYPE_OVERRIDE_CLOSE: ClosureMoveType_E
 OPERATIONSTATUS_OK: OperationStatus_E
 OPERATIONSTATUS_WAIT: OperationStatus_E
 OPERATIONSTATUS_ERROR: OperationStatus_E
@@ -243,6 +286,10 @@ WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_TA
 WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_TIMED_OUT_WAITING_FOR_UI_ACK: WhitelistOperation_information_E
 WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_VALET_MODE: WhitelistOperation_information_E
 WHITELISTOPERATION_INFORMATION_LOCAL_ENTITY_AUTH_FAILED_CANCELLED: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_RIDER_KEY: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_RIDER_KEY_OUTSIDE_FLEET_MODE: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_PREDELIVERY_KEY: WhitelistOperation_information_E
+WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_PREDELIVERY_KEY_WHEN_ALREADY_DELIVERED: WhitelistOperation_information_E
 CLOSURESTATE_CLOSED: ClosureState_E
 CLOSURESTATE_OPEN: ClosureState_E
 CLOSURESTATE_AJAR: ClosureState_E
@@ -260,6 +307,13 @@ VEHICLE_SLEEP_STATUS_ASLEEP: VehicleSleepStatus_E
 VEHICLE_USER_PRESENCE_UNKNOWN: UserPresence_E
 VEHICLE_USER_PRESENCE_NOT_PRESENT: UserPresence_E
 VEHICLE_USER_PRESENCE_PRESENT: UserPresence_E
+UI_DESIRE_NONE: UIDesire_E
+UI_DESIRE_HAS_DATA: UIDesire_E
+GEAR_UNKNOWN: Gear_E
+GEAR_PARK: Gear_E
+GEAR_DRIVE: Gear_E
+GEAR_REVERSE: Gear_E
+GEAR_NEUTRAL: Gear_E
 
 class SignedMessage(_message.Message):
     __slots__ = ("protobufMessageAsBytes", "signatureType")
@@ -466,18 +520,22 @@ class DetailedClosureStatus(_message.Message):
     def __init__(self, tonneauPercentOpen: _Optional[int] = ...) -> None: ...
 
 class VehicleStatus(_message.Message):
-    __slots__ = ("closureStatuses", "vehicleLockState", "vehicleSleepStatus", "userPresence", "detailedClosureStatus")
+    __slots__ = ("closureStatuses", "vehicleLockState", "vehicleSleepStatus", "userPresence", "detailedClosureStatus", "uiDesire", "gear")
     CLOSURESTATUSES_FIELD_NUMBER: _ClassVar[int]
     VEHICLELOCKSTATE_FIELD_NUMBER: _ClassVar[int]
     VEHICLESLEEPSTATUS_FIELD_NUMBER: _ClassVar[int]
     USERPRESENCE_FIELD_NUMBER: _ClassVar[int]
     DETAILEDCLOSURESTATUS_FIELD_NUMBER: _ClassVar[int]
+    UIDESIRE_FIELD_NUMBER: _ClassVar[int]
+    GEAR_FIELD_NUMBER: _ClassVar[int]
     closureStatuses: ClosureStatuses
     vehicleLockState: VehicleLockState_E
     vehicleSleepStatus: VehicleSleepStatus_E
     userPresence: UserPresence_E
     detailedClosureStatus: DetailedClosureStatus
-    def __init__(self, closureStatuses: _Optional[_Union[ClosureStatuses, _Mapping]] = ..., vehicleLockState: _Optional[_Union[VehicleLockState_E, str]] = ..., vehicleSleepStatus: _Optional[_Union[VehicleSleepStatus_E, str]] = ..., userPresence: _Optional[_Union[UserPresence_E, str]] = ..., detailedClosureStatus: _Optional[_Union[DetailedClosureStatus, _Mapping]] = ...) -> None: ...
+    uiDesire: UIDesire_E
+    gear: Gear_E
+    def __init__(self, closureStatuses: _Optional[_Union[ClosureStatuses, _Mapping]] = ..., vehicleLockState: _Optional[_Union[VehicleLockState_E, str]] = ..., vehicleSleepStatus: _Optional[_Union[VehicleSleepStatus_E, str]] = ..., userPresence: _Optional[_Union[UserPresence_E, str]] = ..., detailedClosureStatus: _Optional[_Union[DetailedClosureStatus, _Mapping]] = ..., uiDesire: _Optional[_Union[UIDesire_E, str]] = ..., gear: _Optional[_Union[Gear_E, str]] = ...) -> None: ...
 
 class FromVCSECMessage(_message.Message):
     __slots__ = ("vehicleStatus", "commandStatus", "whitelistInfo", "whitelistEntryInfo", "nominalError")
