@@ -1003,13 +1003,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         OAuth session) always raises ``TeslaFleetMessageFaultCommandRequiresAccountCredentials``;
         use the Fleet-API-relayed ``VehicleSigned`` transport instead.
         """
-        return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    vehicleControlResetPinToDriveAdminAction=VehicleControlResetPinToDriveAdminAction()
-                )
-            )
-        )
+        return await self.reset_pin_to_drive_admin()
 
     async def door_lock(self) -> dict[str, Any]:
         """Locks the vehicle."""

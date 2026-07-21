@@ -85,6 +85,7 @@ tests/test_ble_write_timeout_router.py
 tests/test_command_counter_lock.py
 tests/test_command_logging.py
 tests/test_cross_transport_parity.py
+tests/test_energysite_island_mode.py
 tests/test_find_vehicle_scan_filter.py
 tests/test_firmware_at_least.py
 tests/test_fleet_auth_refresh.py
