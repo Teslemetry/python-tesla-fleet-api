@@ -987,17 +987,23 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    async def clear_pin_to_drive_admin(self, pin: str | None = None):
-        """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners."""
-        return await self._sendInfotainment(
-            Action(
-                vehicleAction=VehicleAction(
-                    drivingClearSpeedLimitPinAction=DrivingClearSpeedLimitPinAction(
-                        pin=pin
-                    )
-                )
-            )
-        )
+    async def clear_pin_to_drive_admin(self, pin: str | None = None) -> dict[str, Any]:
+        """Deactivates PIN to Drive and resets the associated PIN for vehicles running firmware versions 2023.44+. This command is only accessible to fleet managers or owners.
+
+        ``pin`` is accepted for cross-transport signature parity with the
+        cloud REST endpoint, but the signed ``VehicleControlResetPinToDriveAdminAction``
+        has no pin field, so it is not sent (same pattern as other documented
+        cross-transport form gaps - see CLAUDE.md). Live-verified: the
+        previous implementation built ``DrivingClearSpeedLimitPinAction``,
+        the Speed-Limit-Mode pin clear, not a PIN-to-Drive action at all -
+        confirmed by the vehicle itself rejecting a live call with reason
+        ``speed_limit_mode_active``, a condition meaningful only to Speed
+        Limit Mode. This action requires proof of Tesla account credentials
+        (fleet-manager/owner tier) - calling it over raw BLE signing (no
+        OAuth session) always raises ``TeslaFleetMessageFaultCommandRequiresAccountCredentials``;
+        use the Fleet-API-relayed ``VehicleSigned`` transport instead.
+        """
+        return await self.reset_pin_to_drive_admin()
 
     async def door_lock(self) -> dict[str, Any]:
         """Locks the vehicle."""
