@@ -6,6 +6,10 @@ Without this test, a future ``tesla-protocol`` version bump that adds a new
 oneof/message field would silently drift the library out of full command
 coverage with no signal - this test fails loudly instead, forcing a deliberate
 decision (wrap it, or add it to an allowlist with a reason) for anything new.
+
+This test asserts full coverage of ``commands.py``, so it only passes once
+every command-wrapper PR in the full-surface rollout has landed; if merged
+before the others, rebase this branch onto the updated main once they have.
 """
 
 import inspect
