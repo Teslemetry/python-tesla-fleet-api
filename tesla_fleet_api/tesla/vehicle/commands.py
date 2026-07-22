@@ -174,7 +174,14 @@ from tesla_protocol.command.car_server_pb2 import (
     # Group 12: Power modes
     SetLowPowerModeAction,
     SetKeepAccessoryPowerModeAction,
+    # Group 18: Niche/low-certainty-value commands (captain full-coverage directive)
+    PiiKeyRequest,
+    PseudonymSyncRequest,
+    TeslaAuthResponseAction,
+    SetupCloudProfileWithLocalProfileUuidAction,
+    GetLocalProfilesForVaultUuidAction,
 )
+from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
     VehicleData,
     VehicleState,
@@ -2403,4 +2410,108 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         """Auto secures the vehicle (locks, closes windows, etc.)."""
         return await self._sendVehicleSecurity(
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_AUTO_SECURE_VEHICLE)
+        )
+
+    # Group 18: Niche/low-certainty-value commands
+    #
+    # Included per the captain's full-proto-coverage directive; each has no
+    # known third-party consumer use case today, unlike every other command
+    # in this file. See AGENTS.md for detail on why each is niche.
+
+    async def pii_key_request(
+        self, subscriber_public_key: str, pii_key_expiration: int
+    ) -> dict[str, Any]:
+        """Requests a PII (privacy/telemetry pseudonymization) key.
+
+        ``pii_key_expiration`` is a Unix timestamp in seconds.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    piiKeyRequest=PiiKeyRequest(
+                        subscriber_public_key=subscriber_public_key,
+                        pii_key_expiration=Timestamp(seconds=pii_key_expiration),
+                    )
+                )
+            )
+        )
+
+    async def pseudonym_sync_request(
+        self, last_known_pseudonym_hashed: bytes
+    ) -> dict[str, Any]:
+        """Syncs the vehicle's privacy/telemetry pseudonym with a previously known hashed value."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    pseudonymSyncRequest=PseudonymSyncRequest(
+                        last_known_pseudonym_hashed=last_known_pseudonym_hashed
+                    )
+                )
+            )
+        )
+
+    async def tesla_auth_response(
+        self,
+        client_id: str,
+        scope: str,
+        access_token: str,
+        refresh_token: str,
+        expiry_timestamp: int,
+        error: str = "",
+        scoped_token: str = "",
+    ) -> dict[str, Any]:
+        """Passes a completed "Sign in with Tesla" OAuth response to the vehicle screen.
+
+        This is a pass-through: the caller must already have a completed OAuth
+        response from elsewhere in their own auth flow; the library cannot
+        originate these fields itself.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    teslaAuthResponseAction=TeslaAuthResponseAction(
+                        client_id=client_id,
+                        scope=scope,
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                        expiry_timestamp=expiry_timestamp,
+                        error=error,
+                        scoped_token=scoped_token,
+                    )
+                )
+            )
+        )
+
+    async def setup_cloud_profile_with_local_profile_uuid(
+        self,
+        cloud_vault_uuid: str,
+        local_profile_uuid: str,
+        delete_local_profile_after_setup: bool = False,
+    ) -> dict[str, Any]:
+        """Links a local Tesla profile to a cloud vault profile UUID."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setupCloudProfileWithLocalProfileUuidAction=SetupCloudProfileWithLocalProfileUuidAction(
+                        cloud_vault_uuid=cloud_vault_uuid,
+                        local_profile_uuid=local_profile_uuid,
+                        delete_local_profile_after_setup=delete_local_profile_after_setup,
+                    )
+                )
+            )
+        )
+
+    async def get_local_profiles_for_vault_uuid(
+        self, vault_uuid: str
+    ) -> dict[str, Any]:
+        """Gets local Tesla profiles associated with a cloud vault UUID."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getLocalProfilesForVaultUuidAction=GetLocalProfilesForVaultUuidAction(
+                        vault_uuid=vault_uuid
+                    )
+                )
+            ),
+            mutating=False,
         )
