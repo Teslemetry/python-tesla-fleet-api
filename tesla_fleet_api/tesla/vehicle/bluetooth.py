@@ -36,19 +36,26 @@ from tesla_fleet_api.tesla.vehicle.commands import (
 # Protocol
 from tesla_protocol.command.car_server_pb2 import (
     Action,
+    GetAlertState,
     GetChargeScheduleState,
     GetChargeState,
+    GetChildPresenceDetectionState,
     GetClimateState,
     GetClosuresState,
     GetDriveState,
+    GetGuiSettings,
+    GetLightShowState,
     GetLocationState,
     GetMediaDetailState,
     GetMediaState,
     GetParentalControlsState,
+    GetParkedAccessoryState,
     GetPreconditioningScheduleState,
     GetSoftwareUpdateState,
+    GetSuspensionState,
     GetTirePressureState,
     GetVehicleData,
+    GetVehicleState,
     VehicleAction,
 )
 from tesla_protocol.command.keys_pb2 import Role
@@ -74,19 +81,26 @@ from tesla_protocol.command.vcsec_pb2 import (
     WhitelistOperation,
 )
 from tesla_protocol.command.vehicle_pb2 import (
+    AlertState,
     ChargeScheduleState,
     ChargeState,
+    ChildPresenceDetectionState,
     ClimateState,
     ClosuresState,
     DriveState,
+    GuiSettings,
+    LightShowState,
     LocationState,
     MediaDetailState,
     MediaState,
     ParentalControlsState,
+    ParkedAccessoryState,
     PreconditioningScheduleState,
     SoftwareUpdateState,
+    SuspensionState,
     TirePressureState,
     VehicleData,
+    VehicleState,
 )
 
 SERVICE_UUID = "00000211-b2d1-43f0-9b88-960cebf8b91e"
@@ -1504,6 +1518,28 @@ class VehicleBluetooth(
                         getParentalControlsState=GetParentalControlsState()
                         if BluetoothVehicleData.PARENTAL_CONTROLS_STATE in endpoints
                         else None,
+                        getGuiSettings=GetGuiSettings()
+                        if BluetoothVehicleData.GUI_SETTINGS in endpoints
+                        else None,
+                        getParkedAccessoryState=GetParkedAccessoryState()
+                        if BluetoothVehicleData.PARKED_ACCESSORY_STATE in endpoints
+                        else None,
+                        getVehicleState=GetVehicleState()
+                        if BluetoothVehicleData.LEGACY_VEHICLE_STATE in endpoints
+                        else None,
+                        getAlertState=GetAlertState()
+                        if BluetoothVehicleData.ALERT_STATE in endpoints
+                        else None,
+                        getLightShowState=GetLightShowState()
+                        if BluetoothVehicleData.LIGHT_SHOW_STATE in endpoints
+                        else None,
+                        getSuspensionState=GetSuspensionState()
+                        if BluetoothVehicleData.SUSPENSION_STATE in endpoints
+                        else None,
+                        getChildPresenceDetectionState=GetChildPresenceDetectionState()
+                        if BluetoothVehicleData.CHILD_PRESENCE_DETECTION_STATE
+                        in endpoints
+                        else None,
                     )
                 )
             )
@@ -1668,6 +1704,104 @@ class VehicleBluetooth(
                 )
             )
         ).parental_controls_state
+
+    async def gui_settings(self) -> GuiSettings:
+        """Return the current GUI display settings over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(getGuiSettings=GetGuiSettings())
+                    )
+                )
+            )
+        ).gui_settings
+
+    async def parked_accessory_state(self) -> ParkedAccessoryState:
+        """Return the current parked-accessory (e.g. awning) state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getParkedAccessoryState=GetParkedAccessoryState()
+                        )
+                    )
+                )
+            )
+        ).parked_accessory_state
+
+    async def legacy_vehicle_state(self) -> VehicleState:
+        """Return CarServer's legacy vehicle-state surface over BLE.
+
+        Named to match the reply field (``VehicleData.legacy_vehicle_state``),
+        not ``vehicle_state()``: that name is already taken by the VCSEC
+        ``VehicleStatus`` reader below, a different message from a different
+        domain.
+        """
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(getVehicleState=GetVehicleState())
+                    )
+                )
+            )
+        ).legacy_vehicle_state
+
+    async def alert_state(self) -> AlertState:
+        """Return the current active vehicle alerts over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(getAlertState=GetAlertState())
+                    )
+                )
+            )
+        ).alert_state
+
+    async def light_show_state(self) -> LightShowState:
+        """Return the current light show state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getLightShowState=GetLightShowState()
+                        )
+                    )
+                )
+            )
+        ).light_show_state
+
+    async def suspension_state(self) -> SuspensionState:
+        """Return the current adaptive suspension state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getSuspensionState=GetSuspensionState()
+                        )
+                    )
+                )
+            )
+        ).suspension_state
+
+    async def child_presence_detection_state(self) -> ChildPresenceDetectionState:
+        """Return the current child presence detection state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getChildPresenceDetectionState=GetChildPresenceDetectionState()
+                        )
+                    )
+                )
+            )
+        ).child_presence_detection_state
 
     async def vehicle_state(self) -> VehicleStatus:
         """Return the vehicle security-domain status over BLE."""
