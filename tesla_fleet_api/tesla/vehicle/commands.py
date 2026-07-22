@@ -180,6 +180,15 @@ from tesla_protocol.command.car_server_pb2 import (
     TeslaAuthResponseAction,
     SetupCloudProfileWithLocalProfileUuidAction,
     GetLocalProfilesForVaultUuidAction,
+    SetRateTariffRequest,
+    GetRateTariffRequest,
+    AddManagedChargingSiteRequest,
+    RemoveManagedChargingSiteRequest,
+    GetManagedChargingSitesRequest,
+    SetDischargeLimitAction,
+    ManagedChargingSite,
+    ManagerType,
+    SiteController,
 )
 from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
@@ -2514,4 +2523,90 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             ),
             mutating=False,
+        )
+
+    async def set_rate_tariff(
+        self,
+        seasons: SetRateTariffRequest.Seasons,
+        tariff: SetRateTariffRequest.Tariff | None = None,
+    ) -> dict[str, Any]:
+        """Sets a time-of-use rate tariff schedule for charge-on-solar-style optimization.
+
+        ``seasons``/``tariff`` are ``tesla_protocol`` message types
+        (``SetRateTariffRequest.Seasons``/``.Tariff``) - the tariff schedule is
+        deeply nested (up to 5 named seasons, each with 4 time-of-use period
+        types), so construct them directly rather than through a parallel
+        flattened API.
+        """
+        action = SetRateTariffRequest(seasons=seasons)
+        if tariff is not None:
+            action.tariff.CopyFrom(tariff)
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(setRateTariffRequest=action))
+        )
+
+    async def get_rate_tariff(self) -> dict[str, Any]:
+        """Gets the current time-of-use rate tariff schedule."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(getRateTariffRequest=GetRateTariffRequest())
+            ),
+            mutating=False,
+        )
+
+    async def add_managed_charging_site(
+        self, public_key: str, lat: float, lon: float
+    ) -> dict[str, Any]:
+        """Registers a managed charging site (utility managed-charging program) for this vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    addManagedChargingSiteRequest=AddManagedChargingSiteRequest(
+                        site=ManagedChargingSite(
+                            public_key=public_key,
+                            manager_type=ManagerType(site_controller=SiteController()),
+                            lat_lon=LatLong(latitude=lat, longitude=lon),
+                        )
+                    )
+                )
+            )
+        )
+
+    async def remove_managed_charging_site(self, public_key: str) -> dict[str, Any]:
+        """Removes a previously-registered managed charging site by its public key."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    removeManagedChargingSiteRequest=RemoveManagedChargingSiteRequest(
+                        public_key=public_key
+                    )
+                )
+            )
+        )
+
+    async def get_managed_charging_sites(self) -> dict[str, Any]:
+        """Gets the list of registered managed charging sites."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getManagedChargingSitesRequest=GetManagedChargingSitesRequest()
+                )
+            ),
+            mutating=False,
+        )
+
+    async def set_discharge_limit(self, discharge_limit: int) -> dict[str, Any]:
+        """Sets the vehicle's general discharge limit.
+
+        Not the same feature as ``set_powershare_discharge_limit``
+        (``SetPowershareDischargeLimitAction``, a distinct proto message).
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setDischargeLimitAction=SetDischargeLimitAction(
+                        discharge_limit=discharge_limit
+                    )
+                )
+            )
         )
