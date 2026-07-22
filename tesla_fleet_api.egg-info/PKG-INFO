@@ -17,7 +17,7 @@ Requires-Dist: aiofiles>=24
 Requires-Dist: aiolimiter>=1
 Requires-Dist: cryptography>=43
 Requires-Dist: protobuf>=6.32.0
-Requires-Dist: tesla-protocol>=0.4.0
+Requires-Dist: tesla-protocol>=0.5.0
 Requires-Dist: bleak>=0.22
 Requires-Dist: bleak-retry-connector>=3.9
 Dynamic: license-file

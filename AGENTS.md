@@ -107,7 +107,7 @@ Tesla protobuf bindings come from the published `tesla-protocol` PyPI package (`
 
 **Runtime-version pin (Home Assistant compatibility).** protobuf refuses to load gencode stamped *newer* than the installed runtime (`gencode X > runtime` → `VersionError`). Home Assistant core pins `protobuf==6.32.0`, so any `tesla-protocol` version this library depends on must stamp gencode **≤ 6.32.0** and declare a `protobuf` requirement compatible with `==6.32.0` — check both before bumping the floor. The `protobuf>=6.32.0` floor in `pyproject.toml` must stay in sync with whatever `tesla-protocol` actually requires.
 
-**Known upstream `.pyi` stub bug, fixed but not yet released as of `tesla-protocol` 0.4.0**: protoc's pyi generator aliases same-package imports differently than its `.py` generator (`_foo_pb2` vs `foo__pb2`), so protoletariat's rewriter left several generated `.pyi` files (`car_server_pb2`, `universal_message_pb2`, `vcsec_pb2`, `vehicle_pb2` under `command/`) with bare, unresolvable cross-file imports — breaking pyright strict mode on fields like `RoutableMessage.signature_data` and `VehicleData.vehicleData`, even though runtime behavior is unaffected. Fixed upstream in `Teslemetry/tesla-protocol#13`; bump the `tesla-protocol` floor to the first release containing that fix and confirm `uv run pyright tesla_fleet_api` is clean before considering this resolved.
+`tesla-protocol` versions before 0.5.0 shipped generated `.pyi` files with bare, unresolvable cross-file imports in several `command/` modules (a protoletariat/protoc-pyi-generator alias mismatch, fixed upstream in `Teslemetry/tesla-protocol#13`) that broke pyright strict mode without affecting runtime behavior — stay on `>=0.5.0`.
 
 ## Code Style
 
