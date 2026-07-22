@@ -496,6 +496,8 @@ similar in spirit to
 - `listen_vehicle_lock_state(callback)` - `VehicleLockState_E`
 - `listen_vehicle_sleep_status(callback)` - `VehicleSleepStatus_E`
 - `listen_user_presence(callback)` - `UserPresence_E`
+- `listen_gear(callback)` - `Gear_E`
+- `listen_ui_desire(callback)` - `UIDesire_E`
 - `listen_front_driver_door(callback)` - `ClosureState_E`
 - `listen_front_passenger_door(callback)` - `ClosureState_E`
 - `listen_rear_driver_door(callback)` - `ClosureState_E`
@@ -521,14 +523,14 @@ unsubscribe()
 The door/trunk/charge-port/tonneau listeners and `listen_tonneau_percent_open`
 only fire on broadcasts that actually carry the corresponding submessage
 (`closureStatuses`/`detailedClosureStatus`) - not every status broadcast
-includes them. `listen_vehicle_lock_state`, `listen_vehicle_sleep_status`, and
-`listen_user_presence` fire on every `VehicleStatus` broadcast, since proto3
-gives no presence tracking for a scalar enum field.
+includes them. `listen_vehicle_lock_state`, `listen_vehicle_sleep_status`,
+`listen_user_presence`, `listen_gear`, and `listen_ui_desire` fire on every
+`VehicleStatus` broadcast, since proto3 gives no presence tracking for a
+scalar enum field.
 
-`VehicleStatus`'s `uiDesire` and `gear` fields (added by a later proto sync)
-and anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
+Anything not decoded into `VehicleStatus` - other VCSEC broadcast payloads
 (`CommandStatus`, whitelist events, faults) and any future
-infotainment-domain broadcast - have no typed listener surface. Use the untyped
+infotainment-domain broadcast - has no typed listener surface. Use the untyped
 `listen_broadcast`, which delivers every raw unsolicited `RoutableMessage` for
 a given `Domain`, including decoded `VehicleStatus` broadcasts:
 

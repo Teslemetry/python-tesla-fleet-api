@@ -29,7 +29,9 @@ from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     CommandStatus,
     DetailedClosureStatus,
     FromVCSECMessage,
+    Gear_E,
     OperationStatus_E,
+    UIDesire_E,
     UserPresence_E,
     VehicleLockState_E,
     VehicleSleepStatus_E,
@@ -174,6 +176,60 @@ class TypedFieldListenerTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(lock_seen, [VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED])
         self.assertEqual(presence_seen, [UserPresence_E.VEHICLE_USER_PRESENCE_PRESENT])
+
+    async def test_gear_listener_fires_with_typed_value(self) -> None:
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_gear(seen.append)
+
+        vehicle._on_message(_status_broadcast(VehicleStatus(gear=Gear_E.GEAR_DRIVE)))
+
+        self.assertEqual(seen, [Gear_E.GEAR_DRIVE])
+
+    async def test_gear_listener_fires_with_default_when_absent(self) -> None:
+        # gear is a scalar proto3 field, so it has no HasField presence -
+        # a broadcast that never sets it still fires with the 0 default.
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_gear(seen.append)
+
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        self.assertEqual(seen, [Gear_E.GEAR_UNKNOWN])
+
+    async def test_ui_desire_listener_fires_with_typed_value(self) -> None:
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_ui_desire(seen.append)
+
+        vehicle._on_message(
+            _status_broadcast(VehicleStatus(uiDesire=UIDesire_E.UI_DESIRE_HAS_DATA))
+        )
+
+        self.assertEqual(seen, [UIDesire_E.UI_DESIRE_HAS_DATA])
+
+    async def test_ui_desire_listener_fires_with_default_when_absent(self) -> None:
+        # uiDesire is a scalar proto3 field, so it has no HasField presence -
+        # a broadcast that never sets it still fires with the 0 default.
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_ui_desire(seen.append)
+
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        self.assertEqual(seen, [UIDesire_E.UI_DESIRE_NONE])
 
 
 class ClosureListenerTests(IsolatedAsyncioTestCase):

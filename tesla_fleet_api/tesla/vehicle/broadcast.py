@@ -4,12 +4,10 @@ VCSEC emits ``VehicleStatus`` broadcasts on the same notification
 subscription used for command replies (``_on_message`` in ``bluetooth.py``).
 Each modeled leaf field of ``VehicleStatus`` gets its own typed
 ``listen_<field>`` method here, mirroring python-teslemetry-stream's
-per-field listener surface; ``uiDesire`` and ``gear`` (added to
-``VehicleStatus`` in a later proto sync) have no typed listener yet. The
-untyped ``listen_broadcast`` receives every raw broadcast for a domain,
-including ``VehicleStatus`` and payloads that have no typed listener surface:
-other VCSEC broadcast payloads (``CommandStatus``, whitelist events, faults),
-the two unmodeled ``VehicleStatus`` fields above, and any future
+per-field listener surface. The untyped ``listen_broadcast`` receives every
+raw broadcast for a domain, including ``VehicleStatus`` and payloads that
+have no typed listener surface: other VCSEC broadcast payloads
+(``CommandStatus``, whitelist events, faults) and any future
 infotainment-domain broadcast.
 """
 
@@ -24,6 +22,8 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
 )
 from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     ClosureState_E,
+    Gear_E,
+    UIDesire_E,
     UserPresence_E,
     VehicleLockState_E,
     VehicleSleepStatus_E,
@@ -116,6 +116,18 @@ class BroadcastListeners:
         """Listen for driver-presence status."""
         return self._register(
             self._status_listeners, lambda status: callback(status.userPresence)
+        )
+
+    def listen_gear(self, callback: Callable[[Gear_E], None]) -> Unsubscribe:
+        """Listen for the vehicle's gear selection."""
+        return self._register(
+            self._status_listeners, lambda status: callback(status.gear)
+        )
+
+    def listen_ui_desire(self, callback: Callable[[UIDesire_E], None]) -> Unsubscribe:
+        """Listen for the vehicle's UI desire state."""
+        return self._register(
+            self._status_listeners, lambda status: callback(status.uiDesire)
         )
 
     def listen_tonneau_percent_open(
