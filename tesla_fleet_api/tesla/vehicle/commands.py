@@ -180,6 +180,9 @@ from tesla_protocol.command.car_server_pb2 import (
     TeslaAuthResponseAction,
     SetupCloudProfileWithLocalProfileUuidAction,
     GetLocalProfilesForVaultUuidAction,
+    BluetoothClassicPairingRequest,
+    BandwidthTest,
+    FetchKeysInfoAction,
 )
 from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
@@ -2512,6 +2515,40 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                         vault_uuid=vault_uuid
                     )
                 )
+            ),
+            mutating=False,
+        )
+
+    async def bluetooth_classic_pairing_request(
+        self, name: str, mac_address: bytes
+    ) -> dict[str, Any]:
+        """Requests Bluetooth Classic (not BLE) pairing with a phone for calls/audio."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    bluetoothClassicPairingRequest=BluetoothClassicPairingRequest(
+                        utf8_name=name,
+                        mac_address=mac_address,
+                    )
+                )
+            )
+        )
+
+    async def bandwidth_test(self, requested_size: int) -> dict[str, Any]:
+        """Runs a diagnostic bandwidth test of the given size in bytes."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    bandwidthTest=BandwidthTest(requested_size=requested_size)
+                )
+            )
+        )
+
+    async def fetch_keys_info(self) -> dict[str, Any]:
+        """Gets information about keys paired with the vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(fetchKeysInfoAction=FetchKeysInfoAction())
             ),
             mutating=False,
         )
