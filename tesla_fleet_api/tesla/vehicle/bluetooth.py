@@ -966,8 +966,6 @@ class VehicleBluetooth(
         ):
             del self._broadcast_watchers[domain]
 
-    # Group 12: VCSEC closures (Bluetooth-only for individual doors)
-
     async def open_front_driver_door(self) -> dict[str, Any]:
         """Unlatches/opens the front driver door."""
         return await self._sendVehicleSecurity(
