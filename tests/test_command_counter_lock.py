@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.commands import Commands
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     Domain,
 )
 

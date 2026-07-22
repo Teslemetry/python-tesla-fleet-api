@@ -4,7 +4,7 @@ requires = ["setuptools>=77.0"]
 
 [project]
 name = "tesla_fleet_api"
-version = "1.7.6"
+version = "1.7.7"
 license = "Apache-2.0"
 description = "Tesla Fleet API library for Python"
 readme = "README.md"
@@ -22,6 +22,7 @@ dependencies = [
     "aiolimiter>=1",
     "cryptography>=43",
     "protobuf>=6.32.0",
+    "tesla-protocol>=0.5.0",
     "bleak>=0.22",
     "bleak-retry-connector>=3.9",
 ]
@@ -39,12 +40,10 @@ include = ["tesla_fleet_api*"]
 tesla_fleet_api = ["py.typed"]
 
 [tool.ruff]
-exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
 [tool.pyright]
 include = ["tesla_fleet_api"]
 typeCheckingMode = "strict"
-exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -13,7 +13,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from tesla_fleet_api.tesla.vehicle.bluetooth import ReassemblingBuffer, prependLength
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,

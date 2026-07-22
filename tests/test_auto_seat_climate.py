@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from tesla_fleet_api.const import AutoSeat, Method
 from tesla_fleet_api.tesla.vehicle.commands import Commands
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     Action,
     AutoSeatClimateAction,
 )

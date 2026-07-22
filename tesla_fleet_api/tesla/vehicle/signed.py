@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.commands import Commands
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     RoutableMessage,
 )
 

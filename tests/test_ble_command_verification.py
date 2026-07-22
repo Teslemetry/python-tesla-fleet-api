@@ -18,13 +18,13 @@ ambiguous case), and the second, when present, answers the prover read.
 from __future__ import annotations
 
 from tesla_fleet_api.exceptions import BluetoothCommandFailed, BluetoothTimeout
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
+from tesla_protocol.command.vehicle_pb2 import (
     ChargeState,
     ClimateState,
     MediaState,
     VehicleData,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
 )

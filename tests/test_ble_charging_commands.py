@@ -25,7 +25,7 @@ plugged in throughout) per-command status:
 - Live-discovered: ``set_scheduled_departure()``'s ``preconditioning_enabled``
   and ``off_peak_charging_enabled`` parameters are accepted by the Python
   signature but never wired into ``ScheduledDepartureAction`` (that proto
-  message has no such fields, see ``proto/car_server.proto``) - passing
+  message has no such fields, see ``tesla_protocol.command.car_server_pb2``) - passing
   ``preconditioning_enabled=False`` live had no effect on the vehicle's
   observed ``ChargeState.preconditioning_enabled``. Documented in AGENTS.md.
 - ``charge_port_door_open``/``charge_port_door_close`` are EXCLUDED from live
@@ -33,13 +33,13 @@ plugged in throughout) per-command status:
   re-engage without a physical reseat) and ship mocked-transport-only below.
 """
 
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action
-from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
+from tesla_protocol.command.car_server_pb2 import Action
+from tesla_protocol.command.common_pb2 import (
     OffPeakChargingTimes,
     PreconditioningTimes,
 )
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import Domain
+from tesla_protocol.command.vcsec_pb2 import (
     ClosureMoveType_E,
     UnsignedMessage,
 )

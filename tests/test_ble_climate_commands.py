@@ -22,7 +22,7 @@ per-command status:
 """
 
 from tesla_fleet_api.const import AutoSeat
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     Action,
     ActionStatus,
     HvacSeatCoolerActions,
@@ -30,13 +30,13 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     Response,
     ResultReason,
 )
-from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import StwHeatLevel
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.common_pb2 import StwHeatLevel
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import ClimateState
+from tesla_protocol.command.vehicle_pb2 import ClimateState
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,
@@ -319,7 +319,7 @@ class SetPreconditioningMaxTests(MockedBleTransportTestCase):
 
 class SetRecirculationTests(MockedBleTransportTestCase):
     """Deferred live (``ClimateState`` has no recirculation field at all -
-    confirmed against ``proto/vehicle.proto``, so the command's effect is not
+    confirmed against ``tesla_protocol.command.vehicle_pb2``, so the command's effect is not
     observable over BLE). Mocked-transport only."""
 
     async def test_sends_recirculation_on(self) -> None:

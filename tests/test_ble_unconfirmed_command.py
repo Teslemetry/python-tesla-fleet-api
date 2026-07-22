@@ -24,12 +24,12 @@ from tesla_fleet_api.exceptions import (
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
 )
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import Domain
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
 )

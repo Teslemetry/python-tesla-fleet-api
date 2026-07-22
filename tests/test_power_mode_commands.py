@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.tesla.vehicle.commands import Commands
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action
+from tesla_protocol.command.car_server_pb2 import Action
 
 VIN = "5YJXCAE43LF123456"
 
