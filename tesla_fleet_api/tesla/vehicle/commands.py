@@ -128,32 +128,26 @@ from tesla_protocol.command.car_server_pb2 import (
     NavigationRequest,
     NavigationSuperchargerRequest,
     NavigationWaypointsRequest,
-    # Group 1: Steering wheel heat level
     StwHeatLevelAction,
-    # Group 2: General infotainment
     HvacRecirculationAction,
     DashcamSaveClipAction,
     SetSuspensionLevelAction,
     StartLightShowAction,
     StopLightShowAction,
     CancelSohTestAction,
-    # Group 3: Schedules
     RemoveChargeScheduleAction,
     RemovePreconditionScheduleAction,
     BatchRemoveChargeSchedulesAction,
     BatchRemovePreconditionSchedulesAction,
-    # Group 4: Powershare
     SetPowershareFeatureAction,
     SetPowershareRequestAction,
     SetPowershareDischargeLimitAction,
-    # Group 5: Outlets & power feeds
     SetOutletsOnOffAction,
     SetOutletTimerAction,
     SetOutletSocLimitAction,
     SetPowerFeedOnOffAction,
     SetPowerFeedTimerAction,
     SetPowerFeedSocLimitAction,
-    # Group 6: Lighting
     SetLightbarBrightnessAction,
     SetLightbarMiddleAction,
     SetLightbarDitchAction,
@@ -161,26 +155,19 @@ from tesla_protocol.command.car_server_pb2 import (
     SetTrailerLightTestStartStopAction,
     SetTruckBedLightAutoStateAction,
     SetTruckBedLightBrightnessAction,
-    # Group 7: Tent mode
     SetTentModeRequestAction,
-    # Group 8: Parental controls
     ParentalControlsAction,
     ParentalControlsClearPinAction,
     ParentalControlsClearPinAdminAction,
     ParentalControlsEnableSettingsAction,
     ParentalControlsSetSpeedLimitAction,
-    # Group 9: Charge on solar
     UpdateChargeOnSolarFeatureRequest,
     GetChargeOnSolarFeatureRequest,
     ChargeOnSolarFeature,
-    # Group 10: Navigation
     NavigationGpsDestinationRequest,
-    # Group 11: Admin
     VehicleControlResetPinToDriveAdminAction,
-    # Group 12: Power modes
     SetLowPowerModeAction,
     SetKeepAccessoryPowerModeAction,
-    # Group 18: Niche/low-certainty-value commands (captain full-coverage directive)
     PiiKeyRequest,
     PseudonymSyncRequest,
     TeslaAuthResponseAction,
@@ -1862,8 +1849,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     # fleet_telemetry_config_get doesnt require signing
     # fleet_telemetry_config_delete doesnt require signing
 
-    # Group 2: New infotainment commands — general
-
     async def set_recirculation(self, on: bool) -> dict[str, Any]:
         """Sets HVAC recirculation mode on/off."""
         return await self._sendInfotainment(
@@ -1932,8 +1917,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 vehicleAction=VehicleAction(cancelSohTestAction=CancelSohTestAction())
             )
         )
-
-    # Group 3: Schedule commands
 
     async def add_charge_schedule(
         self,
@@ -2051,8 +2034,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    # Group 4: Cybertruck — powershare
-
     async def set_powershare_feature(self, on: bool) -> dict[str, Any]:
         """Enables or disables the Powershare feature."""
         return await self._sendInfotainment(
@@ -2096,8 +2077,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             )
         )
-
-    # Group 5: Cybertruck — outlets & power feeds
 
     async def set_outlets(self, request: int) -> dict[str, Any]:
         """Sets outlets on/off (0=off, 1=cabin+bed, 2=cabin)."""
@@ -2164,8 +2143,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             )
         )
-
-    # Group 6: Cybertruck — lighting
 
     async def set_lightbar_brightness(self, brightness: int) -> dict[str, Any]:
         """Sets the lightbar brightness."""
@@ -2263,8 +2240,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    # Group 7: Cybertruck — tent mode
-
     async def set_tent_mode(self, on: bool) -> dict[str, Any]:
         """Enables or disables tent mode."""
         return await self._sendInfotainment(
@@ -2274,8 +2249,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             )
         )
-
-    # Group 8: Parental controls
 
     async def parental_controls(self, activate: bool, pin: str) -> dict[str, Any]:
         """Activates or deactivates parental controls with PIN."""
@@ -2340,8 +2313,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    # Group 9: Charge on solar
-
     async def update_charge_on_solar(
         self, enabled: bool, lower_charge_limit: float, upper_charge_limit: float
     ) -> dict[str, Any]:
@@ -2371,8 +2342,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             mutating=False,
         )
 
-    # Group 10: Navigation
-
     async def navigation_gps_destination_request(
         self, lat: float, lon: float, destination: str, order: int
     ) -> dict[str, Any]:
@@ -2394,8 +2363,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             )
         )
 
-    # Group 11: Admin
-
     async def reset_pin_to_drive_admin(self) -> dict[str, Any]:
         """Resets PIN to Drive as admin (fleet manager/owner). Requires firmware 2023.44+."""
         return await self._sendInfotainment(
@@ -2405,8 +2372,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             )
         )
-
-    # Group 12: VCSEC — closures & RKE
 
     async def open_tonneau(self) -> dict[str, Any]:
         """Opens the tonneau cover."""
@@ -2444,7 +2409,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_AUTO_SECURE_VEHICLE)
         )
 
-    # Group 18: Niche/low-certainty-value commands
     #
     # Included per the captain's full-proto-coverage directive; each has no
     # known third-party consumer use case today, unlike every other command
