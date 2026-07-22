@@ -66,7 +66,7 @@ class BleCommandLoggingTests(MockedBleTransportTestCase):
         )
 
     async def test_verify_commands_resolution_logs_verified_outcome(self) -> None:
-        from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+        from tesla_protocol.command.vcsec_pb2 import (
             VehicleLockState_E,
             VehicleStatus,
         )

@@ -34,7 +34,7 @@ from tesla_fleet_api.tesla.vehicle.commands import (
 )
 
 # Protocol
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     Action,
     GetChargeScheduleState,
     GetChargeState,
@@ -51,13 +51,13 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     GetVehicleData,
     VehicleAction,
 )
-from tesla_fleet_api.tesla.vehicle.proto.keys_pb2 import Role
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.keys_pb2 import Role
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     ClosureMoveRequest,
     ClosureMoveType_E,
     FromVCSECMessage,
@@ -73,7 +73,7 @@ from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
     VehicleStatus,
     WhitelistOperation,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
+from tesla_protocol.command.vehicle_pb2 import (
     ChargeScheduleState,
     ChargeState,
     ClimateState,

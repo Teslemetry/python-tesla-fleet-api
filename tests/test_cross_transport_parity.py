@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action, VehicleAction
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import RoutableMessage
+from tesla_protocol.command.car_server_pb2 import Action, VehicleAction
+from tesla_protocol.command.universal_message_pb2 import RoutableMessage
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,

@@ -22,6 +22,7 @@ dependencies = [
     "aiolimiter>=1",
     "cryptography>=43",
     "protobuf>=6.32.0",
+    "tesla-protocol>=0.4.0",
     "bleak>=0.22",
     "bleak-retry-connector>=3.9",
 ]
@@ -39,12 +40,10 @@ include = ["tesla_fleet_api*"]
 tesla_fleet_api = ["py.typed"]
 
 [tool.ruff]
-exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
 [tool.pyright]
 include = ["tesla_fleet_api"]
 typeCheckingMode = "strict"
-exclude = ["tesla_fleet_api/tesla/vehicle/proto/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

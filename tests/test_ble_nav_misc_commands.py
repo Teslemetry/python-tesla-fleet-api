@@ -22,12 +22,12 @@ enum class - ``EnumTypeWrapper`` isn't callable, so every live call raised
 ``navigation_gps_destination_request``.
 """
 
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     Action,
     NavigationGpsDestinationRequest,
     NavigationGpsRequest,
 )
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
+from tesla_protocol.command.universal_message_pb2 import Domain
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,

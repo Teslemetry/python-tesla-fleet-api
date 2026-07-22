@@ -6,10 +6,10 @@ through ``VehicleBluetooth``'s ``_send``, produce the expected signed
 later BLE command-test PR builds on ``ble_mocked_transport``.
 """
 
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import RKEAction_E, UnsignedMessage
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import ChargeState, VehicleData
+from tesla_protocol.command.car_server_pb2 import Action
+from tesla_protocol.command.universal_message_pb2 import Domain
+from tesla_protocol.command.vcsec_pb2 import RKEAction_E, UnsignedMessage
+from tesla_protocol.command.vehicle_pb2 import ChargeState, VehicleData
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,

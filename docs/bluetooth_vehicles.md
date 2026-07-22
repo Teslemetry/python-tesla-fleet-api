@@ -535,7 +535,7 @@ infotainment-domain broadcast - has no typed listener surface. Use the untyped
 a given `Domain`, including decoded `VehicleStatus` broadcasts:
 
 ```python
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
+from tesla_protocol.command.universal_message_pb2 import Domain
 
 unsubscribe = vehicle.listen_broadcast(Domain.DOMAIN_VEHICLE_SECURITY, print)
 ```

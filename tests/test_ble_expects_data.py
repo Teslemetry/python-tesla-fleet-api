@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     MessageStatus,
     OperationStatus_E,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import VehicleStatus
+from tesla_protocol.command.vcsec_pb2 import VehicleStatus
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,

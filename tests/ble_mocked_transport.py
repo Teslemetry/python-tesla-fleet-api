@@ -20,28 +20,28 @@ from cryptography.hazmat.primitives.hashes import SHA256, Hash
 
 from tesla_fleet_api.const import BluetoothConfirmation
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     ActionStatus,
     Response,
 )
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     OperationStatus_E as InfotainmentOperationStatus_E,
 )
-from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import SignatureType, Tag
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.signatures_pb2 import SignatureType, Tag
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     CommandStatus,
     FromVCSECMessage,
     VehicleStatus,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     OperationStatus_E as VcsecOperationStatus_E,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import VehicleData
+from tesla_protocol.command.vehicle_pb2 import VehicleData
 
 VIN = "5YJXCAE43LF123456"
 

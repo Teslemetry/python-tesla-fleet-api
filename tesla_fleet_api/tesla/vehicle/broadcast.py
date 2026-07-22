@@ -16,11 +16,11 @@ from __future__ import annotations
 from typing import Callable, TypeVar
 
 from tesla_fleet_api.const import LOGGER
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     Domain,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     ClosureState_E,
     Gear_E,
     UIDesire_E,

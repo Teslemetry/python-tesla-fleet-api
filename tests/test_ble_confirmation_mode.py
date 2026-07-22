@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from tesla_fleet_api.exceptions import BluetoothTimeout, BluetoothUnconfirmedCommand
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles, VehiclesBluetooth
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
 )

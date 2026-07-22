@@ -46,14 +46,14 @@ from tesla_fleet_api.const import (
 )
 
 # Protocol
-from tesla_fleet_api.tesla.vehicle.proto.errors_pb2 import GenericError_E
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.errors_pb2 import GenericError_E
+from tesla_protocol.command.car_server_pb2 import (
     AutoStwHeatAction,
     BoomboxAction,
     DrivingClearSpeedLimitPinAdminAction,
     Response,
 )
-from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
+from tesla_protocol.command.signatures_pb2 import (
     Session_Info_Status,
     SignatureType,
     Tag,
@@ -62,7 +62,7 @@ from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
     SessionInfo,
     SignatureData,
 )
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import (
     OperationStatus_E,
     Destination,
     Domain,
@@ -70,11 +70,11 @@ from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
     SessionInfoRequest,
     Flags,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     FromVCSECMessage,
     VehicleStatus,
 )
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
+from tesla_protocol.command.car_server_pb2 import (
     Action,
     MediaPlayAction,
     VehicleAction,
@@ -175,21 +175,21 @@ from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import (
     SetLowPowerModeAction,
     SetKeepAccessoryPowerModeAction,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
+from tesla_protocol.command.vehicle_pb2 import (
     VehicleData,
     VehicleState,
     ClimateState,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     UnsignedMessage,
     RKEAction_E,
     ClosureMoveRequest,
     ClosureMoveType_E,
 )
-from tesla_fleet_api.tesla.vehicle.proto.signatures_pb2 import (
+from tesla_protocol.command.signatures_pb2 import (
     HMAC_Personalized_Signature_Data,
 )
-from tesla_fleet_api.tesla.vehicle.proto.common_pb2 import (
+from tesla_protocol.command.common_pb2 import (
     LatLong,
     Void,
     PreconditioningTimes,

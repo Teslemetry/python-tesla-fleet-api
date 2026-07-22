@@ -16,8 +16,8 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action, VehicleAction
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.car_server_pb2 import Action, VehicleAction
+from tesla_protocol.command.universal_message_pb2 import (
     Domain,
     RoutableMessage,
 )

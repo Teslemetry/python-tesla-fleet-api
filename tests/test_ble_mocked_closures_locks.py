@@ -18,8 +18,8 @@ individual-door powered-close gotcha in AGENTS.md). Treat these the same as
 the CAPTAIN-PRESENT group: live-verify only in a captain-present session.
 """
 
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import Domain
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.universal_message_pb2 import Domain
+from tesla_protocol.command.vcsec_pb2 import (
     ClosureMoveType_E,
     RKEAction_E,
     UnsignedMessage,

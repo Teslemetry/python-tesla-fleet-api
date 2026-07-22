@@ -25,13 +25,13 @@ from tesla_fleet_api.exceptions import (
     BluetoothUnconfirmedCommand,
 )
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
-from tesla_fleet_api.tesla.vehicle.proto.errors_pb2 import GenericError_E, NominalError
-from tesla_fleet_api.tesla.vehicle.proto.universal_message_pb2 import (
+from tesla_protocol.command.errors_pb2 import GenericError_E, NominalError
+from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
     RoutableMessage,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.vcsec_pb2 import (
     CommandStatus,
     FromVCSECMessage,
     OperationStatus_E,

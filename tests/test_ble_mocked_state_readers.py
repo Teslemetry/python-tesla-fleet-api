@@ -6,12 +6,12 @@ canned reply and assert the reader decodes it to the expected typed proto.
 """
 
 from tesla_fleet_api.const import BluetoothVehicleData
-from tesla_fleet_api.tesla.vehicle.proto.car_server_pb2 import Action
-from tesla_fleet_api.tesla.vehicle.proto.vcsec_pb2 import (
+from tesla_protocol.command.car_server_pb2 import Action
+from tesla_protocol.command.vcsec_pb2 import (
     VehicleLockState_E,
     VehicleStatus,
 )
-from tesla_fleet_api.tesla.vehicle.proto.vehicle_pb2 import (
+from tesla_protocol.command.vehicle_pb2 import (
     ChargeScheduleState,
     ChargeState,
     ClimateState,
