@@ -180,6 +180,8 @@ from tesla_protocol.command.car_server_pb2 import (
     TeslaAuthResponseAction,
     SetupCloudProfileWithLocalProfileUuidAction,
     GetLocalProfilesForVaultUuidAction,
+    DeleteDashcamClipsAction,
+    FormatUSBAction,
 )
 from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
@@ -2514,4 +2516,28 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 )
             ),
             mutating=False,
+        )
+
+    # No confirmation guard, matching the existing erase_user_data()
+    # precedent: this library exposes the signed command as-is and leaves
+    # any confirmation UX to the caller.
+
+    async def format_usb(self) -> dict[str, Any]:
+        """Formats the USB drive connected to the vehicle, erasing all files on it. Irreversible."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    formatUsbAction=FormatUSBAction(format_usb=True)
+                )
+            )
+        )
+
+    async def delete_dashcam_clips(self) -> dict[str, Any]:
+        """Deletes all dashcam clips stored on the vehicle. Irreversible."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    deleteDashcamClipsAction=DeleteDashcamClipsAction(delete_clips=True)
+                )
+            )
         )
