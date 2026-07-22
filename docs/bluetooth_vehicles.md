@@ -450,7 +450,7 @@ asyncio.run(main())
 
 Available BLE state readers:
 
-- `vehicle_state()`
+- `vehicle_state()` (VCSEC `VehicleStatus` - not `legacy_vehicle_state()` below)
 - `charge_state()`
 - `climate_state()`
 - `drive_state()`
@@ -463,6 +463,13 @@ Available BLE state readers:
 - `media_detail_state()`
 - `software_update_state()`
 - `parental_controls_state()`
+- `gui_settings()`
+- `parked_accessory_state()`
+- `legacy_vehicle_state()` (CarServer's `GetVehicleState` - a different message from `vehicle_state()` above)
+- `alert_state()`
+- `light_show_state()`
+- `suspension_state()`
+- `child_presence_detection_state()`
 
 For explicit composite requests, use `vehicle_data(endpoints)` with
 `BluetoothVehicleData` values:
