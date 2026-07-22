@@ -43,6 +43,12 @@ from tesla_fleet_api.const import (
     CabinOverheatProtectionTemp,
     SunRoofCommand,
     WindowCommand,
+    TemperatureUnit,
+    DistanceUnit,
+    TimeDisplayFormat,
+    TirePressureUnit,
+    EnergyDisplayFormat,
+    PhoneFontSize,
 )
 
 # Protocol
@@ -182,6 +188,30 @@ from tesla_protocol.command.car_server_pb2 import (
     GetLocalProfilesForVaultUuidAction,
     DeleteDashcamClipsAction,
     FormatUSBAction,
+    SetTemperatureUnitAction,
+    SetDistanceUnitAction,
+    SetTimeDisplayFormatAction,
+    SetTirePressureUnitAction,
+    SetEnergyDisplayFormatAction,
+    SetPhoneSettingPreferencesAction,
+    PhoneUnitPreferences,
+    UiSetUpcomingCalendarEntries,
+    TakeDrivenoteAction,
+    VideoRequestAction,
+    NavigationRouteAction,
+    GetMessagesAction,
+    SetRateTariffRequest,
+    GetRateTariffRequest,
+    AddManagedChargingSiteRequest,
+    RemoveManagedChargingSiteRequest,
+    GetManagedChargingSitesRequest,
+    SetDischargeLimitAction,
+    ManagedChargingSite,
+    ManagerType,
+    SiteController,
+    BluetoothClassicPairingRequest,
+    BandwidthTest,
+    FetchKeysInfoAction,
 )
 from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
@@ -2540,4 +2570,267 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     deleteDashcamClipsAction=DeleteDashcamClipsAction(delete_clips=True)
                 )
             )
+        )
+
+    async def set_temperature_unit(self, unit: TemperatureUnit | int) -> dict[str, Any]:
+        """Sets the vehicle's displayed temperature unit."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTemperatureUnitAction=SetTemperatureUnitAction(
+                        unit=unit  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_distance_unit(self, unit: DistanceUnit | int) -> dict[str, Any]:
+        """Sets the vehicle's displayed distance unit."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setDistanceUnitAction=SetDistanceUnitAction(
+                        unit=unit  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_time_display_format(
+        self, format: TimeDisplayFormat | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed clock format (12h/24h)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTimeDisplayFormatAction=SetTimeDisplayFormatAction(
+                        format=format  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_tire_pressure_unit(
+        self, unit: TirePressureUnit | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed tire pressure unit."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setTirePressureUnitAction=SetTirePressureUnitAction(
+                        unit=unit  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_energy_display_format(
+        self, format: EnergyDisplayFormat | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed energy/range unit (percentage/distance)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setEnergyDisplayFormatAction=SetEnergyDisplayFormatAction(
+                        format=format  # pyright: ignore[reportArgumentType]
+                    )
+                )
+            )
+        )
+
+    async def set_phone_setting_preferences(
+        self,
+        font_size: PhoneFontSize | int = PhoneFontSize.STANDARD,
+        *,
+        distance_unit: DistanceUnit | int | None = None,
+        temperature_unit: TemperatureUnit | int | None = None,
+    ) -> dict[str, Any]:
+        """Sets paired-phone display preferences: font size and, optionally, distance/temperature units."""
+        action = SetPhoneSettingPreferencesAction(
+            font_size=font_size  # pyright: ignore[reportArgumentType]
+        )
+        if distance_unit is not None or temperature_unit is not None:
+            unit_kwargs: dict[str, Any] = {}
+            if distance_unit is not None:
+                unit_kwargs["distance_unit"] = distance_unit
+            if temperature_unit is not None:
+                unit_kwargs["temperature_unit"] = temperature_unit
+            action.unit_preferences.CopyFrom(PhoneUnitPreferences(**unit_kwargs))
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(setPhoneSettingPreferencesAction=action))
+        )
+
+    async def upcoming_calendar_entries(self, calendar_data: str) -> dict[str, Any]:
+        """Sends upcoming calendar entries to the vehicle.
+
+        Signed-command sibling of the REST-only ``VehicleFleet.upcoming_calendar_entries``.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    uiSetUpcomingCalendarEntries=UiSetUpcomingCalendarEntries(
+                        calendar_data=calendar_data
+                    )
+                )
+            )
+        )
+
+    async def take_drivenote(self, note: str) -> dict[str, Any]:
+        """Records a drive note.
+
+        Signed-command sibling of the REST-only ``VehicleFleet.take_drivenote``.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    takeDrivenoteAction=TakeDrivenoteAction(note=note)
+                )
+            )
+        )
+
+    async def video_request(self, url: str) -> dict[str, Any]:
+        """Requests the vehicle open a video stream from the given URL (e.g. sentry/dashcam viewer)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    videoRequestAction=VideoRequestAction(url=url)
+                )
+            )
+        )
+
+    async def navigation_route(self) -> dict[str, Any]:
+        """Triggers vehicle route navigation."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationRouteAction=NavigationRouteAction()
+                )
+            )
+        )
+
+    async def get_messages(self) -> dict[str, Any]:
+        """Gets vehicle in-car messages."""
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(getMessagesAction=GetMessagesAction())),
+            mutating=False,
+        )
+
+    async def set_rate_tariff(
+        self,
+        seasons: SetRateTariffRequest.Seasons,
+        tariff: SetRateTariffRequest.Tariff | None = None,
+    ) -> dict[str, Any]:
+        """Sets a time-of-use rate tariff schedule for charge-on-solar-style optimization.
+
+        ``seasons``/``tariff`` are ``tesla_protocol`` message types
+        (``SetRateTariffRequest.Seasons``/``.Tariff``) - the tariff schedule is
+        deeply nested (up to 5 named seasons, each with 4 time-of-use period
+        types), so construct them directly rather than through a parallel
+        flattened API.
+        """
+        action = SetRateTariffRequest(seasons=seasons)
+        if tariff is not None:
+            action.tariff.CopyFrom(tariff)
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(setRateTariffRequest=action))
+        )
+
+    async def get_rate_tariff(self) -> dict[str, Any]:
+        """Gets the current time-of-use rate tariff schedule."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(getRateTariffRequest=GetRateTariffRequest())
+            ),
+            mutating=False,
+        )
+
+    async def add_managed_charging_site(
+        self, public_key: str, lat: float, lon: float
+    ) -> dict[str, Any]:
+        """Registers a managed charging site (utility managed-charging program) for this vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    addManagedChargingSiteRequest=AddManagedChargingSiteRequest(
+                        site=ManagedChargingSite(
+                            public_key=public_key,
+                            manager_type=ManagerType(site_controller=SiteController()),
+                            lat_lon=LatLong(latitude=lat, longitude=lon),
+                        )
+                    )
+                )
+            )
+        )
+
+    async def remove_managed_charging_site(self, public_key: str) -> dict[str, Any]:
+        """Removes a previously-registered managed charging site by its public key."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    removeManagedChargingSiteRequest=RemoveManagedChargingSiteRequest(
+                        public_key=public_key
+                    )
+                )
+            )
+        )
+
+    async def get_managed_charging_sites(self) -> dict[str, Any]:
+        """Gets the list of registered managed charging sites."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getManagedChargingSitesRequest=GetManagedChargingSitesRequest()
+                )
+            ),
+            mutating=False,
+        )
+
+    async def set_discharge_limit(self, discharge_limit: int) -> dict[str, Any]:
+        """Sets the vehicle's general discharge limit.
+
+        Not the same feature as ``set_powershare_discharge_limit``
+        (``SetPowershareDischargeLimitAction``, a distinct proto message).
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    setDischargeLimitAction=SetDischargeLimitAction(
+                        discharge_limit=discharge_limit
+                    )
+                )
+            )
+        )
+
+    async def bluetooth_classic_pairing_request(
+        self, name: str, mac_address: bytes
+    ) -> dict[str, Any]:
+        """Requests Bluetooth Classic (not BLE) pairing with a phone for calls/audio."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    bluetoothClassicPairingRequest=BluetoothClassicPairingRequest(
+                        utf8_name=name,
+                        mac_address=mac_address,
+                    )
+                )
+            )
+        )
+
+    async def bandwidth_test(self, requested_size: int) -> dict[str, Any]:
+        """Runs a diagnostic bandwidth test of the given size in bytes."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    bandwidthTest=BandwidthTest(requested_size=requested_size)
+                )
+            )
+        )
+
+    async def fetch_keys_info(self) -> dict[str, Any]:
+        """Gets information about keys paired with the vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(fetchKeysInfoAction=FetchKeysInfoAction())
+            ),
+            mutating=False,
         )

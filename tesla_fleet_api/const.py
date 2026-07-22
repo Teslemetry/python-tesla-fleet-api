@@ -268,6 +268,48 @@ class SeatHeaterLevel(StrEnum):
     HIGH = "high"
 
 
+class TemperatureUnit(IntEnum):
+    """Displayed temperature unit options"""
+
+    FAHRENHEIT = 0
+    CELSIUS = 1
+
+
+class DistanceUnit(IntEnum):
+    """Displayed distance unit options"""
+
+    MILES = 0
+    KILOMETERS = 1
+
+
+class TimeDisplayFormat(IntEnum):
+    """Displayed clock format options"""
+
+    HOUR_12 = 0
+    HOUR_24 = 1
+
+
+class TirePressureUnit(IntEnum):
+    """Displayed tire pressure unit options"""
+
+    PSI = 0
+    BAR = 1
+
+
+class EnergyDisplayFormat(IntEnum):
+    """Displayed energy/range unit options"""
+
+    PERCENTAGE = 0
+    DISTANCE = 1
+
+
+class PhoneFontSize(IntEnum):
+    """Paired-phone display font size options"""
+
+    STANDARD = 0
+    LARGE = 1
+
+
 class BluetoothVehicleData(StrEnum):
     CHARGE_STATE = "GetChargeState"
     CLIMATE_STATE = "GetClimateState"
