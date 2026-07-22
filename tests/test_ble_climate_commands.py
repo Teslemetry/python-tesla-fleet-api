@@ -319,7 +319,7 @@ class SetPreconditioningMaxTests(MockedBleTransportTestCase):
 
 class SetRecirculationTests(MockedBleTransportTestCase):
     """Deferred live (``ClimateState`` has no recirculation field at all -
-    confirmed against ``proto/vehicle.proto``, so the command's effect is not
+    confirmed against ``tesla_protocol.command.vehicle_pb2``, so the command's effect is not
     observable over BLE). Mocked-transport only."""
 
     async def test_sends_recirculation_on(self) -> None:
