@@ -180,6 +180,11 @@ from tesla_protocol.command.car_server_pb2 import (
     TeslaAuthResponseAction,
     SetupCloudProfileWithLocalProfileUuidAction,
     GetLocalProfilesForVaultUuidAction,
+    UiSetUpcomingCalendarEntries,
+    TakeDrivenoteAction,
+    VideoRequestAction,
+    NavigationRouteAction,
+    GetMessagesAction,
 )
 from google.protobuf.timestamp_pb2 import Timestamp
 from tesla_protocol.command.vehicle_pb2 import (
@@ -2513,5 +2518,60 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     )
                 )
             ),
+            mutating=False,
+        )
+
+    async def upcoming_calendar_entries(self, calendar_data: str) -> dict[str, Any]:
+        """Sends upcoming calendar entries to the vehicle.
+
+        Signed-command sibling of the REST-only ``VehicleFleet.upcoming_calendar_entries``.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    uiSetUpcomingCalendarEntries=UiSetUpcomingCalendarEntries(
+                        calendar_data=calendar_data
+                    )
+                )
+            )
+        )
+
+    async def take_drivenote(self, note: str) -> dict[str, Any]:
+        """Records a drive note.
+
+        Signed-command sibling of the REST-only ``VehicleFleet.take_drivenote``.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    takeDrivenoteAction=TakeDrivenoteAction(note=note)
+                )
+            )
+        )
+
+    async def video_request(self, url: str) -> dict[str, Any]:
+        """Requests the vehicle open a video stream from the given URL (e.g. sentry/dashcam viewer)."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    videoRequestAction=VideoRequestAction(url=url)
+                )
+            )
+        )
+
+    async def navigation_route(self) -> dict[str, Any]:
+        """Triggers vehicle route navigation."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    navigationRouteAction=NavigationRouteAction()
+                )
+            )
+        )
+
+    async def get_messages(self) -> dict[str, Any]:
+        """Gets vehicle in-car messages."""
+        return await self._sendInfotainment(
+            Action(vehicleAction=VehicleAction(getMessagesAction=GetMessagesAction())),
             mutating=False,
         )

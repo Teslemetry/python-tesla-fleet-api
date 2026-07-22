@@ -195,3 +195,43 @@ class NavigationGpsRequestParityTests(MockedBleTransportTestCase):
         await ble.navigation_gps_request(37.3230, -122.0322, order=2)
         action = _sent_vehicle_action(ble, send)
         self.assertEqual(action.navigationGpsRequest.order, 2)
+
+
+class UpcomingCalendarEntriesParityTests(MockedBleTransportTestCase):
+    """``upcoming_calendar_entries`` must carry the same ``calendar_data`` string
+    on both the REST-only cloud path and its new signed-command BLE sibling."""
+
+    async def test_calendar_data_survives_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.upcoming_calendar_entries("some-ics-payload")
+        assert request.await_args is not None
+        self.assertEqual(
+            request.await_args.kwargs["json"], {"calendar_data": "some-ics-payload"}
+        )
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.upcoming_calendar_entries("some-ics-payload")
+        action = _sent_vehicle_action(ble, send)
+        self.assertEqual(
+            action.uiSetUpcomingCalendarEntries.calendar_data, "some-ics-payload"
+        )
+
+
+class TakeDrivenoteParityTests(MockedBleTransportTestCase):
+    """``take_drivenote`` must carry the same ``note`` string on both the
+    REST-only cloud path and its new signed-command BLE sibling."""
+
+    async def test_note_survives_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.take_drivenote("brake noise up front")
+        assert request.await_args is not None
+        self.assertEqual(
+            request.await_args.kwargs["json"], {"note": "brake noise up front"}
+        )
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.take_drivenote("brake noise up front")
+        action = _sent_vehicle_action(ble, send)
+        self.assertEqual(action.takeDrivenoteAction.note, "brake noise up front")
