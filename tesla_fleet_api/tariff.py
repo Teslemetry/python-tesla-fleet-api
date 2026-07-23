@@ -211,9 +211,7 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
                     season_name=sell_season_name,
                 )
         else:
-            sell_gap_dates = _adjacent_season_dates(
-                sell_tariff.get("seasons"), today
-            )
+            sell_gap_dates = _adjacent_season_dates(sell_tariff.get("seasons"), today)
 
     # Bound the resolved interval to the matched window(s)' own start/end,
     # not the next start anywhere in the grid - a sparse tariff (gaps
@@ -359,9 +357,7 @@ def _adjacent_season_dates(seasons: Any, today: date) -> tuple[date, date] | Non
         for start_year in range(today.year - 2, today.year + 3):
             end_year = start_year + (end_fields < start_fields)
             boundaries.add(_recurring_date(start_year, *start_fields))
-            boundaries.add(
-                _recurring_date(end_year, *end_fields) + timedelta(days=1)
-            )
+            boundaries.add(_recurring_date(end_year, *end_fields) + timedelta(days=1))
     previous = [boundary for boundary in boundaries if boundary <= today]
     upcoming = [boundary for boundary in boundaries if boundary > today]
     if not previous or not upcoming:

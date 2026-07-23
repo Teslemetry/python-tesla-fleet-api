@@ -226,9 +226,7 @@ class LeapDaySeasonTests(TestCase):
     def _tariff(self):
         periods = {
             "ALL": {
-                "periods": [
-                    {"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}
-                ]
+                "periods": [{"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}]
             }
         }
         return {
@@ -471,15 +469,11 @@ class InactiveSellPeriodTests(TestCase):
     def _tariff(self, sell_season=None):
         all_day = {
             "ALL": {
-                "periods": [
-                    {"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}
-                ]
+                "periods": [{"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}]
             }
         }
         morning = {
-            "MORNING": {
-                "periods": [{"toDayOfWeek": 6, "fromHour": 6, "toHour": 9}]
-            }
+            "MORNING": {"periods": [{"toDayOfWeek": 6, "fromHour": 6, "toHour": 9}]}
         }
         season = {
             "fromMonth": 1,
@@ -493,9 +487,7 @@ class InactiveSellPeriodTests(TestCase):
             "seasons": {"ALL": {**season, "tou_periods": all_day}},
             "sell_tariff": {
                 "energy_charges": {"ALL": {"rates": {"MORNING": 0.1}}},
-                "seasons": {
-                    "ALL": {**(sell_season or season), "tou_periods": morning}
-                },
+                "seasons": {"ALL": {**(sell_season or season), "tou_periods": morning}},
             },
         }
 
@@ -549,16 +541,12 @@ class InactiveSellPeriodTests(TestCase):
 class LongHorizonTests(TestCase):
     def test_upcoming_is_not_silently_truncated(self):
         now = datetime(2026, 7, 20, 0, 0, tzinfo=TZ)
-        result = get_tariff_periods(
-            _fixture_tariff(), now, horizon_hours=24 * 210
-        )
+        result = get_tariff_periods(_fixture_tariff(), now, horizon_hours=24 * 210)
 
         self.assertIsNotNone(result)
         self.assertIsNotNone(result.upcoming)
         self.assertGreater(len(result.upcoming), 10_000)
-        self.assertGreaterEqual(
-            result.upcoming[-1].end, now + timedelta(days=210)
-        )
+        self.assertGreaterEqual(result.upcoming[-1].end, now + timedelta(days=210))
 
 
 class SeasonBoundaryUpcomingWalkTests(TestCase):
