@@ -63,11 +63,15 @@ def _addressed_reply(vehicle: VehicleBluetooth[Any]) -> RoutableMessage:
 def _subscription_ack(
     vehicle: VehicleBluetooth[Any], request_uuid: bytes
 ) -> RoutableMessage:
+    """The subscribe request's own ack - a real one carries
+    ``protobuf_message_as_bytes`` too (an infotainment actuation's
+    ``actionStatus`` rides in that field), the same as every later push."""
     return RoutableMessage(
         to_destination=Destination(
             domain=DOMAIN, routing_address=vehicle._from_destination
         ),
         from_destination=Destination(domain=DOMAIN),
+        protobuf_message_as_bytes=b"subscribe-ack",
         request_uuid=request_uuid,
     )
 
@@ -140,28 +144,67 @@ class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
         self.assertEqual(resp.protobuf_message_as_bytes, b"command-reply")
         self.assertFalse(sink.empty())
 
-    async def test_subscription_ack_completes_atomic_registration(self) -> None:
+    async def test_subscribe_ack_is_not_swallowed_by_its_own_sink(self) -> None:
+        # The subscribe request's own ack carries the same request_uuid as
+        # every later push (both have protobuf_message_as_bytes set), so a
+        # sink armed immediately on registration would divert that first ack
+        # into itself instead of letting `_send` consume it - and
+        # `_send_with_stream_sink` would then time out waiting for a reply
+        # that had already arrived. The sink must start unarmed and only
+        # divert pushes that arrive *after* the ack.
         vehicle = _make_vehicle()
         outgoing = _outgoing_msg()
 
-        async def write_then_push_then_ack(*_: Any) -> None:
-            vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+        async def write_then_ack(*_: Any) -> None:
             vehicle._on_message(_subscription_ack(vehicle, outgoing.uuid))
+            await asyncio.sleep(0)
 
-        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_push_then_ack)
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_ack)
 
+        # A short timeout proves this resolves from the injected ack rather
+        # than from a fallback timeout path.
         response, sink = await asyncio.wait_for(
             vehicle._send_with_stream_sink(
-                outgoing, "protobuf_message_as_bytes", timeout=1.0
+                outgoing, "protobuf_message_as_bytes", timeout=0.5
             ),
             timeout=1.0,
         )
 
+        self.assertEqual(response.protobuf_message_as_bytes, b"subscribe-ack")
         self.assertEqual(response.request_uuid, outgoing.uuid)
-        self.assertEqual(
-            (await asyncio.wait_for(sink.get(), timeout=0.1)).protobuf_message_as_bytes,
-            b"push-data",
+
+        # The subscription is now live: a push carrying the same
+        # request_uuid must reach the sink, not be treated as another ack.
+        vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+        pushed = await asyncio.wait_for(sink.get(), timeout=0.1)
+        self.assertEqual(pushed.protobuf_message_as_bytes, b"push-data")
+
+    async def test_push_arriving_before_ack_still_arms_the_sink(self) -> None:
+        # Not the expected wire ordering (the vehicle sends the ack before
+        # any push), but the sink must not get stuck unarmed forever if a
+        # frame beats the ack: whichever frame arrives first satisfies
+        # _send_with_stream_sink's wait, and everything after it is treated
+        # as a push.
+        vehicle = _make_vehicle()
+        outgoing = _outgoing_msg()
+
+        async def write_then_first_frame(*_: Any) -> None:
+            vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_first_frame)
+
+        response, sink = await asyncio.wait_for(
+            vehicle._send_with_stream_sink(
+                outgoing, "protobuf_message_as_bytes", timeout=0.5
+            ),
+            timeout=1.0,
         )
+        self.assertEqual(response.protobuf_message_as_bytes, b"push-data")
+
+        vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+        pushed = await asyncio.wait_for(sink.get(), timeout=0.1)
+        self.assertEqual(pushed.protobuf_message_as_bytes, b"push-data")
 
     async def test_unregistered_sink_drops_late_pushes(self) -> None:
         vehicle = _make_vehicle()

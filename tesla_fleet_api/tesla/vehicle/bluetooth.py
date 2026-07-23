@@ -326,11 +326,21 @@ class _StreamSink:
     for telemetry. Kept entirely separate from ``_queues`` so ``_send``'s
     pre-send drain and the one-shot ``_await_response`` consumer can never
     see or discard a subscription push.
+
+    ``armed`` gates whether ``_on_message`` diverts a matching frame into this
+    sink at all. The subscribe request's own ack shares its ``request_uuid``
+    with every later push, so a sink registered before that ack arrives must
+    start unarmed - letting exactly that first frame fall through to the
+    ordinary reply queue for ``_send`` to consume - and only arm once the ack
+    has been claimed.
     """
 
-    def __init__(self, maxsize: int = _STREAM_SINK_MAXSIZE) -> None:
+    def __init__(
+        self, maxsize: int = _STREAM_SINK_MAXSIZE, *, armed: bool = True
+    ) -> None:
         self._queue: asyncio.Queue[RoutableMessage] = asyncio.Queue(maxsize=maxsize)
         self.dropped = 0
+        self.armed = armed
 
     def put(self, msg: RoutableMessage) -> None:
         if self._queue.full():
@@ -719,6 +729,11 @@ class VehicleBluetooth(
         out of reach of both ``_send``'s pre-send drain and the one-shot
         ``_await_response`` consumer, which would otherwise discard it or
         return it as an unrelated command's reply.
+
+        The subscribe request's own ack shares that same ``request_uuid``
+        with later pushes, so an unarmed sink lets exactly one matching frame
+        fall through here to ``_queues`` - the ack ``_send_with_stream_sink``
+        is waiting on - before arming itself for every push after it.
         """
 
         if msg.to_destination.routing_address != self._from_destination:
@@ -736,10 +751,14 @@ class VehicleBluetooth(
 
         sink = self._stream_sinks.get(msg.request_uuid)
         if sink is not None:
-            if msg.HasField("protobuf_message_as_bytes"):
-                LOGGER.debug(f"Received subscription push: {msg}")
-                sink.put(msg)
-                return
+            if sink.armed:
+                if msg.HasField("protobuf_message_as_bytes"):
+                    LOGGER.debug(f"Received subscription push: {msg}")
+                    sink.put(msg)
+                    return
+            else:
+                LOGGER.debug(f"Received subscribe ack, arming sink: {msg}")
+                sink.armed = True
         elif msg.request_uuid in self._retired_streams:
             LOGGER.debug(f"Dropping push for retired subscription: {msg}")
             return
@@ -757,9 +776,17 @@ class VehicleBluetooth(
         LOGGER.debug(f"Received response: {msg}")
         queue.put_nowait(msg)
 
-    def _register_stream_sink(self, request_uuid: bytes) -> _StreamSink:
-        """Start routing pushes for ``request_uuid`` into their own sink."""
-        sink = _StreamSink()
+    def _register_stream_sink(
+        self, request_uuid: bytes, *, armed: bool = True
+    ) -> _StreamSink:
+        """Start routing pushes for ``request_uuid`` into their own sink.
+
+        ``armed=False`` is for a sink registered ahead of its own subscribe
+        request: the first matching frame (that request's ack) is left to
+        fall through to ``_queues`` instead of being diverted, and
+        ``_on_message`` arms the sink once it has passed through.
+        """
+        sink = _StreamSink(armed=armed)
         try:
             self._retired_streams.remove(request_uuid)
         except ValueError:
@@ -780,8 +807,13 @@ class VehicleBluetooth(
         *,
         timeout: float | None = None,
     ) -> tuple[RoutableMessage, _StreamSink]:
-        """Atomically register a stream route and send its subscription request."""
-        sink = self._register_stream_sink(msg.uuid)
+        """Atomically register a stream route and send its subscription request.
+
+        The registered sink starts unarmed so this request's own ack - which
+        carries the same ``request_uuid`` as every later push - is left for
+        ``_send`` to consume as an ordinary reply rather than being diverted.
+        """
+        sink = self._register_stream_sink(msg.uuid, armed=False)
         try:
             response = await self._send(
                 msg, requires, expects_data=False, timeout=timeout
