@@ -62,10 +62,12 @@ def unwrap_tariff_v2(response: Any) -> dict[str, Any]:
     ``time_of_use_settings`` write envelope
     (``{"tou_settings": {"tariff_content_v2": {...}}}``), or the bare
     ``tariff_content_v2`` object itself. Raises
-    :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null body or
-    an unrecognized envelope or a bare object without the minimal Tariff V2
-    shape (``seasons`` and ``energy_charges``) - a malformed body is not the
-    same as "no tariff configured".
+    :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null body, an
+    unrecognized envelope, or an extracted object without the minimal
+    Tariff V2 shape (``seasons`` and ``energy_charges``) - checked
+    identically for every path, since a malformed body (including an empty
+    ``{}`` nested under a recognized envelope) is not the same as "no
+    tariff configured".
     """
     if response is None:
         raise InvalidResponse("tariff response body was null")
@@ -73,30 +75,28 @@ def unwrap_tariff_v2(response: Any) -> dict[str, Any]:
         raise InvalidResponse(repr(response))
     body = cast("dict[str, Any]", response)
 
+    candidate: Any
     if "tariff_content_v2" in body:
-        tariff = body["tariff_content_v2"]
-        if isinstance(tariff, dict):
-            return cast("dict[str, Any]", tariff)
-        raise InvalidResponse(str(body))
+        candidate = body["tariff_content_v2"]
+    elif "response" in body or "tou_settings" in body:
+        envelope_key = "response" if "response" in body else "tou_settings"
+        inner = body[envelope_key]
+        candidate = (
+            cast("dict[str, Any]", inner).get("tariff_content_v2")
+            if isinstance(inner, dict)
+            else None
+        )
+    else:
+        # No recognized envelope key present - treat the input as the bare
+        # `tariff_content_v2` object itself.
+        candidate = body
 
-    for envelope_key in ("response", "tou_settings"):
-        if envelope_key in body:
-            inner = body[envelope_key]
-            if isinstance(inner, dict) and isinstance(
-                cast("dict[str, Any]", inner).get("tariff_content_v2"), dict
-            ):
-                return cast(
-                    "dict[str, Any]", cast("dict[str, Any]", inner)["tariff_content_v2"]
-                )
-            raise InvalidResponse(str(body))
-
-    # No recognized envelope key present - treat the input as the bare
-    # `tariff_content_v2` object itself, but only if it carries the
-    # minimal Tariff V2 shape (`seasons` + `energy_charges`). Anything
-    # else (an empty dict, an unrelated payload) is malformed, not "no
-    # tariff configured".
-    if "seasons" in body and "energy_charges" in body:
-        return body
+    if (
+        isinstance(candidate, dict)
+        and "seasons" in candidate
+        and "energy_charges" in candidate
+    ):
+        return cast("dict[str, Any]", candidate)
     raise InvalidResponse(str(body))
 
 

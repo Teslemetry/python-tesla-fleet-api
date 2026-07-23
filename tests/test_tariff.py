@@ -64,6 +64,21 @@ class UnwrapTariffV2Tests(TestCase):
         with self.assertRaises(InvalidResponse):
             unwrap_tariff_v2({"unexpected": True})
 
+    def test_enveloped_empty_tariff_raises_via_response_envelope(self):
+        # The minimal-shape check must apply identically on every
+        # extraction path, not just the bare-object fallback - an empty
+        # `{}` nested under a recognized envelope is still malformed.
+        with self.assertRaises(InvalidResponse):
+            unwrap_tariff_v2({"response": {"tariff_content_v2": {}}})
+
+    def test_enveloped_empty_tariff_raises_via_tou_settings_envelope(self):
+        with self.assertRaises(InvalidResponse):
+            unwrap_tariff_v2({"tou_settings": {"tariff_content_v2": {}}})
+
+    def test_empty_tariff_raises_via_top_level_key(self):
+        with self.assertRaises(InvalidResponse):
+            unwrap_tariff_v2({"tariff_content_v2": {}})
+
 
 class FixtureTests(TestCase):
     """Cover the live-shaped fixture's own anomalies."""
