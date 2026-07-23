@@ -56,6 +56,14 @@ class UnwrapTariffV2Tests(TestCase):
         with self.assertRaises(InvalidResponse):
             unwrap_tariff_v2({"response": {"nope": True}})
 
+    def test_empty_bare_dict_raises(self):
+        with self.assertRaises(InvalidResponse):
+            unwrap_tariff_v2({})
+
+    def test_unrelated_bare_dict_raises(self):
+        with self.assertRaises(InvalidResponse):
+            unwrap_tariff_v2({"unexpected": True})
+
 
 class FixtureTests(TestCase):
     """Cover the live-shaped fixture's own anomalies."""
@@ -344,3 +352,183 @@ class MidnightCrossingPeriodTests(TestCase):
         # OVERNIGHT ends at 06:00 the next calendar day.
         expected = datetime(2026, 7, 21, 6, 0, tzinfo=TZ)
         self.assertEqual(result.next_change, expected)
+
+
+class SparsePeriodTests(TestCase):
+    """A tariff whose single TOU period doesn't cover the whole day (a gap
+    outside 06:00-09:00) must end the current period at its own actual
+    end, not carry the rate forward to whatever period starts next
+    elsewhere in the grid."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"MORNING": 0.20}}},
+            "seasons": {
+                "ALL": {
+                    "fromMonth": 1,
+                    "fromDay": 1,
+                    "toMonth": 12,
+                    "toDay": 31,
+                    "tou_periods": {
+                        "MORNING": {
+                            "periods": [{"toDayOfWeek": 6, "fromHour": 6, "toHour": 9}]
+                        },
+                    },
+                }
+            },
+        }
+
+    def test_next_change_is_the_periods_own_end_not_the_next_days_start(self):
+        now = datetime(2026, 7, 20, 7, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.buy.period_name, "MORNING")
+        self.assertEqual(result.current_start, datetime(2026, 7, 20, 6, 0, tzinfo=TZ))
+        self.assertEqual(result.next_change, datetime(2026, 7, 20, 9, 0, tzinfo=TZ))
+
+    def test_outside_the_period_no_rate_resolves(self):
+        # A moment in the gap (09:00-06:00 the next day) is not covered by
+        # any period, so the whole tariff resolves to nothing rather than
+        # the stale MORNING rate.
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+        self.assertIsNone(result)
+
+
+class SeasonBoundaryUpcomingWalkTests(TestCase):
+    """`upcoming` must re-resolve the season (and thus the price) for each
+    future segment, including across more than one season transition
+    within the horizon, rather than reusing the season resolved for
+    `now`."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {
+                "Spring": {"rates": {"ALL": 0.10}},
+                "Summer": {"rates": {"ALL": 0.40}},
+                "Autumn": {"rates": {"ALL": 0.20}},
+            },
+            "seasons": {
+                "Spring": _season_geometry(
+                    3, 1, 5, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+                "Summer": _season_geometry(
+                    6, 1, 7, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+                "Autumn": _season_geometry(
+                    8, 1, 8, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+            },
+        }
+
+    def test_horizon_spanning_two_season_transitions_prices_each_segment(self):
+        # 3 days before Summer starts, horizon reaches 3 days into Autumn -
+        # crossing both the Spring->Summer and Summer->Autumn boundaries.
+        now = datetime(2026, 5, 29, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24 * 65)
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+
+        seasons_seen = [period.buy.season_name for period in result.upcoming]
+        self.assertIn("Spring", seasons_seen)
+        self.assertIn("Summer", seasons_seen)
+        self.assertIn("Autumn", seasons_seen)
+
+        # Each daily segment resolves its own season/price - a segment
+        # anywhere inside Summer must never carry Spring's or Autumn's price.
+        for period in result.upcoming:
+            if period.buy.season_name == "Summer":
+                self.assertEqual(period.buy.price, 0.40)
+            elif period.buy.season_name == "Spring":
+                self.assertEqual(period.buy.price, 0.10)
+            elif period.buy.season_name == "Autumn":
+                self.assertEqual(period.buy.price, 0.20)
+
+        # The segment straddling the Spring->Summer boundary switches at
+        # exactly that boundary, not one grid-tick later or earlier.
+        last_spring = next(
+            p for p in reversed(result.upcoming) if p.buy.season_name == "Spring"
+        )
+        first_summer = next(p for p in result.upcoming if p.buy.season_name == "Summer")
+        self.assertEqual(last_spring.end, datetime(2026, 6, 1, tzinfo=TZ))
+        self.assertEqual(first_summer.start, datetime(2026, 6, 1, tzinfo=TZ))
+
+        # Likewise for the Summer->Autumn boundary later in the same horizon.
+        last_summer = next(
+            p for p in reversed(result.upcoming) if p.buy.season_name == "Summer"
+        )
+        first_autumn = next(p for p in result.upcoming if p.buy.season_name == "Autumn")
+        self.assertEqual(last_summer.end, datetime(2026, 8, 1, tzinfo=TZ))
+        self.assertEqual(first_autumn.start, datetime(2026, 8, 1, tzinfo=TZ))
+
+
+class DstBoundaryTests(TestCase):
+    """A period boundary that falls on the day of a DST transition must
+    keep the intended local wall-clock label (e.g. "changes at 02:30"
+    stays 02:30), built directly in the site timezone rather than via
+    arithmetic on a UTC instant - the latter would land an hour off."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"NIGHT": 0.2, "DAY": 0.3}}},
+            "seasons": {
+                "ALL": {
+                    "fromMonth": 1,
+                    "fromDay": 1,
+                    "toMonth": 12,
+                    "toDay": 31,
+                    "tou_periods": {
+                        "NIGHT": {
+                            "periods": [{"toDayOfWeek": 6, "fromHour": 0, "toHour": 2}]
+                        },
+                        "DAY": {
+                            "periods": [{"toDayOfWeek": 6, "fromHour": 2, "toHour": 24}]
+                        },
+                    },
+                }
+            },
+        }
+
+    def test_boundary_keeps_local_wall_clock_across_spring_forward(self):
+        # Sydney's 2026 spring-forward is 2026-10-04 02:00 -> 03:00 local.
+        sydney = ZoneInfo("Australia/Sydney")
+        now = datetime(2026, 10, 4, 1, 0, tzinfo=sydney)
+        result = get_tariff_periods(self._tariff(), now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.buy.period_name, "NIGHT")
+        # The NIGHT->DAY boundary is defined at local 02:00, still 02:00
+        # even though this calendar day skips straight to 03:00.
+        expected = datetime(2026, 10, 4, 2, 0, tzinfo=sydney)
+        self.assertEqual(result.next_change.replace(tzinfo=sydney), expected)
+        self.assertEqual(result.next_change.hour, 2)
+
+
+class EmptySeasonRatesFallbackTests(TestCase):
+    """When the matched season key exists in `energy_charges` but carries
+    no `rates` block (e.g. an unused `"Winter": {}` alongside an `"ALL"`
+    default), the price lookup must fall back to `charges["ALL"]` rather
+    than resolving to `None`."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {
+                "ALL": {"rates": {"ALL": 0.25}},
+                "Winter": {},
+            },
+            "seasons": {
+                "Winter": _season_geometry(
+                    1, 1, 12, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+            },
+        }
+
+    def test_empty_season_rates_falls_back_to_all(self):
+        now = datetime(2026, 7, 20, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.buy.season_name, "Winter")
+        self.assertEqual(result.buy.price, 0.25)

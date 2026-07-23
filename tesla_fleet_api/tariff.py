@@ -90,8 +90,13 @@ def unwrap_tariff_v2(response: Any) -> dict[str, Any]:
             raise InvalidResponse(str(body))
 
     # No recognized envelope key present - treat the input as the bare
-    # `tariff_content_v2` object itself.
-    return body
+    # `tariff_content_v2` object itself, but only if it carries the
+    # minimal Tariff V2 shape (`seasons` + `energy_charges`). Anything
+    # else (an empty dict, an unrelated payload) is malformed, not "no
+    # tariff configured".
+    if "seasons" in body and "energy_charges" in body:
+        return body
+    raise InvalidResponse(str(body))
 
 
 def get_tariff_periods(
@@ -172,7 +177,7 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     buy_match = _match_window(buy_windows, now_mow)
     if buy_match is None:
         return None
-    buy_period_name = buy_match[0]
+    buy_period_name, buy_start, buy_end = buy_match
     buy_rate = TariffRate(
         price=_lookup_price(
             tariff.get("energy_charges"), buy_season_name, buy_period_name
@@ -182,7 +187,7 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     )
 
     sell_rate = TariffRate(price=None, period_name=None, season_name=None)
-    sell_windows: list[tuple[str, int, int]] = []
+    sell_match: tuple[str, int, int] | None = None
     sell_season_dates: tuple[date, date] | None = None
     sell_tariff = tariff.get("sell_tariff")
     if isinstance(sell_tariff, dict):
@@ -204,10 +209,15 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
                     season_name=sell_season_name,
                 )
 
-    starts = [start for _, start, _ in buy_windows] + [
-        start for _, start, _ in sell_windows
-    ]
-    since_delta, until_delta = _bracket(now_mow, starts)
+    # Bound the resolved interval to the matched window(s)' own start/end,
+    # not the next start anywhere in the grid - a sparse tariff (gaps
+    # between periods) must transition at the current period's actual end,
+    # not carry its rate forward to whatever period happens to start next.
+    since_delta, until_delta = _window_offsets(now_mow, buy_start, buy_end)
+    if sell_match is not None:
+        sell_since, sell_until = _window_offsets(now_mow, sell_match[1], sell_match[2])
+        since_delta = min(since_delta, sell_since)
+        until_delta = min(until_delta, sell_until)
 
     moment_floor = moment.replace(second=0, microsecond=0)
     current_start = moment_floor - timedelta(minutes=since_delta)
@@ -375,26 +385,20 @@ def _match_window(
     return None
 
 
-def _bracket(now_mow: int, starts: list[int]) -> tuple[int, int]:
-    """Return (minutes since the most recent boundary, minutes to the next
-    strictly-future boundary) across every period-start in ``starts``."""
-    mods = sorted({s % _MINUTES_PER_WEEK for s in starts})
-    if not mods:
-        return 0, _MINUTES_PER_WEEK
+def _window_offsets(now_mow: int, start: int, end: int) -> tuple[int, int]:
+    """Return (minutes since this window's start, minutes until its end).
 
-    since = _MINUTES_PER_WEEK
-    until = _MINUTES_PER_WEEK
-    for boundary in mods:
-        d_since = now_mow - boundary
-        if d_since < 0:
-            d_since += _MINUTES_PER_WEEK
-        since = min(since, d_since)
-
-        d_until = boundary - now_mow
-        if d_until <= 0:
-            d_until += _MINUTES_PER_WEEK
-        until = min(until, d_until)
-    return since, until
+    ``start``/``end`` must be a window known to contain ``now_mow`` (see
+    ``_window_contains``) - the same week-boundary-wrap case is resolved
+    the same way here.
+    """
+    duration = end - start
+    start_mod = start % _MINUTES_PER_WEEK
+    if start_mod <= now_mow < start_mod + duration:
+        since = now_mow - start_mod
+    else:
+        since = (now_mow + _MINUTES_PER_WEEK) - start_mod
+    return since, duration - since
 
 
 def _lookup_price(charges: Any, season_name: str, period_name: str) -> float | None:
