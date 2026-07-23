@@ -377,8 +377,9 @@ the tariff object does not carry its own timezone. A naive `now` raises
 period's start, the next change, the currency, and (when `horizon_hours` is
 provided) upcoming periods. It returns `None` when no tariff season covers
 `now`. Missing rates remain `None`, while a real zero price remains `0.0`.
-Malformed or null response envelopes passed to `unwrap_tariff_v2` raise
-`InvalidResponse`.
+Null or malformed inputs passed to `unwrap_tariff_v2` raise `InvalidResponse`.
+This includes every accepted envelope or bare tariff object whose extracted
+tariff lacks either `seasons` or `energy_charges`.
 
 ## Device Commands
 
