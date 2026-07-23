@@ -190,6 +190,7 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     sell_match: tuple[str, int, int] | None = None
     sell_windows: list[tuple[str, int, int]] = []
     sell_season_dates: tuple[date, date] | None = None
+    sell_gap_dates: tuple[date, date] | None = None
     sell_tariff = tariff.get("sell_tariff")
     if isinstance(sell_tariff, dict):
         sell_tariff = cast("dict[str, Any]", sell_tariff)
@@ -209,6 +210,10 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
                     period_name=sell_period_name,
                     season_name=sell_season_name,
                 )
+        else:
+            sell_gap_dates = _adjacent_season_dates(
+                sell_tariff.get("seasons"), today
+            )
 
     # Bound the resolved interval to the matched window(s)' own start/end,
     # not the next start anywhere in the grid - a sparse tariff (gaps
@@ -236,6 +241,13 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
         )
         current_start = max(current_start, season_start)
         next_change = min(next_change, season_end)
+    if sell_gap_dates is not None:
+        gap_start, gap_end = (
+            datetime.combine(boundary, datetime.min.time(), tzinfo=moment.tzinfo)
+            for boundary in sell_gap_dates
+        )
+        current_start = max(current_start, gap_start)
+        next_change = min(next_change, gap_end)
 
     return _Resolved(
         buy=buy_rate,
@@ -319,6 +331,36 @@ def _season_dates(season: Mapping[str, Any], today: date) -> tuple[date, date]:
     start = date(start_year, start_month, start_day)
     end = date(end_year, end_month, end_day) + timedelta(days=1)
     return start, end
+
+
+def _adjacent_season_dates(seasons: Any, today: date) -> tuple[date, date] | None:
+    if not isinstance(seasons, dict):
+        return None
+    boundaries: set[date] = set()
+    for season in cast("dict[str, Any]", seasons).values():
+        if not isinstance(season, dict):
+            continue
+        season = cast("dict[str, Any]", season)
+        periods = season.get("tou_periods")
+        if not isinstance(periods, dict) or not periods:
+            continue
+        start_fields = (
+            _as_int(season.get("fromMonth"), 0),
+            _as_int(season.get("fromDay"), 0),
+        )
+        end_fields = (
+            _as_int(season.get("toMonth"), 0),
+            _as_int(season.get("toDay"), 0),
+        )
+        for start_year in range(today.year - 2, today.year + 3):
+            end_year = start_year + (end_fields < start_fields)
+            boundaries.add(date(start_year, *start_fields))
+            boundaries.add(date(end_year, *end_fields) + timedelta(days=1))
+    previous = [boundary for boundary in boundaries if boundary <= today]
+    upcoming = [boundary for boundary in boundaries if boundary > today]
+    if not previous or not upcoming:
+        return None
+    return max(previous), min(upcoming)
 
 
 def _expand_periods(tou_periods: Mapping[str, Any]) -> list[tuple[str, int, int]]:

@@ -397,7 +397,7 @@ class SparsePeriodTests(TestCase):
 
 
 class InactiveSellPeriodTests(TestCase):
-    def _tariff(self):
+    def _tariff(self, sell_season=None):
         all_day = {
             "ALL": {
                 "periods": [
@@ -422,7 +422,9 @@ class InactiveSellPeriodTests(TestCase):
             "seasons": {"ALL": {**season, "tou_periods": all_day}},
             "sell_tariff": {
                 "energy_charges": {"ALL": {"rates": {"MORNING": 0.1}}},
-                "seasons": {"ALL": {**season, "tou_periods": morning}},
+                "seasons": {
+                    "ALL": {**(sell_season or season), "tou_periods": morning}
+                },
             },
         }
 
@@ -443,6 +445,34 @@ class InactiveSellPeriodTests(TestCase):
         self.assertIsNotNone(result.upcoming)
         self.assertEqual(result.upcoming[0].end, datetime(2026, 7, 21, 6, 0, tzinfo=TZ))
         self.assertEqual(result.upcoming[1].sell.price, 0.1)
+
+    def test_uncovered_sell_season_uses_next_season_start(self):
+        sell_season = {
+            "fromMonth": 7,
+            "fromDay": 25,
+            "toMonth": 7,
+            "toDay": 31,
+        }
+        now = datetime(2026, 7, 20, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(sell_season), now)
+
+        self.assertIsNotNone(result)
+        self.assertIsNone(result.sell.price)
+        self.assertEqual(result.next_change, datetime(2026, 7, 25, tzinfo=TZ))
+
+    def test_uncovered_sell_season_uses_previous_season_end(self):
+        sell_season = {
+            "fromMonth": 7,
+            "fromDay": 25,
+            "toMonth": 7,
+            "toDay": 31,
+        }
+        now = datetime(2026, 8, 2, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(sell_season), now)
+
+        self.assertIsNotNone(result)
+        self.assertIsNone(result.sell.price)
+        self.assertEqual(result.current_start, datetime(2026, 8, 1, tzinfo=TZ))
 
 
 class LongHorizonTests(TestCase):
