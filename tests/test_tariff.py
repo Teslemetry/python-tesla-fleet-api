@@ -549,6 +549,103 @@ class LongHorizonTests(TestCase):
         self.assertGreaterEqual(result.upcoming[-1].end, now + timedelta(days=210))
 
 
+class CurrentStartAfterSellBoundaryTests(TestCase):
+    """When buy and sell schedules differ and both are currently active,
+    ``current_start`` must be the LATER of the two period starts - the
+    returned (buy, sell) pair is only valid from whichever side began
+    most recently, not from whenever the buy period alone started."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"ALL": 0.30}}},
+            "seasons": {
+                "ALL": {
+                    "fromMonth": 1,
+                    "fromDay": 1,
+                    "toMonth": 12,
+                    "toDay": 31,
+                    "tou_periods": {"ALL": {"periods": [{"toDayOfWeek": 6}]}},
+                }
+            },
+            "sell_tariff": {
+                "energy_charges": {"ALL": {"rates": {"DAY": 0.05}}},
+                "seasons": {
+                    "ALL": {
+                        "fromMonth": 1,
+                        "fromDay": 1,
+                        "toMonth": 12,
+                        "toDay": 31,
+                        "tou_periods": {
+                            "DAY": {
+                                "periods": [
+                                    {"toDayOfWeek": 6, "fromHour": 9, "toHour": 17}
+                                ]
+                            }
+                        },
+                    }
+                },
+            },
+        }
+
+    def test_current_start_is_the_later_of_buy_and_sell_starts(self):
+        # Buy has been active since 00:00; sell's DAY window only started
+        # at 09:00 - the combined pair is only valid from 09:00 on.
+        now = datetime(2026, 7, 20, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.current_start, datetime(2026, 7, 20, 9, 0, tzinfo=TZ))
+
+
+class DstFallBackWallClockTests(TestCase):
+    """Walking `upcoming` across a DST fall-back night must keep each
+    day's local midnight boundary and weekday-based rate correct - a bug
+    that added elapsed wall-clock minutes as if they were UTC-elapsed time
+    would drift the local day label across the fold."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"WD": 0.30, "WE": 0.15}}},
+            "seasons": {
+                "ALL": {
+                    "fromMonth": 1,
+                    "fromDay": 1,
+                    "toMonth": 12,
+                    "toDay": 31,
+                    "tou_periods": {
+                        "WD": {"periods": [{"fromDayOfWeek": 0, "toDayOfWeek": 4}]},
+                        "WE": {"periods": [{"fromDayOfWeek": 5, "toDayOfWeek": 6}]},
+                    },
+                }
+            },
+        }
+
+    def test_weekday_boundaries_stay_correct_across_fall_back(self):
+        # Sydney's 2026 DST fall-back is 2026-04-05 (Sunday) 03:00 -> 02:00.
+        sydney = ZoneInfo("Australia/Sydney")
+        now = datetime(2026, 4, 3, 12, 0, tzinfo=sydney)  # Friday
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24 * 5)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        expected = [
+            (datetime(2026, 4, 3, tzinfo=sydney), 4, "WD"),
+            (datetime(2026, 4, 4, tzinfo=sydney), 5, "WE"),
+            (datetime(2026, 4, 5, tzinfo=sydney), 6, "WE"),
+            (datetime(2026, 4, 6, tzinfo=sydney), 0, "WD"),
+            (datetime(2026, 4, 7, tzinfo=sydney), 1, "WD"),
+        ]
+        for period, (start, weekday, period_name) in zip(
+            result.upcoming, expected, strict=False
+        ):
+            self.assertEqual(period.start, start)
+            self.assertEqual(period.start.weekday(), weekday)
+            self.assertEqual(period.buy.period_name, period_name)
+            self.assertEqual(period.end, start + timedelta(days=1))
+
+
 class SeasonBoundaryUpcomingWalkTests(TestCase):
     """`upcoming` must re-resolve the season (and thus the price) for each
     future segment, including across more than one season transition
