@@ -396,6 +396,70 @@ class SparsePeriodTests(TestCase):
         self.assertIsNone(result)
 
 
+class InactiveSellPeriodTests(TestCase):
+    def _tariff(self):
+        all_day = {
+            "ALL": {
+                "periods": [
+                    {"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}
+                ]
+            }
+        }
+        morning = {
+            "MORNING": {
+                "periods": [{"toDayOfWeek": 6, "fromHour": 6, "toHour": 9}]
+            }
+        }
+        season = {
+            "fromMonth": 1,
+            "fromDay": 1,
+            "toMonth": 12,
+            "toDay": 31,
+        }
+        return {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"ALL": 0.25}}},
+            "seasons": {"ALL": {**season, "tou_periods": all_day}},
+            "sell_tariff": {
+                "energy_charges": {"ALL": {"rates": {"MORNING": 0.1}}},
+                "seasons": {"ALL": {**season, "tou_periods": morning}},
+            },
+        }
+
+    def test_inactive_sell_rate_uses_adjacent_sell_boundaries(self):
+        now = datetime(2026, 7, 20, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+
+        self.assertIsNotNone(result)
+        self.assertIsNone(result.sell.price)
+        self.assertEqual(result.current_start, datetime(2026, 7, 20, 9, 0, tzinfo=TZ))
+        self.assertEqual(result.next_change, datetime(2026, 7, 21, 6, 0, tzinfo=TZ))
+
+    def test_upcoming_enters_next_sell_window(self):
+        now = datetime(2026, 7, 20, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        self.assertEqual(result.upcoming[0].end, datetime(2026, 7, 21, 6, 0, tzinfo=TZ))
+        self.assertEqual(result.upcoming[1].sell.price, 0.1)
+
+
+class LongHorizonTests(TestCase):
+    def test_upcoming_is_not_silently_truncated(self):
+        now = datetime(2026, 7, 20, 0, 0, tzinfo=TZ)
+        result = get_tariff_periods(
+            _fixture_tariff(), now, horizon_hours=24 * 210
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        self.assertGreater(len(result.upcoming), 10_000)
+        self.assertGreaterEqual(
+            result.upcoming[-1].end, now + timedelta(days=210)
+        )
+
+
 class SeasonBoundaryUpcomingWalkTests(TestCase):
     """`upcoming` must re-resolve the season (and thus the price) for each
     future segment, including across more than one season transition

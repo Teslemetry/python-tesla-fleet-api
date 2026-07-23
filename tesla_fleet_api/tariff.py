@@ -129,9 +129,7 @@ def get_tariff_periods(
         upcoming = []
         deadline = now + timedelta(hours=horizon_hours)
         cursor = resolved
-        # Bounded defensively against a pathological tariff whose grid never
-        # advances; real tariffs resolve a new boundary on every iteration.
-        for _ in range(10_000):
+        while True:
             upcoming.append(
                 TariffPeriod(
                     start=cursor.current_start,
@@ -145,6 +143,8 @@ def get_tariff_periods(
             next_resolved = _resolve_at(tariff, cursor.next_change)
             if next_resolved is None:
                 break
+            if next_resolved.next_change <= cursor.next_change:
+                raise ValueError("tariff period boundaries do not advance")
             cursor = next_resolved
 
     return TariffResolution(
@@ -188,6 +188,7 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
 
     sell_rate = TariffRate(price=None, period_name=None, season_name=None)
     sell_match: tuple[str, int, int] | None = None
+    sell_windows: list[tuple[str, int, int]] = []
     sell_season_dates: tuple[date, date] | None = None
     sell_tariff = tariff.get("sell_tariff")
     if isinstance(sell_tariff, dict):
@@ -216,6 +217,10 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     since_delta, until_delta = _window_offsets(now_mow, buy_start, buy_end)
     if sell_match is not None:
         sell_since, sell_until = _window_offsets(now_mow, sell_match[1], sell_match[2])
+        since_delta = min(since_delta, sell_since)
+        until_delta = min(until_delta, sell_until)
+    elif sell_windows:
+        sell_since, sell_until = _inactive_window_offsets(now_mow, sell_windows)
         since_delta = min(since_delta, sell_since)
         until_delta = min(until_delta, sell_until)
 
@@ -399,6 +404,23 @@ def _window_offsets(now_mow: int, start: int, end: int) -> tuple[int, int]:
     else:
         since = (now_mow + _MINUTES_PER_WEEK) - start_mod
     return since, duration - since
+
+
+def _inactive_window_offsets(
+    now_mow: int, windows: list[tuple[str, int, int]]
+) -> tuple[int, int]:
+    boundaries = {
+        boundary % _MINUTES_PER_WEEK
+        for _, start, end in windows
+        for boundary in (start, end)
+    }
+    since = min((now_mow - boundary) % _MINUTES_PER_WEEK for boundary in boundaries)
+    until = min(
+        distance
+        for boundary in boundaries
+        if (distance := (boundary - now_mow) % _MINUTES_PER_WEEK) > 0
+    )
+    return since, until
 
 
 def _lookup_price(charges: Any, season_name: str, period_name: str) -> float | None:
