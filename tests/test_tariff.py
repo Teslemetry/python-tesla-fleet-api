@@ -479,6 +479,121 @@ class SparsePeriodTests(TestCase):
         result = get_tariff_periods(self._tariff(), now)
         self.assertIsNone(result)
 
+    def test_upcoming_advances_through_a_gap_to_the_next_days_period(self):
+        # A 48-hour horizon must not stop at the first gap - it should
+        # surface an explicit unresolved gap segment and then continue on
+        # to tomorrow's (and the day after's) MORNING period.
+        now = datetime(2026, 7, 20, 7, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=48)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        starts_and_names = [(p.start, p.buy.period_name) for p in result.upcoming]
+        self.assertEqual(
+            starts_and_names,
+            [
+                (datetime(2026, 7, 20, 6, 0, tzinfo=TZ), "MORNING"),
+                (datetime(2026, 7, 20, 9, 0, tzinfo=TZ), None),
+                (datetime(2026, 7, 21, 6, 0, tzinfo=TZ), "MORNING"),
+                (datetime(2026, 7, 21, 9, 0, tzinfo=TZ), None),
+                (datetime(2026, 7, 22, 6, 0, tzinfo=TZ), "MORNING"),
+            ],
+        )
+        gap_period = result.upcoming[1]
+        self.assertIsNone(gap_period.buy.price)
+        self.assertIsNone(gap_period.sell.price)
+        self.assertEqual(gap_period.end, datetime(2026, 7, 21, 6, 0, tzinfo=TZ))
+        self.assertGreaterEqual(result.upcoming[-1].end, now + timedelta(hours=48))
+
+    def test_upcoming_covers_a_multi_day_gap_weekend_only_period(self):
+        # A period active only on weekends leaves a 5-day gap (Mon-Fri) -
+        # the walk must skip straight across it to the *following*
+        # weekend, not just the next calendar day.
+        tariff = {
+            "currency": "AUD",
+            "energy_charges": {"ALL": {"rates": {"WEEKEND": 0.1}}},
+            "seasons": {
+                "ALL": {
+                    "fromMonth": 1,
+                    "fromDay": 1,
+                    "toMonth": 12,
+                    "toDay": 31,
+                    "tou_periods": {
+                        "WEEKEND": {
+                            "periods": [{"fromDayOfWeek": 5, "toDayOfWeek": 6}]
+                        },
+                    },
+                }
+            },
+        }
+        # 2026-07-25 is a Saturday - inside the WEEKEND period.
+        now = datetime(2026, 7, 25, 10, 0, tzinfo=TZ)
+        result = get_tariff_periods(tariff, now, horizon_hours=24 * 10)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.buy.price, 0.1)
+        self.assertIsNotNone(result.upcoming)
+        weekend_starts = [
+            p.start for p in result.upcoming if p.buy.period_name == "WEEKEND"
+        ]
+        self.assertEqual(
+            weekend_starts,
+            [
+                datetime(2026, 7, 25, tzinfo=TZ),
+                datetime(2026, 7, 26, tzinfo=TZ),
+                datetime(2026, 8, 1, tzinfo=TZ),
+                datetime(2026, 8, 2, tzinfo=TZ),
+            ],
+        )
+        gap_segment = next(
+            p for p in result.upcoming if p.start == datetime(2026, 7, 27, tzinfo=TZ)
+        )
+        self.assertIsNone(gap_segment.buy.price)
+        self.assertEqual(gap_segment.end, datetime(2026, 8, 1, tzinfo=TZ))
+
+
+class UncoveredSeasonGapTests(TestCase):
+    """A tariff whose only season covers part of the year (a real gap the
+    rest of the year, e.g. a Summer-only plan) must let `upcoming` skip
+    across the uncovered months to the season's next start, or clip
+    cleanly to the horizon deadline when the season never resumes within
+    it - never silently stop early."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"Summer": {"rates": {"ALL": 0.4}}},
+            "seasons": {
+                "Summer": _season_geometry(
+                    6, 1, 7, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+            },
+        }
+
+    def test_gap_clips_to_deadline_when_season_never_resumes_in_horizon(self):
+        now = datetime(2026, 7, 29, 12, 0, tzinfo=TZ)
+        deadline = now + timedelta(hours=24 * 20)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24 * 20)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        self.assertEqual(result.upcoming[-1].end, deadline)
+        self.assertIsNone(result.upcoming[-1].buy.price)
+
+    def test_gap_reaches_next_seasons_start_within_a_longer_horizon(self):
+        now = datetime(2026, 7, 29, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24 * 365)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        next_summer = next(
+            p
+            for p in result.upcoming
+            if p.buy.season_name == "Summer" and p.start.year == 2027
+        )
+        self.assertEqual(next_summer.start, datetime(2027, 6, 1, tzinfo=TZ))
+        self.assertEqual(next_summer.buy.price, 0.4)
+
 
 class InactiveSellPeriodTests(TestCase):
     def _tariff(self, sell_season=None):

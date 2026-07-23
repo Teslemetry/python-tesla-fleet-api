@@ -54,6 +54,9 @@ class TariffResolution:
     upcoming: list[TariffPeriod] | None
 
 
+_UNRESOLVED_RATE = TariffRate(price=None, period_name=None, season_name=None)
+
+
 def unwrap_tariff_v2(response: Any) -> dict[str, Any]:
     """Extract the ``tariff_content_v2`` object from a raw API response.
 
@@ -143,7 +146,35 @@ def get_tariff_periods(
                 break
             next_resolved = _resolve_at(tariff, cursor.next_change)
             if next_resolved is None:
-                break
+                # `cursor.next_change` falls in a gap no buy period covers -
+                # advance THROUGH it to the next tariff boundary instead of
+                # stopping the walk here, recording the gap itself as an
+                # unresolved segment so `upcoming` stays a contiguous
+                # timeline with no silent hole.
+                gap_end = _next_resolvable(tariff, cursor.next_change)
+                if gap_end is None or gap_end >= deadline:
+                    gap_end = deadline if gap_end is None else min(gap_end, deadline)
+                    if gap_end > cursor.next_change:
+                        upcoming.append(
+                            TariffPeriod(
+                                start=cursor.next_change,
+                                end=gap_end,
+                                buy=_UNRESOLVED_RATE,
+                                sell=_UNRESOLVED_RATE,
+                            )
+                        )
+                    break
+                upcoming.append(
+                    TariffPeriod(
+                        start=cursor.next_change,
+                        end=gap_end,
+                        buy=_UNRESOLVED_RATE,
+                        sell=_UNRESOLVED_RATE,
+                    )
+                )
+                next_resolved = _resolve_at(tariff, gap_end)
+                if next_resolved is None:
+                    break
             if next_resolved.next_change <= cursor.next_change:
                 raise ValueError("tariff period boundaries do not advance")
             cursor = next_resolved
@@ -364,6 +395,32 @@ def _adjacent_season_dates(seasons: Any, today: date) -> tuple[date, date] | Non
     if not previous or not upcoming:
         return None
     return max(previous), min(upcoming)
+
+
+def _next_resolvable(tariff: Mapping[str, Any], moment: datetime) -> datetime | None:
+    """Find the next moment at/after ``moment`` where the buy side resolves,
+    given that ``moment`` itself falls in a gap no buy period covers.
+
+    Two distinct kinds of gap: a season covers ``moment``'s date but no
+    window in its grid matches (an intra-day/weekly gap, resolved via the
+    same nearest-boundary search used for an inactive sell grid), or no
+    season covers the date at all (resolved via the next season-start
+    boundary, the same search used for an uncovered sell season). Returns
+    ``None`` when no further boundary exists (the tariff never resumes).
+    """
+    today = moment.date()
+    seasons = tariff.get("seasons")
+    _, buy_windows, _ = _season_windows(seasons, today)
+    if buy_windows:
+        now_mow = _minute_of_week(moment)
+        _, until = _inactive_window_offsets(now_mow, buy_windows)
+        moment_floor = moment.replace(second=0, microsecond=0)
+        return moment_floor + timedelta(minutes=until)
+    boundary = _adjacent_season_dates(seasons, today)
+    if boundary is None:
+        return None
+    _, next_start = boundary
+    return datetime.combine(next_start, datetime.min.time(), tzinfo=moment.tzinfo)
 
 
 def _expand_periods(tou_periods: Mapping[str, Any]) -> list[tuple[str, int, int]]:
