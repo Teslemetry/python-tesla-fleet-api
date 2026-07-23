@@ -345,13 +345,44 @@ async def main():
 
         try:
             energy_site = api.energySites.create(12345)
-            time_of_use_settings_response = await energy_site.time_of_use_settings(settings={"tou_settings": {"tariff_content_v2": {}}})
+            time_of_use_settings_response = await energy_site.time_of_use_settings(settings={})
             print(time_of_use_settings_response)
         except TeslaFleetError as e:
             print(e)
 
 asyncio.run(main())
 ```
+
+The top-level `get_tariff_periods` helper resolves the current buy and sell
+rates from a raw `tariff_content_v2` object without making any API calls.
+`unwrap_tariff_v2` accepts the `site_info()` response envelope, the
+`tou_settings` write envelope, or a bare tariff object:
+
+```python
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from tesla_fleet_api import get_tariff_periods, unwrap_tariff_v2
+
+site_info = await energy_site.site_info()
+tariff = unwrap_tariff_v2(site_info)
+site_timezone = ZoneInfo("<installation_time_zone from site_info>")
+now = datetime.now(site_timezone)
+resolution = get_tariff_periods(tariff, now, horizon_hours=24)
+```
+
+`now` must be timezone-aware and expressed in the site's local timezone because
+the tariff object does not carry its own timezone. A naive `now` raises
+`ValueError`. The result contains the current buy and sell rates, the current
+period's start, the next change, the currency, and (when `horizon_hours` is
+provided) a contiguous timeline of upcoming periods. Gaps in the buy schedule
+are preserved as one merged `TariffPeriod` with both rates set to `None`; the
+gap ends when the tariff resumes, or at the horizon deadline if it does not.
+The helper returns `None` when no tariff season covers `now`. Missing rates
+remain `None`, while a real zero price remains `0.0`.
+Null or malformed inputs passed to `unwrap_tariff_v2` raise `InvalidResponse`.
+This includes every accepted envelope or bare tariff object whose extracted
+tariff lacks either `seasons` or `energy_charges`.
 
 ## Device Commands
 
