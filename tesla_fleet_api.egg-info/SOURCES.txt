@@ -75,6 +75,7 @@ tests/test_ble_optimistic_and_best_effort.py
 tests/test_ble_pair.py
 tests/test_ble_reassembling_buffer.py
 tests/test_ble_send_transport.py
+tests/test_ble_stream_sink.py
 tests/test_ble_ui_unit_preference_commands.py
 tests/test_ble_unconfirmed_command.py
 tests/test_ble_write_timeout_router.py

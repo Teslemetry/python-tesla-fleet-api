@@ -5,6 +5,7 @@ import hashlib
 import struct
 import time
 import warnings
+from collections import deque
 from random import randbytes
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
@@ -312,6 +313,47 @@ _INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | Non
     "hvacAutoAction": _plan_auto_conditioning,
 }
 
+# A subscription push stream has no vehicle-side backpressure, so an unbounded
+# sink behind a stalled consumer would grow without limit.
+_STREAM_SINK_MAXSIZE = 32
+_STREAM_TOMBSTONE_MAXSIZE = 32
+
+
+class _StreamSink:
+    """Non-draining queue for one subscription's addressed pushes.
+
+    Bounded and drop-oldest, since the newest snapshot supersedes older ones
+    for telemetry. Kept entirely separate from ``_queues`` so ``_send``'s
+    pre-send drain and the one-shot ``_await_response`` consumer can never
+    see or discard a subscription push.
+
+    ``armed`` gates whether ``_on_message`` diverts a matching frame into this
+    sink at all. The subscribe request's own ack shares its ``request_uuid``
+    with every later push, so a sink registered before that ack arrives must
+    start unarmed - letting exactly that first frame fall through to the
+    ordinary reply queue for ``_send`` to consume - and only arm once the ack
+    has been claimed.
+    """
+
+    def __init__(
+        self, maxsize: int = _STREAM_SINK_MAXSIZE, *, armed: bool = True
+    ) -> None:
+        self._queue: asyncio.Queue[RoutableMessage] = asyncio.Queue(maxsize=maxsize)
+        self.dropped = 0
+        self.armed = armed
+
+    def put(self, msg: RoutableMessage) -> None:
+        if self._queue.full():
+            self._queue.get_nowait()
+            self.dropped += 1
+        self._queue.put_nowait(msg)
+
+    async def get(self) -> RoutableMessage:
+        return await self._queue.get()
+
+    def empty(self) -> bool:
+        return self._queue.empty()
+
 
 class VehicleBluetooth(
     BroadcastListeners, Commands[BluetoothParentT], Generic[BluetoothParentT]
@@ -439,6 +481,8 @@ class VehicleBluetooth(
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
     _broadcast_watchers: dict[Domain, Callable[[RoutableMessage], None]]
+    _stream_sinks: dict[bytes, _StreamSink]
+    _retired_streams: deque[bytes]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -512,6 +556,8 @@ class VehicleBluetooth(
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
         self._broadcast_watchers = {}
+        self._stream_sinks = {}
+        self._retired_streams = deque(maxlen=_STREAM_TOMBSTONE_MAXSIZE)
         self._init_broadcast_listeners()
         self.device = device
         self._connect_lock = asyncio.Lock()
@@ -675,7 +721,20 @@ class VehicleBluetooth(
         self._buffer.receive_data(data)
 
     def _on_message(self, msg: RoutableMessage) -> None:
-        """Route addressed BLE replies into the per-domain response queue."""
+        """Route addressed BLE replies into the per-domain response queue.
+
+        A subscription push is addressed to us and carries its subscribe
+        request's own ``request_uuid``, so it is peeled off into that
+        subscription's own sink before it can reach ``_queues`` - keeping it
+        out of reach of both ``_send``'s pre-send drain and the one-shot
+        ``_await_response`` consumer, which would otherwise discard it or
+        return it as an unrelated command's reply.
+
+        The subscribe request's own ack shares that same ``request_uuid``
+        with later pushes, so an unarmed sink lets exactly one matching frame
+        fall through here to ``_queues`` - the ack ``_send_with_stream_sink``
+        is waiting on - before arming itself for every push after it.
+        """
 
         if msg.to_destination.routing_address != self._from_destination:
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
@@ -690,6 +749,20 @@ class VehicleBluetooth(
                     self._dispatch_status_listeners(status)
             return
 
+        sink = self._stream_sinks.get(msg.request_uuid)
+        if sink is not None:
+            if sink.armed:
+                if msg.HasField("protobuf_message_as_bytes"):
+                    LOGGER.debug(f"Received subscription push: {msg}")
+                    sink.put(msg)
+                    return
+            else:
+                LOGGER.debug(f"Received subscribe ack, arming sink: {msg}")
+                sink.armed = True
+        elif msg.request_uuid in self._retired_streams:
+            LOGGER.debug(f"Dropping push for retired subscription: {msg}")
+            return
+
         queue = self._queues.get(msg.from_destination.domain)
         if queue is None:
             # Domain enum has values (e.g. DOMAIN_BROADCAST, DOMAIN_AUTHD) with
@@ -702,6 +775,53 @@ class VehicleBluetooth(
 
         LOGGER.debug(f"Received response: {msg}")
         queue.put_nowait(msg)
+
+    def _register_stream_sink(
+        self, request_uuid: bytes, *, armed: bool = True
+    ) -> _StreamSink:
+        """Start routing pushes for ``request_uuid`` into their own sink.
+
+        ``armed=False`` is for a sink registered ahead of its own subscribe
+        request: the first matching frame (that request's ack) is left to
+        fall through to ``_queues`` instead of being diverted, and
+        ``_on_message`` arms the sink once it has passed through.
+        """
+        sink = _StreamSink(armed=armed)
+        try:
+            self._retired_streams.remove(request_uuid)
+        except ValueError:
+            pass
+        self._stream_sinks[request_uuid] = sink
+        return sink
+
+    def _unregister_stream_sink(self, request_uuid: bytes) -> None:
+        """Retire ``request_uuid`` so delayed pushes are dropped."""
+        self._stream_sinks.pop(request_uuid, None)
+        if request_uuid not in self._retired_streams:
+            self._retired_streams.append(request_uuid)
+
+    async def _send_with_stream_sink(
+        self,
+        msg: RoutableMessage,
+        requires: str,
+        *,
+        timeout: float | None = None,
+    ) -> tuple[RoutableMessage, _StreamSink]:
+        """Atomically register a stream route and send its subscription request.
+
+        The registered sink starts unarmed so this request's own ack - which
+        carries the same ``request_uuid`` as every later push - is left for
+        ``_send`` to consume as an ordinary reply rather than being diverted.
+        """
+        sink = self._register_stream_sink(msg.uuid, armed=False)
+        try:
+            response = await self._send(
+                msg, requires, expects_data=False, timeout=timeout
+            )
+        except BaseException:
+            self._unregister_stream_sink(msg.uuid)
+            raise
+        return response, sink
 
     async def _send(
         self,

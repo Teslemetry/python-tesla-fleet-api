@@ -1,0 +1,241 @@
+"""Tests for the subscription-push/command-reply queue collision.
+
+A live ``vehicleDataSubscription`` pushes addressed frames on the same
+INFOTAINMENT domain an ordinary command uses for its reply. Before the
+``_stream_sinks`` routing fix, ``_send`` would discard any push sitting
+unconsumed in ``_queues`` before every send, and ``_await_response`` could
+return a push as an unrelated command's own reply. These tests drive the
+real (unmocked) ``_send``/``_on_message`` state machine - only the GATT
+client is faked - so pushes are injected exactly as ``_on_notify``/the
+reassembling buffer would deliver them from a real notification.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from random import randbytes
+from typing import Any
+from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock
+
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_protocol.command.universal_message_pb2 import (
+    Destination,
+    Domain,
+    RoutableMessage,
+)
+
+VIN = "5YJXCAE43LF123456"
+DOMAIN = Domain.DOMAIN_INFOTAINMENT
+
+
+def _make_vehicle(**kwargs: Any) -> VehicleBluetooth[Any]:
+    """A VehicleBluetooth with real send/routing logic but a faked GATT client."""
+    parent = MagicMock()
+    parent.private_key = ec.generate_private_key(ec.SECP256R1())
+    vehicle = VehicleBluetooth(parent, VIN, **kwargs)
+    vehicle.connect_if_needed = AsyncMock()  # type: ignore[method-assign]
+    vehicle.client = MagicMock()
+    vehicle.client.write_gatt_char = AsyncMock()
+    return vehicle
+
+
+def _outgoing_msg() -> RoutableMessage:
+    return RoutableMessage(
+        to_destination=Destination(domain=DOMAIN),
+        uuid=randbytes(16),
+    )
+
+
+def _addressed_reply(vehicle: VehicleBluetooth[Any]) -> RoutableMessage:
+    """An addressed reply to an ordinary command."""
+    return RoutableMessage(
+        to_destination=Destination(
+            domain=DOMAIN, routing_address=vehicle._from_destination
+        ),
+        from_destination=Destination(domain=DOMAIN),
+        protobuf_message_as_bytes=b"command-reply",
+    )
+
+
+def _subscription_ack(
+    vehicle: VehicleBluetooth[Any], request_uuid: bytes
+) -> RoutableMessage:
+    """The subscribe request's own ack - a real one carries
+    ``protobuf_message_as_bytes`` too (an infotainment actuation's
+    ``actionStatus`` rides in that field), the same as every later push."""
+    return RoutableMessage(
+        to_destination=Destination(
+            domain=DOMAIN, routing_address=vehicle._from_destination
+        ),
+        from_destination=Destination(domain=DOMAIN),
+        protobuf_message_as_bytes=b"subscribe-ack",
+        request_uuid=request_uuid,
+    )
+
+
+def _subscription_push(
+    vehicle: VehicleBluetooth[Any], request_uuid: bytes
+) -> RoutableMessage:
+    """An addressed subscription push, correlated by the subscribe request's uuid."""
+    return RoutableMessage(
+        to_destination=Destination(
+            domain=DOMAIN, routing_address=vehicle._from_destination
+        ),
+        from_destination=Destination(domain=DOMAIN),
+        protobuf_message_as_bytes=b"push-data",
+        request_uuid=request_uuid,
+    )
+
+
+class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
+    async def test_already_arrived_push_survives_a_concurrent_send(self) -> None:
+        vehicle = _make_vehicle()
+        subscribe_uuid = randbytes(16)
+        sink = vehicle._register_stream_sink(subscribe_uuid)
+
+        # A push arrives and piles up in the sink before any other command runs.
+        vehicle._on_message(_subscription_push(vehicle, subscribe_uuid))
+        self.assertFalse(sink.empty())
+
+        async def write_then_ack(*_: Any) -> None:
+            vehicle._on_message(_addressed_reply(vehicle))
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_ack)
+
+        resp = await asyncio.wait_for(
+            vehicle._send(_outgoing_msg(), "protobuf_message_as_bytes"), timeout=1.0
+        )
+
+        # The command got its own real reply, and the earlier push is still
+        # sitting in the sink - not silently discarded by _send's pre-send
+        # drain of _queues.
+        self.assertEqual(resp.protobuf_message_as_bytes, b"command-reply")
+        self.assertFalse(sink.empty())
+        received = await asyncio.wait_for(sink.get(), timeout=0.1)
+        self.assertEqual(received.request_uuid, subscribe_uuid)
+        self.assertEqual(received.protobuf_message_as_bytes, b"push-data")
+
+    async def test_push_arriving_mid_wait_is_not_returned_as_command_reply(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        subscribe_uuid = randbytes(16)
+        sink = vehicle._register_stream_sink(subscribe_uuid)
+
+        async def write_then_push_then_ack(*_: Any) -> None:
+            # A push lands while the command is still waiting for its reply.
+            vehicle._on_message(_subscription_push(vehicle, subscribe_uuid))
+            await asyncio.sleep(0)
+            vehicle._on_message(_addressed_reply(vehicle))
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_push_then_ack)
+
+        resp = await asyncio.wait_for(
+            vehicle._send(_outgoing_msg(), "protobuf_message_as_bytes"), timeout=1.0
+        )
+
+        # A push carries protobuf_message_as_bytes too, so pre-fix it could
+        # satisfy _await_response's HasField(requires) check and be returned
+        # as the command's own reply. It must not be.
+        self.assertEqual(resp.protobuf_message_as_bytes, b"command-reply")
+        self.assertFalse(sink.empty())
+
+    async def test_subscribe_ack_is_not_swallowed_by_its_own_sink(self) -> None:
+        # The subscribe request's own ack carries the same request_uuid as
+        # every later push (both have protobuf_message_as_bytes set), so a
+        # sink armed immediately on registration would divert that first ack
+        # into itself instead of letting `_send` consume it - and
+        # `_send_with_stream_sink` would then time out waiting for a reply
+        # that had already arrived. The sink must start unarmed and only
+        # divert pushes that arrive *after* the ack.
+        vehicle = _make_vehicle()
+        outgoing = _outgoing_msg()
+
+        async def write_then_ack(*_: Any) -> None:
+            vehicle._on_message(_subscription_ack(vehicle, outgoing.uuid))
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_ack)
+
+        # A short timeout proves this resolves from the injected ack rather
+        # than from a fallback timeout path.
+        response, sink = await asyncio.wait_for(
+            vehicle._send_with_stream_sink(
+                outgoing, "protobuf_message_as_bytes", timeout=0.5
+            ),
+            timeout=1.0,
+        )
+
+        self.assertEqual(response.protobuf_message_as_bytes, b"subscribe-ack")
+        self.assertEqual(response.request_uuid, outgoing.uuid)
+
+        # The subscription is now live: a push carrying the same
+        # request_uuid must reach the sink, not be treated as another ack.
+        vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+        pushed = await asyncio.wait_for(sink.get(), timeout=0.1)
+        self.assertEqual(pushed.protobuf_message_as_bytes, b"push-data")
+
+    async def test_push_arriving_before_ack_still_arms_the_sink(self) -> None:
+        # Not the expected wire ordering (the vehicle sends the ack before
+        # any push), but the sink must not get stuck unarmed forever if a
+        # frame beats the ack: whichever frame arrives first satisfies
+        # _send_with_stream_sink's wait, and everything after it is treated
+        # as a push.
+        vehicle = _make_vehicle()
+        outgoing = _outgoing_msg()
+
+        async def write_then_first_frame(*_: Any) -> None:
+            vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+            await asyncio.sleep(0)
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_first_frame)
+
+        response, sink = await asyncio.wait_for(
+            vehicle._send_with_stream_sink(
+                outgoing, "protobuf_message_as_bytes", timeout=0.5
+            ),
+            timeout=1.0,
+        )
+        self.assertEqual(response.protobuf_message_as_bytes, b"push-data")
+
+        vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+        pushed = await asyncio.wait_for(sink.get(), timeout=0.1)
+        self.assertEqual(pushed.protobuf_message_as_bytes, b"push-data")
+
+    async def test_unregistered_sink_drops_late_pushes(self) -> None:
+        vehicle = _make_vehicle()
+        subscribe_uuid = randbytes(16)
+        sink = vehicle._register_stream_sink(subscribe_uuid)
+        vehicle._unregister_stream_sink(subscribe_uuid)
+
+        vehicle._on_message(_subscription_push(vehicle, subscribe_uuid))
+
+        self.assertTrue(sink.empty())
+        self.assertTrue(vehicle._queues[DOMAIN].empty())
+
+    async def test_retired_stream_routes_are_bounded(self) -> None:
+        vehicle = _make_vehicle()
+        retired = [randbytes(16) for _ in range(vehicle._retired_streams.maxlen + 5)]
+
+        for request_uuid in retired:
+            vehicle._register_stream_sink(request_uuid)
+            vehicle._unregister_stream_sink(request_uuid)
+
+        self.assertEqual(len(vehicle._retired_streams), vehicle._retired_streams.maxlen)
+        self.assertNotIn(retired[0], vehicle._retired_streams)
+        self.assertIn(retired[-1], vehicle._retired_streams)
+
+    async def test_sink_drops_oldest_when_full(self) -> None:
+        vehicle = _make_vehicle()
+        subscribe_uuid = randbytes(16)
+        sink = vehicle._register_stream_sink(subscribe_uuid)
+
+        for _ in range(sink._queue.maxsize + 5):
+            vehicle._on_message(_subscription_push(vehicle, subscribe_uuid))
+
+        self.assertEqual(sink.dropped, 5)
+        self.assertEqual(sink._queue.qsize(), sink._queue.maxsize)
