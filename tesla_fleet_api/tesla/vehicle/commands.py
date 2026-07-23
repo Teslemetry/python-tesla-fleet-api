@@ -1004,6 +1004,13 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         Fleet API signed transports since it only relies on
         ``_getInfotainment``.
         """
+        if (
+            not isinstance(chunk_size, int)
+            or isinstance(chunk_size, bool)
+            or chunk_size <= 0
+        ):
+            raise ValueError("chunk_size must be a positive integer")
+
         id_reply = await self._getInfotainment(
             Action(
                 vehicleAction=VehicleAction(
@@ -1047,11 +1054,30 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     )
                 )
             )
-            chunk = chunk_reply.vehicle_image_state.vehicle_images[0].asset_data.data
+            asset_data = (
+                chunk_reply.vehicle_image_state.vehicle_images[0].asset_data
+            )
+            if asset_data.start_offset != offset:
+                raise ValueError(
+                    f"Unexpected vehicle image chunk offset "
+                    f"{asset_data.start_offset}; expected {offset}"
+                )
+            chunk = asset_data.data
             if not chunk:
-                break
+                raise ValueError(
+                    f"Vehicle image ended after {offset} of {total_size} bytes"
+                )
             data += chunk
             offset += len(chunk)
+            if offset > total_size:
+                raise ValueError(
+                    f"Vehicle image exceeded declared size of {total_size} bytes"
+                )
+
+        if len(data) != total_size:
+            raise ValueError(
+                f"Vehicle image contained {len(data)} of {total_size} bytes"
+            )
         return bytes(data)
 
     async def handshakeVehicleSecurity(self) -> None:
