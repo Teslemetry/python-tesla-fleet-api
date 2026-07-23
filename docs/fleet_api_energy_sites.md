@@ -375,8 +375,11 @@ resolution = get_tariff_periods(tariff, now, horizon_hours=24)
 the tariff object does not carry its own timezone. A naive `now` raises
 `ValueError`. The result contains the current buy and sell rates, the current
 period's start, the next change, the currency, and (when `horizon_hours` is
-provided) upcoming periods. It returns `None` when no tariff season covers
-`now`. Missing rates remain `None`, while a real zero price remains `0.0`.
+provided) a contiguous timeline of upcoming periods. Gaps in the buy schedule
+are preserved as one merged `TariffPeriod` with both rates set to `None`; the
+gap ends when the tariff resumes, or at the horizon deadline if it does not.
+The helper returns `None` when no tariff season covers `now`. Missing rates
+remain `None`, while a real zero price remains `0.0`.
 Null or malformed inputs passed to `unwrap_tariff_v2` raise `InvalidResponse`.
 This includes every accepted envelope or bare tariff object whose extracted
 tariff lacks either `seasons` or `energy_charges`.

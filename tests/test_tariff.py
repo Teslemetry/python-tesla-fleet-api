@@ -564,11 +564,7 @@ class SparsePeriodTests(TestCase):
                     1,
                     7,
                     29,
-                    {
-                        "WEEKEND": {
-                            "periods": [{"fromDayOfWeek": 5, "toDayOfWeek": 6}]
-                        }
-                    },
+                    {"WEEKEND": {"periods": [{"fromDayOfWeek": 5, "toDayOfWeek": 6}]}},
                 ),
                 "Late": _season_geometry(
                     7, 30, 8, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
@@ -581,9 +577,7 @@ class SparsePeriodTests(TestCase):
         self.assertIsNotNone(result)
         self.assertIsNotNone(result.upcoming)
         late_season = next(
-            period
-            for period in result.upcoming
-            if period.buy.season_name == "Late"
+            period for period in result.upcoming if period.buy.season_name == "Late"
         )
         self.assertEqual(late_season.start, datetime(2026, 7, 30, tzinfo=TZ))
         self.assertEqual(late_season.buy.price, 0.2)

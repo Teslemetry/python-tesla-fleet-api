@@ -34,7 +34,7 @@ class TariffRate:
 
 @dataclass(frozen=True, slots=True)
 class TariffPeriod:
-    """One buy/sell rate pair in effect for ``[start, end)``."""
+    """One resolved rate pair or unresolved gap for ``[start, end)``."""
 
     start: datetime
     end: datetime
@@ -118,8 +118,8 @@ def get_tariff_periods(
     the wrong wall clock; this raises :class:`ValueError` instead.
 
     Returns ``None`` when no season in the tariff covers ``now``'s date.
-    When ``horizon_hours`` is given, ``upcoming`` is populated with every
-    buy/sell period between ``now`` and ``now + horizon_hours``.
+    When ``horizon_hours`` is given, ``upcoming`` is populated. See
+    ``docs/fleet_api_energy_sites.md`` for horizon and gap semantics.
     """
     if now.tzinfo is None or now.tzinfo.utcoffset(now) is None:
         raise ValueError("now must be timezone-aware")
