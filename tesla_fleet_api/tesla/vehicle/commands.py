@@ -52,6 +52,7 @@ from tesla_fleet_api.const import (
     TirePressureUnit,
     EnergyDisplayFormat,
     PhoneFontSize,
+    VehicleImageType,
 )
 
 # Protocol
@@ -60,7 +61,11 @@ from tesla_protocol.command.car_server_pb2 import (
     AutoStwHeatAction,
     BoomboxAction,
     DrivingClearSpeedLimitPinAdminAction,
+    GetVehicleData,
+    GetVehicleImageState,
     Response,
+    VehicleImageDataChunkRequest,
+    VehicleImageRequest,
 )
 from tesla_protocol.command.signatures_pb2 import (
     Session_Info_Status,
@@ -979,6 +984,99 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             raise
         _log_command_result(name, self._transport_name, reply)
         return reply["response"]
+
+    async def vehicle_image_state(
+        self,
+        image_type: VehicleImageType | int,
+        *,
+        chunk_size: int = 16384,
+    ) -> bytes:
+        """Fetch a rendered vehicle image (e.g. AP visualization wrap or
+        license-plate placement) over the signed-command channel and return
+        its assembled bytes.
+
+        Unlike every other ``GetVehicleData`` sub-state, image data is
+        transferred in paged chunks rather than a single reply: this first
+        requests the image's metadata (an ``ID`` request, which reports its
+        total size), then issues ``DATA`` requests advancing by
+        ``chunk_size`` until the full byte range has been retrieved,
+        reassembling the chunks in order. Works over both the BLE and
+        Fleet API signed transports since it only relies on
+        ``_getInfotainment``.
+        """
+        if (
+            not isinstance(chunk_size, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(chunk_size, bool)
+            or chunk_size <= 0
+        ):
+            raise ValueError("chunk_size must be a positive integer")
+
+        id_reply = await self._getInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    getVehicleData=GetVehicleData(
+                        getVehicleImageState=GetVehicleImageState(
+                            imageRequests=[
+                                VehicleImageRequest(
+                                    dataType=VehicleImageRequest.Type.ID,
+                                    imageType=image_type,  # pyright: ignore[reportArgumentType]
+                                )
+                            ]
+                        )
+                    )
+                )
+            )
+        )
+        total_size = id_reply.vehicle_image_state.vehicle_images[0].total_image_size
+
+        data = bytearray()
+        offset = 0
+        while offset < total_size:
+            chunk_reply = await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getVehicleImageState=GetVehicleImageState(
+                                imageRequests=[
+                                    VehicleImageRequest(
+                                        dataType=VehicleImageRequest.Type.DATA,
+                                        imageType=image_type,  # pyright: ignore[reportArgumentType]
+                                        chunkRequest=VehicleImageDataChunkRequest(
+                                            chunk_offset=offset,
+                                            chunk_size=min(
+                                                chunk_size, total_size - offset
+                                            ),
+                                        ),
+                                    )
+                                ]
+                            )
+                        )
+                    )
+                )
+            )
+            asset_data = chunk_reply.vehicle_image_state.vehicle_images[0].asset_data
+            if asset_data.start_offset != offset:
+                raise ValueError(
+                    f"Unexpected vehicle image chunk offset "
+                    f"{asset_data.start_offset}; expected {offset}"
+                )
+            chunk = asset_data.data
+            if not chunk:
+                raise ValueError(
+                    f"Vehicle image ended after {offset} of {total_size} bytes"
+                )
+            data += chunk
+            offset += len(chunk)
+            if offset > total_size:
+                raise ValueError(
+                    f"Vehicle image exceeded declared size of {total_size} bytes"
+                )
+
+        if len(data) != total_size:
+            raise ValueError(
+                f"Vehicle image contained {len(data)} of {total_size} bytes"
+            )
+        return bytes(data)
 
     async def handshakeVehicleSecurity(self) -> None:
         """Perform a handshake with the vehicle security domain."""

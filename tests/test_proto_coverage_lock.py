@@ -54,10 +54,7 @@ KNOWN_UNWRAPPED_VEHICLE_ACTION_FIELDS = (
     ALTERNATE_PATH_VEHICLE_ACTION_FIELDS | STREAMING_SUBSCRIPTION_VEHICLE_ACTION_FIELDS
 )
 
-# Explicitly chunked binary image-data transfer (paged offset/size requests),
-# unlike every other GetVehicleData sub-state's single no-arg read. Needs its
-# own chunking/reassembly design, not a one-shot reader.
-KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS = frozenset({"getVehicleImageState"})
+KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS: frozenset[str] = frozenset()
 
 
 def _vehicle_action_fields():
@@ -105,9 +102,11 @@ class GetVehicleDataCoverageLockTests(unittest.TestCase):
             if field.name in KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS:
                 continue
             type_name = field.message_type.name if field.message_type else None
-            if field.name in BLUETOOTH_SOURCE:
+            if field.name in BLUETOOTH_SOURCE or field.name in COMMANDS_SOURCE:
                 continue
-            if type_name and type_name in BLUETOOTH_SOURCE:
+            if type_name and (
+                type_name in BLUETOOTH_SOURCE or type_name in COMMANDS_SOURCE
+            ):
                 continue
             unwrapped.append(field.name)
         self.assertEqual(
