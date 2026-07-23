@@ -705,9 +705,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     + resp.signature_data.AES_GCM_Response_data.tag,
                     aad.finalize(),
                 )
-                if not session.record_response_counter(
-                    request_hash, response_counter
-                ):
+                if not session.record_response_counter(request_hash, response_counter):
                     raise SignedCommandResponseReplayed
 
             if resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
