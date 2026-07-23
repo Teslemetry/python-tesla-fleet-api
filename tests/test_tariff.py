@@ -595,6 +595,58 @@ class UncoveredSeasonGapTests(TestCase):
         self.assertEqual(next_summer.buy.price, 0.4)
 
 
+class ChainedGapTests(TestCase):
+    """A gap can require more than one jump to resolve: the next season's
+    own start can itself land inside another gap (its grid doesn't cover
+    midnight either). The walk must chain through every jump and merge
+    them into one contiguous unresolved segment, not stop at the first
+    jump's landing point."""
+
+    def _tariff(self):
+        return {
+            "currency": "AUD",
+            "energy_charges": {"Summer": {"rates": {"MORNING": 0.4}}},
+            "seasons": {
+                "Summer": _season_geometry(
+                    6,
+                    1,
+                    7,
+                    31,
+                    {
+                        "MORNING": {
+                            "periods": [{"toDayOfWeek": 6, "fromHour": 6, "toHour": 9}]
+                        }
+                    },
+                ),
+            },
+        }
+
+    def test_season_boundary_landing_in_another_gap_is_chained_through(self):
+        # Summer only exists Jun-Jul, and even within Summer the only
+        # period is 06:00-09:00 daily - so jumping to next Summer's start
+        # (Jun 1 00:00) still isn't resolvable; the walk must chain to the
+        # season's own first 06:00 window.
+        now = datetime(2026, 7, 31, 7, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=24 * 310)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        merged_gap = next(
+            p
+            for p in result.upcoming
+            if p.start == datetime(2026, 7, 31, 9, 0, tzinfo=TZ)
+        )
+        self.assertEqual(merged_gap.end, datetime(2027, 6, 1, 6, 0, tzinfo=TZ))
+        self.assertIsNone(merged_gap.buy.price)
+        next_morning = next(
+            p
+            for p in result.upcoming
+            if p.start == datetime(2027, 6, 1, 6, 0, tzinfo=TZ)
+        )
+        self.assertEqual(next_morning.buy.period_name, "MORNING")
+        self.assertEqual(next_morning.buy.price, 0.4)
+
+
 class InactiveSellPeriodTests(TestCase):
     def _tariff(self, sell_season=None):
         all_day = {

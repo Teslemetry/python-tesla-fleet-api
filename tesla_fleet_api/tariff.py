@@ -144,37 +144,39 @@ def get_tariff_periods(
             )
             if cursor.next_change >= deadline:
                 break
-            next_resolved = _resolve_at(tariff, cursor.next_change)
-            if next_resolved is None:
-                # `cursor.next_change` falls in a gap no buy period covers -
-                # advance THROUGH it to the next tariff boundary instead of
-                # stopping the walk here, recording the gap itself as an
-                # unresolved segment so `upcoming` stays a contiguous
-                # timeline with no silent hole.
-                gap_end = _next_resolvable(tariff, cursor.next_change)
+
+            # `cursor.next_change` may fall in a gap no buy period covers -
+            # advance THROUGH it to the next tariff boundary instead of
+            # stopping the walk here. A single jump (e.g. to a new season's
+            # start) can itself land in another gap (that season's own grid
+            # might not cover midnight either), so keep advancing until the
+            # buy side actually resolves or the horizon runs out, then
+            # record the whole span as one unresolved segment so `upcoming`
+            # stays a contiguous timeline with no silent hole.
+            gap_start = cursor.next_change
+            probe = gap_start
+            next_resolved = _resolve_at(tariff, probe)
+            while next_resolved is None:
+                gap_end = _next_resolvable(tariff, probe)
                 if gap_end is None or gap_end >= deadline:
-                    gap_end = deadline if gap_end is None else min(gap_end, deadline)
-                    if gap_end > cursor.next_change:
-                        upcoming.append(
-                            TariffPeriod(
-                                start=cursor.next_change,
-                                end=gap_end,
-                                buy=_UNRESOLVED_RATE,
-                                sell=_UNRESOLVED_RATE,
-                            )
-                        )
+                    probe = deadline
                     break
+                if gap_end <= probe:
+                    raise ValueError("tariff gap boundary does not advance")
+                probe = gap_end
+                next_resolved = _resolve_at(tariff, probe)
+
+            if probe > gap_start:
                 upcoming.append(
                     TariffPeriod(
-                        start=cursor.next_change,
-                        end=gap_end,
+                        start=gap_start,
+                        end=probe,
                         buy=_UNRESOLVED_RATE,
                         sell=_UNRESOLVED_RATE,
                     )
                 )
-                next_resolved = _resolve_at(tariff, gap_end)
-                if next_resolved is None:
-                    break
+            if next_resolved is None:
+                break
             if next_resolved.next_change <= cursor.next_change:
                 raise ValueError("tariff period boundaries do not advance")
             cursor = next_resolved
