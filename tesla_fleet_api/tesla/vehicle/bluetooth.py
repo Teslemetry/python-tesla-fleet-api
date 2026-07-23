@@ -469,7 +469,7 @@ class VehicleBluetooth(
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
     _broadcast_watchers: dict[Domain, Callable[[RoutableMessage], None]]
-    _stream_sinks: dict[bytes, _StreamSink]
+    _stream_sinks: dict[bytes, _StreamSink | None]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -730,11 +730,15 @@ class VehicleBluetooth(
                     self._dispatch_status_listeners(status)
             return
 
-        sink = self._stream_sinks.get(msg.request_uuid)
-        if sink is not None:
-            LOGGER.debug(f"Received subscription push: {msg}")
-            sink.put(msg)
-            return
+        if msg.request_uuid in self._stream_sinks:
+            sink = self._stream_sinks[msg.request_uuid]
+            if sink is None:
+                LOGGER.debug(f"Dropping push for retired subscription: {msg}")
+                return
+            if msg.HasField("protobuf_message_as_bytes"):
+                LOGGER.debug(f"Received subscription push: {msg}")
+                sink.put(msg)
+                return
 
         queue = self._queues.get(msg.from_destination.domain)
         if queue is None:
@@ -756,8 +760,26 @@ class VehicleBluetooth(
         return sink
 
     def _unregister_stream_sink(self, request_uuid: bytes) -> None:
-        """Stop routing pushes for ``request_uuid``; drops any future pushes."""
-        self._stream_sinks.pop(request_uuid, None)
+        """Retire ``request_uuid`` so delayed pushes are dropped."""
+        self._stream_sinks[request_uuid] = None
+
+    async def _send_with_stream_sink(
+        self,
+        msg: RoutableMessage,
+        requires: str,
+        *,
+        timeout: float | None = None,
+    ) -> tuple[RoutableMessage, _StreamSink]:
+        """Atomically register a stream route and send its subscription request."""
+        sink = self._register_stream_sink(msg.uuid)
+        try:
+            response = await self._send(
+                msg, requires, expects_data=False, timeout=timeout
+            )
+        except BaseException:
+            self._unregister_stream_sink(msg.uuid)
+            raise
+        return response, sink
 
     async def _send(
         self,

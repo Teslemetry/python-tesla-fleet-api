@@ -60,6 +60,18 @@ def _addressed_reply(vehicle: VehicleBluetooth[Any]) -> RoutableMessage:
     )
 
 
+def _subscription_ack(
+    vehicle: VehicleBluetooth[Any], request_uuid: bytes
+) -> RoutableMessage:
+    return RoutableMessage(
+        to_destination=Destination(
+            domain=DOMAIN, routing_address=vehicle._from_destination
+        ),
+        from_destination=Destination(domain=DOMAIN),
+        request_uuid=request_uuid,
+    )
+
+
 def _subscription_push(
     vehicle: VehicleBluetooth[Any], request_uuid: bytes
 ) -> RoutableMessage:
@@ -128,7 +140,30 @@ class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
         self.assertEqual(resp.protobuf_message_as_bytes, b"command-reply")
         self.assertFalse(sink.empty())
 
-    async def test_unregistered_sink_no_longer_receives_pushes(self) -> None:
+    async def test_subscription_ack_completes_atomic_registration(self) -> None:
+        vehicle = _make_vehicle()
+        outgoing = _outgoing_msg()
+
+        async def write_then_push_then_ack(*_: Any) -> None:
+            vehicle._on_message(_subscription_push(vehicle, outgoing.uuid))
+            vehicle._on_message(_subscription_ack(vehicle, outgoing.uuid))
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=write_then_push_then_ack)
+
+        response, sink = await asyncio.wait_for(
+            vehicle._send_with_stream_sink(
+                outgoing, "protobuf_message_as_bytes", timeout=1.0
+            ),
+            timeout=1.0,
+        )
+
+        self.assertEqual(response.request_uuid, outgoing.uuid)
+        self.assertEqual(
+            (await asyncio.wait_for(sink.get(), timeout=0.1)).protobuf_message_as_bytes,
+            b"push-data",
+        )
+
+    async def test_unregistered_sink_drops_late_pushes(self) -> None:
         vehicle = _make_vehicle()
         subscribe_uuid = randbytes(16)
         sink = vehicle._register_stream_sink(subscribe_uuid)
@@ -137,6 +172,7 @@ class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
         vehicle._on_message(_subscription_push(vehicle, subscribe_uuid))
 
         self.assertTrue(sink.empty())
+        self.assertTrue(vehicle._queues[DOMAIN].empty())
 
     async def test_sink_drops_oldest_when_full(self) -> None:
         vehicle = _make_vehicle()
