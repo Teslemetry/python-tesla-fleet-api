@@ -76,6 +76,16 @@ class AutoSeat(IntEnum):
     FRONT_RIGHT = 2
 
 
+class VehicleImageType(IntEnum):
+    """Rendered vehicle image kinds available from ``vehicle_image_state()``.
+
+    Values match the proto ``VehicleImageStateType`` enum (``APVIZ_*`` names).
+    """
+
+    AUTOPILOT_VISUALIZATION_WRAP = 1
+    LICENSE_PLATE = 2
+
+
 class Level(IntEnum):
     """Level options"""
 
