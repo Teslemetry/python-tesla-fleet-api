@@ -222,6 +222,77 @@ class SeasonYearCrossTests(TestCase):
         self.assertEqual(result.current_start, datetime(2026, 4, 1, tzinfo=TZ))
 
 
+class LeapDaySeasonTests(TestCase):
+    def _tariff(self):
+        periods = {
+            "ALL": {
+                "periods": [
+                    {"fromDayOfWeek": 0, "toDayOfWeek": 0, "toHour": 24 * 7}
+                ]
+            }
+        }
+        return {
+            "currency": "AUD",
+            "energy_charges": {"Leap": {"rates": {"ALL": 0.2}}},
+            "seasons": {
+                "Leap": _season_geometry(2, 29, 3, 31, periods),
+            },
+        }
+
+    def test_non_leap_year_clamps_active_season_start(self):
+        now = datetime(2026, 3, 1, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.current_start, datetime(2026, 2, 28, tzinfo=TZ))
+
+    def test_non_leap_february_28_is_covered(self):
+        now = datetime(2026, 2, 28, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.buy.season_name, "Leap")
+
+    def test_adjacent_sell_season_clamps_next_start(self):
+        tariff = self._tariff()
+        tariff["seasons"] = {
+            "ALL": _season_geometry(
+                1,
+                1,
+                12,
+                31,
+                {
+                    "ALL": {
+                        "periods": [
+                            {
+                                "fromDayOfWeek": 0,
+                                "toDayOfWeek": 0,
+                                "toHour": 24 * 14,
+                            }
+                        ]
+                    }
+                },
+            )
+        }
+        tariff["sell_tariff"] = {
+            "energy_charges": {"Leap": {"rates": {"ALL": 0.1}}},
+            "seasons": {
+                "Leap": _season_geometry(
+                    2,
+                    29,
+                    3,
+                    31,
+                    {"ALL": {"periods": [{"toDayOfWeek": 6, "toHour": 24}]}},
+                )
+            },
+        }
+        now = datetime(2026, 2, 20, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(tariff, now)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.next_change, datetime(2026, 2, 28, tzinfo=TZ))
+
+
 class DayOfWeekWrapTests(TestCase):
     """A period spanning Friday -> Monday (a long-weekend rate) must wrap
     the day-of-week range correctly, applying in full to each day in

@@ -278,13 +278,8 @@ def _season_covers(season: Mapping[str, Any], today: date) -> bool:
     to_day = season.get("toDay")
     if from_month is None or from_day is None or to_month is None or to_day is None:
         return False
-    start = (_as_int(from_month, 0), _as_int(from_day, 0))
-    end = (_as_int(to_month, 0), _as_int(to_day, 0))
-    point = (today.month, today.day)
-    if start <= end:
-        return start <= point <= end
-    # Year-crossing season (e.g. October -> March).
-    return point >= start or point <= end
+    start, end = _season_dates(season, today)
+    return start <= today < end
 
 
 def _season_windows(
@@ -328,9 +323,18 @@ def _season_dates(season: Mapping[str, Any], today: date) -> tuple[date, date]:
     else:
         start_year, end_year = today.year - 1, today.year
 
-    start = date(start_year, start_month, start_day)
-    end = date(end_year, end_month, end_day) + timedelta(days=1)
+    start = _recurring_date(start_year, start_month, start_day)
+    end = _recurring_date(end_year, end_month, end_day) + timedelta(days=1)
     return start, end
+
+
+def _recurring_date(year: int, month: int, day: int) -> date:
+    try:
+        return date(year, month, day)
+    except ValueError:
+        if month == 2 and day == 29:
+            return date(year, 2, 28)
+        raise
 
 
 def _adjacent_season_dates(seasons: Any, today: date) -> tuple[date, date] | None:
@@ -354,8 +358,10 @@ def _adjacent_season_dates(seasons: Any, today: date) -> tuple[date, date] | Non
         )
         for start_year in range(today.year - 2, today.year + 3):
             end_year = start_year + (end_fields < start_fields)
-            boundaries.add(date(start_year, *start_fields))
-            boundaries.add(date(end_year, *end_fields) + timedelta(days=1))
+            boundaries.add(_recurring_date(start_year, *start_fields))
+            boundaries.add(
+                _recurring_date(end_year, *end_fields) + timedelta(days=1)
+            )
     previous = [boundary for boundary in boundaries if boundary <= today]
     upcoming = [boundary for boundary in boundaries if boundary > today]
     if not previous or not upcoming:
