@@ -318,7 +318,7 @@ class Session(Generic[CommandParentT]):
         self.hmac: bytes | None = None
         self.publicKey: bytes | None = None
         self.session_info_key: bytes | None = None
-        self.last_response_counter: int | None = None
+        self.response_counters: set[tuple[bytes, int]] = set()
         self._last_authenticated_clock_time: int | None = None
         self.lock: Lock = Lock()
 
@@ -380,7 +380,7 @@ class Session(Generic[CommandParentT]):
         self.hmac = hmac_key
         self.session_info_key = session_info_key
         if not same_epoch:
-            self.last_response_counter = None
+            self.response_counters.clear()
         return True
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
@@ -649,11 +649,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     raise ValueError("Invalid request signature data")
 
                 response_counter = resp.signature_data.AES_GCM_Response_data.counter
-                if (
-                    session.last_response_counter is not None
-                    and response_counter <= session.last_response_counter
-                ):
-                    raise SignedCommandResponseReplayed
 
                 metadata = bytes(
                     [
@@ -697,7 +692,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     + resp.signature_data.AES_GCM_Response_data.tag,
                     aad.finalize(),
                 )
-                session.last_response_counter = response_counter
+                response_identity = (request_hash, response_counter)
+                if response_identity in session.response_counters:
+                    raise SignedCommandResponseReplayed
+                session.response_counters.add(response_identity)
 
             if resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
                 try:

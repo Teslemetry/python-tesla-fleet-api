@@ -522,40 +522,54 @@ class ResponseCounterReplayTests(IsolatedAsyncioTestCase):
             Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
         )
         self.assertTrue(result["response"]["result"])
-        self.assertEqual(session.last_response_counter, 6)
+        self.assertEqual(len(session.response_counters), 1)
 
-    async def test_replayed_response_counter_is_rejected(self) -> None:
+    async def test_response_counter_can_repeat_for_a_different_request(self) -> None:
         commands, session = self._make_aes_commands()
 
-        async def replay_send(
+        async def repeated_counter_send(
             msg, requires, expects_data=True, *, confirm_broadcast=None
         ):
-            # Always answers with the same counter, simulating a captured
-            # response being replayed back regardless of the new request.
             return self._encrypted_reply(commands, session, msg, counter=6)
 
-        commands._send = replay_send  # type: ignore[method-assign]
+        commands._send = repeated_counter_send  # type: ignore[method-assign]
 
         await commands._sendInfotainment(
             Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
         )
-        self.assertEqual(session.last_response_counter, 6)
+        await commands._sendInfotainment(
+            Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
+        )
+        self.assertEqual(len(session.response_counters), 2)
 
-        with self.assertRaises(SignedCommandResponseReplayed):
-            await commands._sendInfotainment(
-                Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
-            )
-
-    async def test_increasing_counters_across_commands_are_accepted(self) -> None:
+    async def test_replayed_counter_for_the_same_request_is_rejected(self) -> None:
         commands, session = self._make_aes_commands()
-        counters = iter([6, 9])
+        sent: list[RoutableMessage] = []
 
-        async def increasing_send(
+        async def capture_send(
+            msg, requires, expects_data=True, *, confirm_broadcast=None
+        ):
+            sent.append(msg)
+            return self._encrypted_reply(commands, session, msg, counter=6)
+
+        commands._send = capture_send  # type: ignore[method-assign]
+        command = Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
+        await commands._sendInfotainment(command)
+
+        commands._commandAes = AsyncMock(return_value=sent[0])  # type: ignore[method-assign]
+        with self.assertRaises(SignedCommandResponseReplayed):
+            await commands._sendInfotainment(command)
+
+    async def test_decreasing_unused_counter_is_accepted(self) -> None:
+        commands, session = self._make_aes_commands()
+        counters = iter([9, 8])
+
+        async def decreasing_send(
             msg, requires, expects_data=True, *, confirm_broadcast=None
         ):
             return self._encrypted_reply(commands, session, msg, counter=next(counters))
 
-        commands._send = increasing_send  # type: ignore[method-assign]
+        commands._send = decreasing_send  # type: ignore[method-assign]
 
         await commands._sendInfotainment(
             Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
@@ -563,7 +577,7 @@ class ResponseCounterReplayTests(IsolatedAsyncioTestCase):
         await commands._sendInfotainment(
             Action(vehicleAction=VehicleAction(ping=Ping(ping_id=0)))
         )
-        self.assertEqual(session.last_response_counter, 9)
+        self.assertEqual({counter for _, counter in session.response_counters}, {8, 9})
 
 
 def _make_ble_vehicle() -> VehicleBluetooth[Any]:
