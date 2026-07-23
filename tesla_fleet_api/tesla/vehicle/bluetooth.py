@@ -312,6 +312,36 @@ _INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | Non
     "hvacAutoAction": _plan_auto_conditioning,
 }
 
+# A subscription push stream has no vehicle-side backpressure, so an unbounded
+# sink behind a stalled consumer would grow without limit.
+_STREAM_SINK_MAXSIZE = 32
+
+
+class _StreamSink:
+    """Non-draining queue for one subscription's addressed pushes.
+
+    Bounded and drop-oldest, since the newest snapshot supersedes older ones
+    for telemetry. Kept entirely separate from ``_queues`` so ``_send``'s
+    pre-send drain and the one-shot ``_await_response`` consumer can never
+    see or discard a subscription push.
+    """
+
+    def __init__(self, maxsize: int = _STREAM_SINK_MAXSIZE) -> None:
+        self._queue: asyncio.Queue[RoutableMessage] = asyncio.Queue(maxsize=maxsize)
+        self.dropped = 0
+
+    def put(self, msg: RoutableMessage) -> None:
+        if self._queue.full():
+            self._queue.get_nowait()
+            self.dropped += 1
+        self._queue.put_nowait(msg)
+
+    async def get(self) -> RoutableMessage:
+        return await self._queue.get()
+
+    def empty(self) -> bool:
+        return self._queue.empty()
+
 
 class VehicleBluetooth(
     BroadcastListeners, Commands[BluetoothParentT], Generic[BluetoothParentT]
@@ -439,6 +469,7 @@ class VehicleBluetooth(
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
     _broadcast_watchers: dict[Domain, Callable[[RoutableMessage], None]]
+    _stream_sinks: dict[bytes, _StreamSink]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -512,6 +543,7 @@ class VehicleBluetooth(
             Domain.DOMAIN_INFOTAINMENT: asyncio.Queue(),
         }
         self._broadcast_watchers = {}
+        self._stream_sinks = {}
         self._init_broadcast_listeners()
         self.device = device
         self._connect_lock = asyncio.Lock()
@@ -675,7 +707,15 @@ class VehicleBluetooth(
         self._buffer.receive_data(data)
 
     def _on_message(self, msg: RoutableMessage) -> None:
-        """Route addressed BLE replies into the per-domain response queue."""
+        """Route addressed BLE replies into the per-domain response queue.
+
+        A subscription push is addressed to us and carries its subscribe
+        request's own ``request_uuid``, so it is peeled off into that
+        subscription's own sink before it can reach ``_queues`` - keeping it
+        out of reach of both ``_send``'s pre-send drain and the one-shot
+        ``_await_response`` consumer, which would otherwise discard it or
+        return it as an unrelated command's reply.
+        """
 
         if msg.to_destination.routing_address != self._from_destination:
             LOGGER.debug("Ignoring broadcast message (not addressed to us)")
@@ -690,6 +730,12 @@ class VehicleBluetooth(
                     self._dispatch_status_listeners(status)
             return
 
+        sink = self._stream_sinks.get(msg.request_uuid)
+        if sink is not None:
+            LOGGER.debug(f"Received subscription push: {msg}")
+            sink.put(msg)
+            return
+
         queue = self._queues.get(msg.from_destination.domain)
         if queue is None:
             # Domain enum has values (e.g. DOMAIN_BROADCAST, DOMAIN_AUTHD) with
@@ -702,6 +748,16 @@ class VehicleBluetooth(
 
         LOGGER.debug(f"Received response: {msg}")
         queue.put_nowait(msg)
+
+    def _register_stream_sink(self, request_uuid: bytes) -> _StreamSink:
+        """Start routing pushes for ``request_uuid`` into their own sink."""
+        sink = _StreamSink()
+        self._stream_sinks[request_uuid] = sink
+        return sink
+
+    def _unregister_stream_sink(self, request_uuid: bytes) -> None:
+        """Stop routing pushes for ``request_uuid``; drops any future pushes."""
+        self._stream_sinks.pop(request_uuid, None)
 
     async def _send(
         self,
