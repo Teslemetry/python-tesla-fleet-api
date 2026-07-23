@@ -174,6 +174,20 @@ class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
         self.assertTrue(sink.empty())
         self.assertTrue(vehicle._queues[DOMAIN].empty())
 
+    async def test_retired_stream_routes_are_bounded(self) -> None:
+        vehicle = _make_vehicle()
+        retired = [randbytes(16) for _ in range(vehicle._retired_streams.maxlen + 5)]
+
+        for request_uuid in retired:
+            vehicle._register_stream_sink(request_uuid)
+            vehicle._unregister_stream_sink(request_uuid)
+
+        self.assertEqual(
+            len(vehicle._retired_streams), vehicle._retired_streams.maxlen
+        )
+        self.assertNotIn(retired[0], vehicle._retired_streams)
+        self.assertIn(retired[-1], vehicle._retired_streams)
+
     async def test_sink_drops_oldest_when_full(self) -> None:
         vehicle = _make_vehicle()
         subscribe_uuid = randbytes(16)

@@ -5,6 +5,7 @@ import hashlib
 import struct
 import time
 import warnings
+from collections import deque
 from random import randbytes
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
@@ -315,6 +316,7 @@ _INFOTAINMENT_VERIFY_PLANS: dict[str, Callable[[VehicleAction], VerifyPlan | Non
 # A subscription push stream has no vehicle-side backpressure, so an unbounded
 # sink behind a stalled consumer would grow without limit.
 _STREAM_SINK_MAXSIZE = 32
+_STREAM_TOMBSTONE_MAXSIZE = 32
 
 
 class _StreamSink:
@@ -469,7 +471,8 @@ class VehicleBluetooth(
     client: BleakClient | None = None
     _queues: dict[Domain, asyncio.Queue[RoutableMessage]]
     _broadcast_watchers: dict[Domain, Callable[[RoutableMessage], None]]
-    _stream_sinks: dict[bytes, _StreamSink | None]
+    _stream_sinks: dict[bytes, _StreamSink]
+    _retired_streams: deque[bytes]
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
@@ -544,6 +547,7 @@ class VehicleBluetooth(
         }
         self._broadcast_watchers = {}
         self._stream_sinks = {}
+        self._retired_streams = deque(maxlen=_STREAM_TOMBSTONE_MAXSIZE)
         self._init_broadcast_listeners()
         self.device = device
         self._connect_lock = asyncio.Lock()
@@ -730,15 +734,15 @@ class VehicleBluetooth(
                     self._dispatch_status_listeners(status)
             return
 
-        if msg.request_uuid in self._stream_sinks:
-            sink = self._stream_sinks[msg.request_uuid]
-            if sink is None:
-                LOGGER.debug(f"Dropping push for retired subscription: {msg}")
-                return
+        sink = self._stream_sinks.get(msg.request_uuid)
+        if sink is not None:
             if msg.HasField("protobuf_message_as_bytes"):
                 LOGGER.debug(f"Received subscription push: {msg}")
                 sink.put(msg)
                 return
+        elif msg.request_uuid in self._retired_streams:
+            LOGGER.debug(f"Dropping push for retired subscription: {msg}")
+            return
 
         queue = self._queues.get(msg.from_destination.domain)
         if queue is None:
@@ -756,12 +760,18 @@ class VehicleBluetooth(
     def _register_stream_sink(self, request_uuid: bytes) -> _StreamSink:
         """Start routing pushes for ``request_uuid`` into their own sink."""
         sink = _StreamSink()
+        try:
+            self._retired_streams.remove(request_uuid)
+        except ValueError:
+            pass
         self._stream_sinks[request_uuid] = sink
         return sink
 
     def _unregister_stream_sink(self, request_uuid: bytes) -> None:
         """Retire ``request_uuid`` so delayed pushes are dropped."""
-        self._stream_sinks[request_uuid] = None
+        self._stream_sinks.pop(request_uuid, None)
+        if request_uuid not in self._retired_streams:
+            self._retired_streams.append(request_uuid)
 
     async def _send_with_stream_sink(
         self,
