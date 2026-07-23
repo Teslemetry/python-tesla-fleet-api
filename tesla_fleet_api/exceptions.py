@@ -414,6 +414,31 @@ class SignedCommandRequired(TeslaFleetError):
     )
 
 
+class SessionInfoAuthenticationFault(TeslaFleetError):
+    """A ``session_info`` reply failed local authentication and was discarded.
+
+    Raised when the reply's ``session_info_tag`` HMAC does not verify, is
+    absent, the echoed ``request_uuid`` does not match the outstanding
+    request it claims to answer, or its clock time regresses within the same
+    epoch. The session's prior state is left unmodified.
+    """
+
+    message = "Session info reply failed authentication and was discarded."
+
+
+class SignedCommandResponseReplayed(TeslaFleetError):
+    """A signed command response reused a counter value already seen on this session.
+
+    protocol.md requires rejecting a response whose counter has previously
+    been used, to prevent an attacker from replaying a captured encrypted
+    response back at the client.
+    """
+
+    message = (
+        "Signed command response reused an already-seen counter; discarded as a replay."
+    )
+
+
 class TeslaFleetInformationFault(TeslaFleetError):
     """Vehicle has responded with an error when sending a signed command"""
 

@@ -46,5 +46,5 @@ class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
                 base64.b64encode(msg.SerializeToString()).decode()
             )
             resp = RoutableMessage.FromString(base64.b64decode(json["response"]))
-            self.validate_msg(resp)
+            self.validate_msg(resp, msg.uuid)
             return resp
