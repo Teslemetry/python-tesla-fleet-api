@@ -182,9 +182,7 @@ class StreamSinkQueueCollisionTests(IsolatedAsyncioTestCase):
             vehicle._register_stream_sink(request_uuid)
             vehicle._unregister_stream_sink(request_uuid)
 
-        self.assertEqual(
-            len(vehicle._retired_streams), vehicle._retired_streams.maxlen
-        )
+        self.assertEqual(len(vehicle._retired_streams), vehicle._retired_streams.maxlen)
         self.assertNotIn(retired[0], vehicle._retired_streams)
         self.assertIn(retired[-1], vehicle._retired_streams)
 
