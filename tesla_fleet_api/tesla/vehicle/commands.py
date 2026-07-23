@@ -26,6 +26,8 @@ from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
     NotOnWhitelistFault,
+    SessionInfoAuthenticationFault,
+    SignedCommandResponseReplayed,
     TeslaFleetError,
     # TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
@@ -315,6 +317,9 @@ class Session(Generic[CommandParentT]):
         self.sharedKey: bytes | None = None
         self.hmac: bytes | None = None
         self.publicKey: bytes | None = None
+        self.session_info_key: bytes | None = None
+        self.last_response_counter: int | None = None
+        self._last_authenticated_clock_time: int | None = None
         self.lock: Lock = Lock()
 
     @property
@@ -324,18 +329,59 @@ class Session(Generic[CommandParentT]):
             self.epoch is not None and self.hmac is not None and self.delta is not None
         )
 
-    def update(self, sessionInfo: SessionInfo):
-        """Update the session with new information"""
+    def keys_for(self, vehicle_public_key: bytes) -> tuple[bytes, bytes, bytes]:
+        """Derive (shared_key, command_hmac_key, session_info_key) for a candidate vehicle public key.
 
-        self.counter = sessionInfo.counter
-        self.epoch = sessionInfo.epoch
-        self.delta = int(time.time()) - sessionInfo.clock_time
-        if not self.ready or self.publicKey != sessionInfo.publicKey:
-            self.publicKey = sessionInfo.publicKey
-            self.sharedKey = self.parent.shared_key(sessionInfo.publicKey)
-            self.hmac = hmac.new(
-                self.sharedKey, "authenticated command".encode(), hashlib.sha256
-            ).digest()
+        Pure and side-effect free - it does not touch any session state, so a
+        caller must authenticate a reply against the returned keys before
+        deciding whether to commit them via ``commit()``.
+        """
+        shared_key = self.parent.shared_key(vehicle_public_key)
+        hmac_key = hmac.new(
+            shared_key, "authenticated command".encode(), hashlib.sha256
+        ).digest()
+        session_info_key = hmac.new(
+            shared_key, "session info".encode(), hashlib.sha256
+        ).digest()
+        return shared_key, hmac_key, session_info_key
+
+    def commit(
+        self,
+        session_info: SessionInfo,
+        shared_key: bytes,
+        hmac_key: bytes,
+        session_info_key: bytes,
+    ) -> bool:
+        """Commit an already-authenticated SessionInfo plus its ``keys_for`` result.
+
+        The anti-replay counter never rolls back within the same epoch, and a
+        clock time that regresses within the same epoch marks the reply as
+        stale/replayed - returns False without mutating any state so the
+        caller can discard it.
+        """
+        same_epoch = self.epoch is not None and self.epoch == session_info.epoch
+        if (
+            same_epoch
+            and self._last_authenticated_clock_time is not None
+            and session_info.clock_time < self._last_authenticated_clock_time
+        ):
+            return False
+
+        self.counter = (
+            max(self.counter, session_info.counter)
+            if same_epoch
+            else session_info.counter
+        )
+        self.epoch = session_info.epoch
+        self.delta = int(time.time()) - session_info.clock_time
+        self._last_authenticated_clock_time = session_info.clock_time
+        self.publicKey = session_info.publicKey
+        self.sharedKey = shared_key
+        self.hmac = hmac_key
+        self.session_info_key = session_info_key
+        if not same_epoch:
+            self.last_response_counter = None
+        return True
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
         """Sign a command and return session metadata"""
@@ -429,21 +475,86 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         """
         raise NotImplementedError
 
-    def validate_msg(self, msg: RoutableMessage) -> None:
-        """Validate the message."""
+    def validate_msg(self, msg: RoutableMessage, request_uuid: bytes) -> None:
+        """Validate the message.
+
+        ``request_uuid`` is the uuid of the outstanding request ``msg``
+        answers; it authenticates any piggy-backed ``session_info`` as the
+        TAG_CHALLENGE bound into that reply's HMAC tag before any field of it
+        is trusted.
+        """
         if msg.session_info:
-            info = SessionInfo.FromString(msg.session_info)
-            if (
-                info.status
-                == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST
-            ):
-                raise NotOnWhitelistFault
-            self._sessions[msg.from_destination.domain].update(info)
+            self._authenticate_session_info(msg, request_uuid)
 
         if msg.signedMessageStatus.signed_message_fault > 0:
             exception = MESSAGE_FAULTS[msg.signedMessageStatus.signed_message_fault]
             if exception:
                 raise exception
+
+    def _authenticate_session_info(
+        self, msg: RoutableMessage, request_uuid: bytes
+    ) -> None:
+        """Authenticate and commit a piggy-backed ``SessionInfo`` reply.
+
+        A ``SessionInfo`` is untrusted wire data until its ``session_info_tag``
+        is verified: the tag is an HMAC over the exact bytes received, keyed
+        by a key derived from the *candidate* vehicle public key carried
+        inside that same ``SessionInfo``, and bound to this request's
+        ``request_uuid`` as a challenge - so a captured older reply can't be
+        replayed against a newer request. Only once that tag checks out do we
+        act on anything the message claims, including its own whitelist
+        status, and even then ``Session.commit`` still refuses a clock time
+        that regresses within the same epoch.
+
+        VCSEC typically leaves the wire-level ``request_uuid`` field empty on
+        real hardware (memory constraints) - its absence must never be
+        treated as a rejection. Only cross-check the echo when the vehicle
+        chose to populate it.
+        """
+        if msg.request_uuid and msg.request_uuid != request_uuid:
+            raise SessionInfoAuthenticationFault(
+                "Session info reply does not match an outstanding request."
+            )
+
+        session = self._sessions[msg.from_destination.domain]
+        info = SessionInfo.FromString(msg.session_info)
+        shared_key, hmac_key, session_info_key = session.keys_for(info.publicKey)
+
+        tag = msg.signature_data.session_info_tag.tag
+        if not tag:
+            raise SessionInfoAuthenticationFault(
+                "Session info reply is missing its authentication tag."
+            )
+
+        metadata = bytes(
+            [
+                Tag.TAG_SIGNATURE_TYPE,
+                1,
+                SignatureType.SIGNATURE_TYPE_HMAC,
+                Tag.TAG_PERSONALIZATION,
+                17,
+                *self.vin.encode(),
+                Tag.TAG_CHALLENGE,
+                len(request_uuid),
+                *request_uuid,
+                Tag.TAG_END,
+            ]
+        )
+        expected_tag = hmac.new(
+            session_info_key, metadata + msg.session_info, hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(expected_tag, tag):
+            raise SessionInfoAuthenticationFault(
+                "Session info reply failed authentication (invalid tag)."
+            )
+
+        if info.status == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST:
+            raise NotOnWhitelistFault
+
+        if not session.commit(info, shared_key, hmac_key, session_info_key):
+            raise SessionInfoAuthenticationFault(
+                "Session info reply is stale (clock regressed within the same epoch)."
+            )
 
     async def _command(
         self,
@@ -537,6 +648,13 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 else:
                     raise ValueError("Invalid request signature data")
 
+                response_counter = resp.signature_data.AES_GCM_Response_data.counter
+                if (
+                    session.last_response_counter is not None
+                    and response_counter <= session.last_response_counter
+                ):
+                    raise SignedCommandResponseReplayed
+
                 metadata = bytes(
                     [
                         Tag.TAG_SIGNATURE_TYPE,
@@ -579,6 +697,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     + resp.signature_data.AES_GCM_Response_data.tag,
                     aad.finalize(),
                 )
+                session.last_response_counter = response_counter
 
             if resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
                 try:

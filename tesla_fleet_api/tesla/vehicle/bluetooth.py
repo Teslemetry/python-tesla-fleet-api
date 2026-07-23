@@ -829,7 +829,7 @@ class VehicleBluetooth(
                     resp = await self._queues[domain].get()
                     LOGGER.debug(f"Received message {resp}")
 
-                    self.validate_msg(resp)
+                    self.validate_msg(resp, msg.uuid)
 
                     if resp.HasField(requires):
                         return resp
@@ -850,7 +850,7 @@ class VehicleBluetooth(
                                 while True:
                                     resp2 = await self._queues[domain].get()
                                     LOGGER.debug(f"Received follow-up message {resp2}")
-                                    self.validate_msg(resp2)
+                                    self.validate_msg(resp2, msg.uuid)
                                     if resp2.HasField(requires):
                                         return resp2
                         except TimeoutError:
