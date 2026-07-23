@@ -470,6 +470,9 @@ Available BLE state readers:
 - `light_show_state()`
 - `suspension_state()`
 - `child_presence_detection_state()`
+- `vehicle_image_state()` (paged image bytes; see
+  [Vehicle Image State](fleet_api_signed_commands.md#vehicle-image-state) for
+  its shared BLE/Fleet signed-command contract)
 
 For explicit composite requests, use `vehicle_data(endpoints)` with
 `BluetoothVehicleData` values:

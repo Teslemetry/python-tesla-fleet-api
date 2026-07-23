@@ -1005,7 +1005,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         ``_getInfotainment``.
         """
         if (
-            not isinstance(chunk_size, int)
+            not isinstance(chunk_size, int)  # pyright: ignore[reportUnnecessaryIsInstance]
             or isinstance(chunk_size, bool)
             or chunk_size <= 0
         ):
@@ -1054,9 +1054,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     )
                 )
             )
-            asset_data = (
-                chunk_reply.vehicle_image_state.vehicle_images[0].asset_data
-            )
+            asset_data = chunk_reply.vehicle_image_state.vehicle_images[0].asset_data
             if asset_data.start_offset != offset:
                 raise ValueError(
                     f"Unexpected vehicle image chunk offset "

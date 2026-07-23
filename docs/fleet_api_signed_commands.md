@@ -190,6 +190,24 @@ state after the call instead of relying on the number of send attempts.
 `adjust_volume(volume)` accepts absolute volume values from `0.0` through
 `11.0`, matching the Fleet API command validation.
 
+## Vehicle Image State
+
+`vehicle_image_state(image_type, *, chunk_size=16384)` retrieves a rendered
+vehicle image over the signed-command channel and returns its assembled
+`bytes`. It is available on both `VehicleSigned` and `VehicleBluetooth`.
+
+```python
+from tesla_fleet_api.const import VehicleImageType
+
+image = await vehicle.vehicle_image_state(
+    VehicleImageType.AUTOPILOT_VISUALIZATION_WRAP
+)
+```
+
+Use `VehicleImageType.LICENSE_PLATE` for the license-plate placement image.
+The method first reads the image's declared size, then requests and reassembles
+the data in `chunk_size` pages. `chunk_size` must be a positive integer.
+
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each signed command's

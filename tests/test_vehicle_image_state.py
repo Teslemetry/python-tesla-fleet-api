@@ -35,9 +35,7 @@ def _image_state_reply(
             vehicle_images=[
                 VehicleImage(
                     total_image_size=total_size,
-                    asset_data=VehicleImageData(
-                        data=data, start_offset=start_offset
-                    ),
+                    asset_data=VehicleImageData(data=data, start_offset=start_offset),
                 )
             ]
         )
@@ -136,9 +134,7 @@ class VehicleImageStateTests(MockedBleTransportTestCase):
         send.side_effect = [
             infotainment_vehicle_data_reply(_image_state_reply(total_size=4)),
             infotainment_vehicle_data_reply(
-                _image_state_reply(
-                    total_size=4, data=b"abcd", start_offset=1
-                )
+                _image_state_reply(total_size=4, data=b"abcd", start_offset=1)
             ),
         ]
 
