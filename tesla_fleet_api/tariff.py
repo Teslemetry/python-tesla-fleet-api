@@ -412,12 +412,18 @@ def _next_resolvable(tariff: Mapping[str, Any], moment: datetime) -> datetime | 
     """
     today = moment.date()
     seasons = tariff.get("seasons")
-    _, buy_windows, _ = _season_windows(seasons, today)
+    _, buy_windows, season_dates = _season_windows(seasons, today)
     if buy_windows:
         now_mow = _minute_of_week(moment)
         _, until = _inactive_window_offsets(now_mow, buy_windows)
         moment_floor = moment.replace(second=0, microsecond=0)
-        return moment_floor + timedelta(minutes=until)
+        next_window = moment_floor + timedelta(minutes=until)
+        if season_dates is None:
+            return next_window
+        season_end = datetime.combine(
+            season_dates[1], datetime.min.time(), tzinfo=moment.tzinfo
+        )
+        return min(next_window, season_end)
     boundary = _adjacent_season_dates(seasons, today)
     if boundary is None:
         return None

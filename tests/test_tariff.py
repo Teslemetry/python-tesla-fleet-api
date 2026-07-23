@@ -551,6 +551,49 @@ class SparsePeriodTests(TestCase):
         self.assertIsNone(gap_segment.buy.price)
         self.assertEqual(gap_segment.end, datetime(2026, 8, 1, tzinfo=TZ))
 
+    def test_season_transition_precedes_next_weekly_window(self):
+        tariff = {
+            "currency": "AUD",
+            "energy_charges": {
+                "Early": {"rates": {"WEEKEND": 0.1}},
+                "Late": {"rates": {"ALL": 0.2}},
+            },
+            "seasons": {
+                "Early": _season_geometry(
+                    7,
+                    1,
+                    7,
+                    29,
+                    {
+                        "WEEKEND": {
+                            "periods": [{"fromDayOfWeek": 5, "toDayOfWeek": 6}]
+                        }
+                    },
+                ),
+                "Late": _season_geometry(
+                    7, 30, 8, 31, {"ALL": {"periods": [{"toDayOfWeek": 6}]}}
+                ),
+            },
+        }
+        now = datetime(2026, 7, 26, 12, 0, tzinfo=TZ)
+        result = get_tariff_periods(tariff, now, horizon_hours=24 * 7)
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.upcoming)
+        late_season = next(
+            period
+            for period in result.upcoming
+            if period.buy.season_name == "Late"
+        )
+        self.assertEqual(late_season.start, datetime(2026, 7, 30, tzinfo=TZ))
+        self.assertEqual(late_season.buy.price, 0.2)
+        gap = next(
+            period
+            for period in result.upcoming
+            if period.start == datetime(2026, 7, 27, tzinfo=TZ)
+        )
+        self.assertEqual(gap.end, late_season.start)
+
 
 class UncoveredSeasonGapTests(TestCase):
     """A tariff whose only season covers part of the year (a real gap the

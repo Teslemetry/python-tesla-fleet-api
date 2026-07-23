@@ -5,6 +5,7 @@ tesla_fleet_api/__init__.py
 tesla_fleet_api/const.py
 tesla_fleet_api/exceptions.py
 tesla_fleet_api/py.typed
+tesla_fleet_api/tariff.py
 tesla_fleet_api/util.py
 tesla_fleet_api.egg-info/PKG-INFO
 tesla_fleet_api.egg-info/SOURCES.txt
@@ -91,6 +92,7 @@ tests/test_proto_compatibility.py
 tests/test_proto_coverage_lock.py
 tests/test_router.py
 tests/test_session_info_authentication.py
+tests/test_tariff.py
 tests/test_tesla_private_key.py
 tests/test_teslemetry_authorized_clients.py
 tests/test_teslemetry_gateway_address.py
