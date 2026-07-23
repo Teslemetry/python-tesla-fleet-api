@@ -2,6 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import struct
+from collections import deque
 from random import randbytes
 from typing import (
     Any,
@@ -308,6 +309,8 @@ def _log_command_error(name: str, transport: str, exc: BaseException) -> None:
 class Session(Generic[CommandParentT]):
     """A connect to a domain"""
 
+    _response_counter_cache_size = 256
+
     def __init__(self, parent: Commands[CommandParentT], domain: Domain):
         self.parent: Commands[CommandParentT] = parent
         self.domain: Domain = domain
@@ -318,7 +321,9 @@ class Session(Generic[CommandParentT]):
         self.hmac: bytes | None = None
         self.publicKey: bytes | None = None
         self.session_info_key: bytes | None = None
-        self.response_counters: set[tuple[bytes, int]] = set()
+        self.response_counters: deque[tuple[bytes, int]] = deque(
+            maxlen=self._response_counter_cache_size
+        )
         self._last_authenticated_clock_time: int | None = None
         self.lock: Lock = Lock()
 
@@ -381,6 +386,14 @@ class Session(Generic[CommandParentT]):
         self.session_info_key = session_info_key
         if not same_epoch:
             self.response_counters.clear()
+        return True
+
+    def record_response_counter(self, request_hash: bytes, counter: int) -> bool:
+        """Record an authenticated response counter if it has not been seen."""
+        identity = (request_hash, counter)
+        if identity in self.response_counters:
+            return False
+        self.response_counters.append(identity)
         return True
 
     def hmac_personalized(self) -> HMAC_Personalized_Signature_Data:
@@ -692,10 +705,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     + resp.signature_data.AES_GCM_Response_data.tag,
                     aad.finalize(),
                 )
-                response_identity = (request_hash, response_counter)
-                if response_identity in session.response_counters:
+                if not session.record_response_counter(
+                    request_hash, response_counter
+                ):
                     raise SignedCommandResponseReplayed
-                session.response_counters.add(response_identity)
 
             if resp.from_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
                 try:

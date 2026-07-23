@@ -579,6 +579,19 @@ class ResponseCounterReplayTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual({counter for _, counter in session.response_counters}, {8, 9})
 
+    def test_response_counter_cache_is_bounded(self) -> None:
+        _, session = self._make_aes_commands()
+
+        for counter in range(session._response_counter_cache_size + 1):
+            self.assertTrue(
+                session.record_response_counter(counter.to_bytes(2), counter)
+            )
+
+        self.assertEqual(
+            len(session.response_counters), session._response_counter_cache_size
+        )
+        self.assertNotIn((b"\x00\x00", 0), session.response_counters)
+
 
 def _make_ble_vehicle() -> VehicleBluetooth[Any]:
     """A VehicleBluetooth with the real handshake/_send state machine but a faked GATT client."""
