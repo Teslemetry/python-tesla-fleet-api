@@ -164,7 +164,9 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     today = moment.date()
     now_mow = _minute_of_week(moment)
 
-    buy_season_name, buy_windows = _season_windows(tariff.get("seasons"), today)
+    buy_season_name, buy_windows, buy_season_dates = _season_windows(
+        tariff.get("seasons"), today
+    )
     if buy_season_name is None:
         return None
     buy_match = _match_window(buy_windows, now_mow)
@@ -181,10 +183,11 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
 
     sell_rate = TariffRate(price=None, period_name=None, season_name=None)
     sell_windows: list[tuple[str, int, int]] = []
+    sell_season_dates: tuple[date, date] | None = None
     sell_tariff = tariff.get("sell_tariff")
     if isinstance(sell_tariff, dict):
         sell_tariff = cast("dict[str, Any]", sell_tariff)
-        sell_season_name, sell_windows = _season_windows(
+        sell_season_name, sell_windows, sell_season_dates = _season_windows(
             sell_tariff.get("seasons"), today
         )
         if sell_season_name is not None:
@@ -207,11 +210,23 @@ def _resolve_at(tariff: Mapping[str, Any], moment: datetime) -> _Resolved | None
     since_delta, until_delta = _bracket(now_mow, starts)
 
     moment_floor = moment.replace(second=0, microsecond=0)
+    current_start = moment_floor - timedelta(minutes=since_delta)
+    next_change = moment_floor + timedelta(minutes=until_delta)
+    for season_dates in (buy_season_dates, sell_season_dates):
+        if season_dates is None:
+            continue
+        season_start, season_end = (
+            datetime.combine(boundary, datetime.min.time(), tzinfo=moment.tzinfo)
+            for boundary in season_dates
+        )
+        current_start = max(current_start, season_start)
+        next_change = min(next_change, season_end)
+
     return _Resolved(
         buy=buy_rate,
         sell=sell_rate,
-        current_start=moment_floor - timedelta(minutes=since_delta),
-        next_change=moment_floor + timedelta(minutes=until_delta),
+        current_start=current_start,
+        next_change=next_change,
     )
 
 
@@ -247,14 +262,14 @@ def _season_covers(season: Mapping[str, Any], today: date) -> bool:
 
 def _season_windows(
     seasons: Any, today: date
-) -> tuple[str | None, list[tuple[str, int, int]]]:
+) -> tuple[str | None, list[tuple[str, int, int]], tuple[date, date] | None]:
     """Find the season covering ``today`` and expand its period grid.
 
     Skips seasons with no ``tou_periods`` (an empty ``{}`` season object is
     legal and present in real tariffs, e.g. an unused "Winter").
     """
     if not isinstance(seasons, dict):
-        return None, []
+        return None, [], None
     for name, season in cast("dict[str, Any]", seasons).items():
         if not isinstance(season, dict):
             continue
@@ -263,8 +278,32 @@ def _season_windows(
         if not isinstance(periods, dict) or not periods:
             continue
         if _season_covers(season, today):
-            return name, _expand_periods(cast("dict[str, Any]", periods))
-    return None, []
+            return (
+                name,
+                _expand_periods(cast("dict[str, Any]", periods)),
+                _season_dates(season, today),
+            )
+    return None, [], None
+
+
+def _season_dates(season: Mapping[str, Any], today: date) -> tuple[date, date]:
+    start_month = _as_int(season.get("fromMonth"), 0)
+    start_day = _as_int(season.get("fromDay"), 0)
+    end_month = _as_int(season.get("toMonth"), 0)
+    end_day = _as_int(season.get("toDay"), 0)
+    start_fields = (start_month, start_day)
+    end_fields = (end_month, end_day)
+
+    if start_fields <= end_fields:
+        start_year = end_year = today.year
+    elif (today.month, today.day) >= start_fields:
+        start_year, end_year = today.year, today.year + 1
+    else:
+        start_year, end_year = today.year - 1, today.year
+
+    start = date(start_year, start_month, start_day)
+    end = date(end_year, end_month, end_day) + timedelta(days=1)
+    return start, end
 
 
 def _expand_periods(tou_periods: Mapping[str, Any]) -> list[tuple[str, int, int]]:

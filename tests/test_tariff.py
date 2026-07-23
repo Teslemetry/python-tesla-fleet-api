@@ -193,6 +193,26 @@ class SeasonYearCrossTests(TestCase):
         self.assertEqual(result.buy.season_name, "Winter")
         self.assertEqual(result.buy.price, 0.2)
 
+    def test_season_boundary_delimits_period_and_upcoming(self):
+        now = datetime(2026, 3, 31, 23, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now, horizon_hours=2)
+
+        self.assertIsNotNone(result)
+        boundary = datetime(2026, 4, 1, tzinfo=TZ)
+        self.assertEqual(result.next_change, boundary)
+        self.assertIsNotNone(result.upcoming)
+        self.assertEqual(result.upcoming[0].end, boundary)
+        self.assertEqual(result.upcoming[1].start, boundary)
+        self.assertEqual(result.upcoming[1].buy.season_name, "Winter")
+        self.assertEqual(result.upcoming[1].buy.price, 0.2)
+
+    def test_season_start_delimits_current_period(self):
+        now = datetime(2026, 4, 1, 1, 0, tzinfo=TZ)
+        result = get_tariff_periods(self._tariff(), now)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.current_start, datetime(2026, 4, 1, tzinfo=TZ))
+
 
 class DayOfWeekWrapTests(TestCase):
     """A period spanning Friday -> Monday (a long-weekend rate) must wrap
