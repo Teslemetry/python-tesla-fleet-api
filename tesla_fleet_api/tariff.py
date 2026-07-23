@@ -1,10 +1,10 @@
 """Pure, offline resolver for the Tesla Energy Tariff V2 (time-of-use) object.
 
-Consumes the raw ``tariff_content_v2`` object as returned by
-``EnergySite.site_info()`` (nested under ``tou_settings``) - there is no
-typed model for it elsewhere in this library. Everything here is a pure
-function over caller-supplied data: no I/O, no network, no vehicle/VPP
-access.
+Consumes the raw ``tariff_content_v2`` object returned in
+``EnergySite.site_info()`` responses or accepted under ``tou_settings`` when
+writing time-of-use settings. There is no typed model for it elsewhere in this
+library. Everything here is a pure function over caller-supplied data: no I/O,
+no network, no vehicle/VPP access.
 """
 
 from __future__ import annotations
@@ -63,8 +63,9 @@ def unwrap_tariff_v2(response: Any) -> dict[str, Any]:
     (``{"tou_settings": {"tariff_content_v2": {...}}}``), or the bare
     ``tariff_content_v2`` object itself. Raises
     :class:`~tesla_fleet_api.exceptions.InvalidResponse` for a null body or
-    any shape that doesn't carry a ``tariff_content_v2`` dict - a malformed
-    body is not the same as "no tariff configured".
+    an unrecognized envelope or a bare object without the minimal Tariff V2
+    shape (``seasons`` and ``energy_charges``) - a malformed body is not the
+    same as "no tariff configured".
     """
     if response is None:
         raise InvalidResponse("tariff response body was null")
