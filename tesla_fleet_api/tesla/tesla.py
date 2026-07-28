@@ -153,7 +153,8 @@ class Tesla:
         the create race, its file is read instead of raising.
         """
         if not exists(path):
-            self.rsa_private_key = rsa.generate_private_key(
+            self.rsa_private_key = await asyncio.to_thread(
+                rsa.generate_private_key,
                 public_exponent=65537,
                 key_size=key_size,
                 backend=default_backend(),

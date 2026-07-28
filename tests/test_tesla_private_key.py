@@ -258,3 +258,40 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
                 await writer
 
             self.assertEqual(_rsa_pem(key), _rsa_pem(winner_key))
+
+    async def test_generation_does_not_block_the_event_loop(self) -> None:
+        """A concurrent heartbeat must keep ticking while the key is generated.
+
+        Generation blocks a real OS thread (started via ``asyncio.to_thread``),
+        not the event loop, so a plain time.sleep stand-in for the CPU-bound
+        call proves the loop stays responsive.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            real_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+
+            def slow_generate(*args: object, **kwargs: object) -> rsa.RSAPrivateKey:
+                import time as time_module
+
+                time_module.sleep(0.3)
+                return real_key
+
+            ticks = 0
+
+            async def heartbeat() -> None:
+                nonlocal ticks
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks += 1
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.rsa.generate_private_key",
+                side_effect=slow_generate,
+            ):
+                heart = asyncio.create_task(heartbeat())
+                try:
+                    await Tesla().get_rsa_private_key(path, key_size=1024)
+                finally:
+                    heart.cancel()
+
+            self.assertGreater(ticks, 5)
