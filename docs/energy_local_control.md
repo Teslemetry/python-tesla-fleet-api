@@ -28,10 +28,11 @@ key you will register with the gateway and later hand to `aiopowerwall`.
 
 Creating a new key uses a worker process so RSA generation does not block the
 asyncio event loop. Call it from a script or module with a spawn-safe entry
-point (guard application startup with `if __name__ == "__main__":`). Key
-generation is not supported directly from a REPL, `python -c`, or a notebook
-cell; loading an existing key file does not start a worker process and works in
-those environments.
+point (guard application startup with `if __name__ == "__main__":`) when
+possible. If the worker process cannot start, including from a REPL,
+`python -c`, or a notebook cell, generation falls back to the current process
+and logs a warning that the asyncio event loop may be blocked. Loading an
+existing key file does not start a worker process.
 
 ## 2. Register the key with the gateway, over the cloud
 
