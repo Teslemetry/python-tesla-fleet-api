@@ -4,6 +4,8 @@ import base64
 import asyncio
 import os
 import time
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from os.path import exists
 import aiofiles
 
@@ -20,6 +22,23 @@ from cryptography.hazmat.backends import default_backend
 
 _KEY_READ_RETRY_TIMEOUT = 1.0
 _KEY_READ_RETRY_INTERVAL = 0.05
+_RSA_KEY_GENERATION_EXECUTOR = ProcessPoolExecutor(
+    max_workers=1, mp_context=get_context("spawn")
+)
+
+
+def _generate_rsa_private_key_pem(key_size: int) -> bytes:
+    """Generate an RSA key outside the main process and return serialized material."""
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+        backend=default_backend(),
+    )
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
 
 
 def _owner_only_opener(file: str, flags: int) -> int:
@@ -153,17 +172,17 @@ class Tesla:
         the create race, its file is read instead of raising.
         """
         if not exists(path):
-            self.rsa_private_key = await asyncio.to_thread(
-                rsa.generate_private_key,
-                public_exponent=65537,
-                key_size=key_size,
-                backend=default_backend(),
+            pem = await asyncio.get_running_loop().run_in_executor(
+                _RSA_KEY_GENERATION_EXECUTOR,
+                _generate_rsa_private_key_pem,
+                key_size,
             )
-            pem = self.rsa_private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption(),
+            value = serialization.load_pem_private_key(
+                pem, password=None, backend=default_backend()
             )
+            if not isinstance(value, rsa.RSAPrivateKey):
+                raise AssertionError("Generated key is not an RSAPrivateKey")
+            self.rsa_private_key = value
             try:
                 async with aiofiles.open(
                     path, "wb", opener=_owner_only_opener
