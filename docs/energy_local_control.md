@@ -26,6 +26,13 @@ inherits it - `TeslaFleetApi`, `Teslemetry`, `Tessie`) loads an existing RSA
 private key or creates a new 4096-bit unencrypted PEM key file. This is the
 key you will register with the gateway and later hand to `aiopowerwall`.
 
+Creating a new key uses a worker process so RSA generation does not block the
+asyncio event loop. Call it from a script or module with a spawn-safe entry
+point (guard application startup with `if __name__ == "__main__":`). Key
+generation is not supported directly from a REPL, `python -c`, or a notebook
+cell; loading an existing key file does not start a worker process and works in
+those environments.
+
 ## 2. Register the key with the gateway, over the cloud
 
 `EnergySite.add_authorized_client` registers the public half of that key with
