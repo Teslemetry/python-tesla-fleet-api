@@ -53,18 +53,20 @@ async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, b
     `python -c`, or a notebook cell - surfaced here as a clear error instead of
     an opaque BrokenProcessPool.
     """
-    with ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn")) as pool:
-        try:
-            pem = await asyncio.get_running_loop().run_in_executor(
-                pool, _generate_rsa_private_key_pem, key_size
-            )
-        except BrokenProcessPool as err:
-            raise RuntimeError(
-                "RSA key generation requires a subprocess-spawnable entry "
-                "point (a script or module guarded by "
-                "`if __name__ == '__main__':`); it cannot run from a REPL, "
-                "`python -c`, or a notebook cell."
-            ) from err
+    pool = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
+    try:
+        pem = await asyncio.get_running_loop().run_in_executor(
+            pool, _generate_rsa_private_key_pem, key_size
+        )
+    except BrokenProcessPool as err:
+        raise RuntimeError(
+            "RSA key generation requires a subprocess-spawnable entry "
+            "point (a script or module guarded by "
+            "`if __name__ == '__main__':`); it cannot run from a REPL, "
+            "`python -c`, or a notebook cell."
+        ) from err
+    finally:
+        await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=True)
     value = await asyncio.to_thread(
         serialization.load_pem_private_key,
         pem,

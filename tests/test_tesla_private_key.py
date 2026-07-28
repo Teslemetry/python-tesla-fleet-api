@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import stat
 import os
+import stat
 import tempfile
+import threading
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, mock
@@ -332,18 +333,50 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
 
             self.assertGreater(ticks, 10)
 
+    async def test_cancellation_does_not_block_the_event_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            generation_started = asyncio.Event()
+            shutdown_started = threading.Event()
+            release_shutdown = threading.Event()
+
+            class _SlowPool:
+                def submit(
+                    self, fn: object, *args: object, **kwargs: object
+                ) -> concurrent.futures.Future[bytes]:
+                    future: concurrent.futures.Future[bytes] = (
+                        concurrent.futures.Future()
+                    )
+                    generation_started.set()
+                    return future
+
+                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
+                    shutdown_started.set()
+                    release_shutdown.wait()
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
+                return_value=_SlowPool(),
+            ):
+                task = asyncio.create_task(
+                    Tesla().get_rsa_private_key(path, key_size=1024)
+                )
+                await generation_started.wait()
+                task.cancel()
+                await asyncio.wait_for(
+                    asyncio.to_thread(shutdown_started.wait), timeout=0.1
+                )
+                await asyncio.sleep(0)
+                release_shutdown.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
     async def test_broken_process_pool_raises_clear_error(self) -> None:
         """A spawn-incapable caller (REPL, `python -c`, notebook) gets a clear error."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
 
             class _BrokenPool:
-                def __enter__(self) -> "_BrokenPool":
-                    return self
-
-                def __exit__(self, *exc_info: object) -> bool:
-                    return False
-
                 def submit(
                     self, fn: object, *args: object, **kwargs: object
                 ) -> concurrent.futures.Future[bytes]:
@@ -352,6 +385,9 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
                     )
                     future.set_exception(BrokenProcessPool("boom"))
                     return future
+
+                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
+                    pass
 
             with mock.patch(
                 "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
