@@ -5,6 +5,7 @@ import asyncio
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from multiprocessing import get_context
 from os.path import exists
 import aiofiles
@@ -22,13 +23,15 @@ from cryptography.hazmat.backends import default_backend
 
 _KEY_READ_RETRY_TIMEOUT = 1.0
 _KEY_READ_RETRY_INTERVAL = 0.05
-_RSA_KEY_GENERATION_EXECUTOR = ProcessPoolExecutor(
-    max_workers=1, mp_context=get_context("spawn")
-)
 
 
 def _generate_rsa_private_key_pem(key_size: int) -> bytes:
-    """Generate an RSA key outside the main process and return serialized material."""
+    """Generate an RSA key and serialize it, for use in a worker process.
+
+    cryptography's RSA keygen holds the GIL for its full duration, so a
+    thread (unlike a separate process) would still stall the caller's event
+    loop.
+    """
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=key_size,
@@ -39,6 +42,38 @@ def _generate_rsa_private_key_pem(key_size: int) -> bytes:
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     )
+
+
+async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
+    """Generate an RSA key in a short-lived worker process and return it with its PEM.
+
+    The pool is created fresh per call (not at import time) so importing this
+    module never requires a spawn-safe entry point; only actually generating a
+    key does. `spawn` needs to re-import `__main__`, which fails under a REPL,
+    `python -c`, or a notebook cell - surfaced here as a clear error instead of
+    an opaque BrokenProcessPool.
+    """
+    with ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn")) as pool:
+        try:
+            pem = await asyncio.get_running_loop().run_in_executor(
+                pool, _generate_rsa_private_key_pem, key_size
+            )
+        except BrokenProcessPool as err:
+            raise RuntimeError(
+                "RSA key generation requires a subprocess-spawnable entry "
+                "point (a script or module guarded by "
+                "`if __name__ == '__main__':`); it cannot run from a REPL, "
+                "`python -c`, or a notebook cell."
+            ) from err
+    value = await asyncio.to_thread(
+        serialization.load_pem_private_key,
+        pem,
+        password=None,
+        backend=default_backend(),
+    )
+    if not isinstance(value, rsa.RSAPrivateKey):
+        raise AssertionError("Generated key is not an RSAPrivateKey")
+    return value, pem
 
 
 def _owner_only_opener(file: str, flags: int) -> int:
@@ -172,16 +207,7 @@ class Tesla:
         the create race, its file is read instead of raising.
         """
         if not exists(path):
-            pem = await asyncio.get_running_loop().run_in_executor(
-                _RSA_KEY_GENERATION_EXECUTOR,
-                _generate_rsa_private_key_pem,
-                key_size,
-            )
-            value = serialization.load_pem_private_key(
-                pem, password=None, backend=default_backend()
-            )
-            if not isinstance(value, rsa.RSAPrivateKey):
-                raise AssertionError("Generated key is not an RSAPrivateKey")
+            value, pem = await _generate_rsa_private_key(key_size)
             self.rsa_private_key = value
             try:
                 async with aiofiles.open(

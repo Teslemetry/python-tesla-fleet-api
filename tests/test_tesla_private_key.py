@@ -10,9 +10,11 @@ winner's file instead of raising.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import stat
 import os
 import tempfile
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, mock
 
@@ -176,10 +178,14 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertEqual(mode, 0o600)
 
     async def test_new_key_file_is_owner_only_with_restrictive_umask(self) -> None:
+        # 0o077 (not 0o777, unlike the EC key's equivalent test above): a
+        # fully permission-devoid umask also blocks the multiprocessing
+        # worker's own internal semaphore file, unrelated to this method's
+        # own O_EXCL/fchmod permission handling, which this test targets.
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
             tesla = Tesla()
-            old_umask = os.umask(0o777)
+            old_umask = os.umask(0o077)
             try:
                 await tesla.get_rsa_private_key(path, key_size=1024)
             finally:
@@ -260,7 +266,14 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertEqual(_rsa_pem(key), _rsa_pem(winner_key))
 
     async def test_generation_does_not_block_the_event_loop(self) -> None:
-        """A concurrent heartbeat must keep ticking during real RSA generation."""
+        """A concurrent heartbeat must keep ticking during real RSA generation.
+
+        Generation runs in a separate worker process (a plain
+        ``asyncio.to_thread`` would not do - cryptography's RSA keygen holds
+        the GIL for its full duration, so a thread still stalls the caller's
+        event loop), which is why this uses a real key rather than a mocked
+        stand-in: only genuine process isolation proves the loop stays free.
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
 
@@ -280,3 +293,72 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
 
             self.assertGreater(ticks, 5)
             self.assertEqual(_rsa_pem(key), Path(path).read_bytes())
+
+    async def test_deserialization_does_not_block_the_event_loop(self) -> None:
+        """The post-generation PEM deserialization also must not stall the loop.
+
+        It runs in the main process (via ``asyncio.to_thread``), so unlike
+        generation it can be exercised with a mocked slow stand-in.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            real_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+
+            def slow_load_pem_private_key(
+                *args: object, **kwargs: object
+            ) -> rsa.RSAPrivateKey:
+                import time as time_module
+
+                time_module.sleep(0.15)
+                return real_key
+
+            ticks = 0
+
+            async def heartbeat() -> None:
+                nonlocal ticks
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks += 1
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.serialization.load_pem_private_key",
+                side_effect=slow_load_pem_private_key,
+            ):
+                heart = asyncio.create_task(heartbeat())
+                try:
+                    await Tesla().get_rsa_private_key(path, key_size=1024)
+                finally:
+                    heart.cancel()
+
+            self.assertGreater(ticks, 10)
+
+    async def test_broken_process_pool_raises_clear_error(self) -> None:
+        """A spawn-incapable caller (REPL, `python -c`, notebook) gets a clear error."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            class _BrokenPool:
+                def __enter__(self) -> "_BrokenPool":
+                    return self
+
+                def __exit__(self, *exc_info: object) -> bool:
+                    return False
+
+                def submit(
+                    self, fn: object, *args: object, **kwargs: object
+                ) -> concurrent.futures.Future[bytes]:
+                    future: concurrent.futures.Future[bytes] = (
+                        concurrent.futures.Future()
+                    )
+                    future.set_exception(BrokenProcessPool("boom"))
+                    return future
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
+                return_value=_BrokenPool(),
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertIn("spawn", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, BrokenProcessPool)
