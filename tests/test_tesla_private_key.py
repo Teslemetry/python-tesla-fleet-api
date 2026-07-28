@@ -179,14 +179,14 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertEqual(mode, 0o600)
 
     async def test_new_key_file_is_owner_only_with_restrictive_umask(self) -> None:
-        # 0o077 (not 0o777, unlike the EC key's equivalent test above): a
-        # fully permission-devoid umask also blocks the multiprocessing
-        # worker's own internal semaphore file, unrelated to this method's
-        # own O_EXCL/fchmod permission handling, which this test targets.
+        # Under 0o777 the isolated worker process's own semaphore can't be
+        # created, so this exercises the in-process fallback - which, like
+        # the pre-process-isolation implementation, still produces a correct
+        # owner-only key file.
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
             tesla = Tesla()
-            old_umask = os.umask(0o077)
+            old_umask = os.umask(0o777)
             try:
                 await tesla.get_rsa_private_key(path, key_size=1024)
             finally:
@@ -371,8 +371,15 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
                 with self.assertRaises(asyncio.CancelledError):
                     await task
 
-    async def test_broken_process_pool_raises_clear_error(self) -> None:
-        """A spawn-incapable caller (REPL, `python -c`, notebook) gets a clear error."""
+    async def test_broken_process_pool_falls_back_to_in_process_generation(
+        self,
+    ) -> None:
+        """A spawn-incapable caller (REPL, `python -c`, notebook) still succeeds.
+
+        It falls back to in-process generation with a logged warning instead
+        of raising, matching the pre-process-isolation behavior these
+        environments already relied on.
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
 
@@ -389,12 +396,39 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
                 def shutdown(self, wait: bool, cancel_futures: bool) -> None:
                     pass
 
-            with mock.patch(
-                "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
-                return_value=_BrokenPool(),
+            with (
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
+                    return_value=_BrokenPool(),
+                ),
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
             ):
-                with self.assertRaises(RuntimeError) as ctx:
-                    await Tesla().get_rsa_private_key(path, key_size=1024)
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
 
-            self.assertIn("spawn", str(ctx.exception))
-            self.assertIsInstance(ctx.exception.__cause__, BrokenProcessPool)
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated worker process" in message for message in logs.output)
+            )
+
+    async def test_pool_setup_oserror_falls_back_to_in_process_generation(self) -> None:
+        """A restrictive umask (or any other OSError at pool setup) also falls back."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            with (
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
+                    side_effect=PermissionError("boom"),
+                ),
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
+            ):
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated worker process" in message for message in logs.output)
+            )

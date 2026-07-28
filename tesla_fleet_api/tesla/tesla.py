@@ -10,6 +10,7 @@ from multiprocessing import get_context
 from os.path import exists
 import aiofiles
 
+from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites
 from tesla_fleet_api.tesla.partner import Partner
@@ -44,29 +45,47 @@ def _generate_rsa_private_key_pem(key_size: int) -> bytes:
     )
 
 
-async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
-    """Generate an RSA key in a short-lived worker process and return it with its PEM.
+async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
+    """Generate an RSA key's PEM in a short-lived worker process.
 
     The pool is created fresh per call (not at import time) so importing this
     module never requires a spawn-safe entry point; only actually generating a
-    key does. `spawn` needs to re-import `__main__`, which fails under a REPL,
-    `python -c`, or a notebook cell - surfaced here as a clear error instead of
-    an opaque BrokenProcessPool.
+    key does. Raises `BrokenProcessPool`/`OSError` if the worker process or
+    its synchronization primitives can't start - e.g. `spawn` needs to
+    re-import `__main__`, which fails under a REPL, `python -c`, or a
+    notebook cell, or a restrictive umask blocks the pool's own semaphore
+    file - so the caller can fall back to in-process generation.
     """
     pool = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
     try:
-        pem = await asyncio.get_running_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             pool, _generate_rsa_private_key_pem, key_size
         )
-    except BrokenProcessPool as err:
-        raise RuntimeError(
-            "RSA key generation requires a subprocess-spawnable entry "
-            "point (a script or module guarded by "
-            "`if __name__ == '__main__':`); it cannot run from a REPL, "
-            "`python -c`, or a notebook cell."
-        ) from err
     finally:
         await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=True)
+
+
+async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
+    """Generate an RSA key and return it with its PEM.
+
+    Prefers a short-lived worker process so keygen - which holds the GIL for
+    its full duration, unlike a thread - never stalls the caller's event
+    loop. Falls back to in-process generation, which does block the loop,
+    only when the environment can't support that worker process at all (no
+    spawn-importable `__main__`, or a restrictive umask blocking its
+    semaphore) - the same environments this method could already generate
+    keys in before process isolation was introduced.
+    """
+    try:
+        pem = await _generate_rsa_private_key_pem_isolated(key_size)
+    except (BrokenProcessPool, OSError) as err:
+        LOGGER.warning(
+            "RSA key generation could not use an isolated worker process "
+            "(%s); falling back to in-process generation, which will block "
+            "the event loop for the duration of key generation.",
+            err,
+        )
+        pem = await asyncio.to_thread(_generate_rsa_private_key_pem, key_size)
     value = await asyncio.to_thread(
         serialization.load_pem_private_key,
         pem,
