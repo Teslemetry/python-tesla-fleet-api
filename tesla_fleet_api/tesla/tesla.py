@@ -2,11 +2,14 @@
 
 import base64
 import asyncio
+from contextlib import suppress
 import os
+import sys
 import time
 from os.path import exists
 import aiofiles
 
+from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites
 from tesla_fleet_api.tesla.partner import Partner
@@ -20,6 +23,146 @@ from cryptography.hazmat.backends import default_backend
 
 _KEY_READ_RETRY_TIMEOUT = 1.0
 _KEY_READ_RETRY_INTERVAL = 0.05
+
+
+def _generate_rsa_private_key_pem(key_size: int) -> bytes:
+    """Generate an RSA key and serialize it.
+
+    cryptography's RSA keygen holds the GIL for its full duration, so a
+    thread (unlike a separate process) would still stall the caller's event
+    loop; used both as the isolated subprocess's script body and as the
+    in-process fallback.
+    """
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+        backend=default_backend(),
+    )
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+
+_RSA_KEYGEN_SUBPROCESS_SCRIPT = """
+import sys
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+key = rsa.generate_private_key(
+    public_exponent=65537, key_size=int(sys.argv[1]), backend=default_backend()
+)
+sys.stdout.buffer.write(
+    key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+)
+"""
+
+
+async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
+    """Generate an RSA key's PEM in a plain, short-lived `sys.executable -c ...` subprocess.
+
+    Unlike `multiprocessing`, a plain subprocess's `-c` script is its own
+    `__main__` - it never re-imports the caller's actual entry point, so
+    there is nothing to guard, nothing to pickle, no semaphore to create, and
+    no daemonic-process restriction. `asyncio.create_subprocess_exec` is
+    awaited natively, off the loop by construction, including cancellation:
+    killing and awaiting the child's exit are both async, so cancelling the
+    caller can't block the loop either. Raises on any exec, non-zero-exit, or
+    empty-output failure, so the caller can fall back to in-process
+    generation.
+
+    In a frozen bundle (PyInstaller, cx_Freeze, py2exe), `sys.executable` is
+    the application itself, not a Python interpreter - `-c` would relaunch
+    the whole application rather than run this script, which can exit 0
+    without ever emitting a PEM. `sys.frozen` is the de facto marker these
+    freezers all set, so that case is refused up front instead of relying on
+    the empty-output check alone to catch it after the fact.
+    """
+    if getattr(sys, "frozen", False):
+        raise RuntimeError(
+            "sys.executable is a frozen application bundle, not a Python "
+            "interpreter; it cannot run the RSA keygen script"
+        )
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        _RSA_KEYGEN_SUBPROCESS_SCRIPT,
+        str(key_size),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        with suppress(ProcessLookupError):
+            proc.kill()
+        await proc.wait()
+        raise
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"RSA key generation subprocess exited with code {proc.returncode}: "
+            f"{stderr.decode(errors='replace').strip()}"
+        )
+    if not stdout:
+        raise RuntimeError(
+            "RSA key generation subprocess exited successfully but produced no output"
+        )
+    return stdout
+
+
+async def _deserialize_rsa_pem(pem: bytes) -> rsa.RSAPrivateKey:
+    """Deserialize a freshly generated RSA PEM off the event loop.
+
+    A malformed PEM (e.g. from a wrong-but-zero-exit isolated subprocess)
+    raises `ValueError` here rather than being trusted - the caller treats
+    that the same as any other isolation failure and falls back.
+    """
+    value = await asyncio.to_thread(
+        serialization.load_pem_private_key,
+        pem,
+        password=None,
+        backend=default_backend(),
+    )
+    if not isinstance(value, rsa.RSAPrivateKey):
+        raise AssertionError("Generated key is not an RSAPrivateKey")
+    return value
+
+
+async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
+    """Generate an RSA key and return it with its PEM.
+
+    Prefers a short-lived subprocess so keygen - which holds the GIL for its
+    full duration, unlike a thread - never stalls the caller's event loop.
+    Falls back to in-process generation, which does block the loop, whenever
+    that subprocess can't be used - the same environments this method could
+    already generate keys in before process isolation was introduced. The
+    fallback catches any exception from launching, running, or deserializing
+    the subprocess's output, deliberately not enumerated by type, since
+    process isolation is best-effort here and any way it can fail - including
+    producing a PEM that turns out not to deserialize - should degrade to the
+    working (if blocking) legacy path rather than propagate or return bad key
+    material.
+    """
+    try:
+        pem = await _generate_rsa_private_key_pem_isolated(key_size)
+        value = await _deserialize_rsa_pem(pem)
+    except Exception as err:
+        LOGGER.warning(
+            "RSA key generation could not use an isolated subprocess "
+            "(%s: %s); falling back to in-process generation, which will "
+            "block the event loop for the duration of key generation.",
+            type(err).__name__,
+            err,
+        )
+        pem = await asyncio.to_thread(_generate_rsa_private_key_pem, key_size)
+        value = await _deserialize_rsa_pem(pem)
+    return value, pem
 
 
 def _owner_only_opener(file: str, flags: int) -> int:
@@ -153,16 +296,8 @@ class Tesla:
         the create race, its file is read instead of raising.
         """
         if not exists(path):
-            self.rsa_private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=key_size,
-                backend=default_backend(),
-            )
-            pem = self.rsa_private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
+            value, pem = await _generate_rsa_private_key(key_size)
+            self.rsa_private_key = value
             try:
                 async with aiofiles.open(
                     path, "wb", opener=_owner_only_opener
