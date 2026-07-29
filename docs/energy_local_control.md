@@ -30,9 +30,10 @@ Creating a new key uses a plain `sys.executable -c` subprocess so RSA generation
 does not block the asyncio event loop. The subprocess runs its own script as
 `__main__` and never imports the caller's entry point, so this works from
 scripts, REPLs, `python -c`, and notebooks without an entry-point guard. If the
-subprocess cannot start or exits unsuccessfully, generation falls back to the
-current process and logs a warning that the asyncio event loop may be blocked.
-Loading an existing key file does not start a subprocess.
+subprocess cannot be used (including in a frozen application), exits
+unsuccessfully, or returns empty or invalid key data, generation falls back to
+the current process and logs a warning that the asyncio event loop may be
+blocked. Loading an existing key file does not start a subprocess.
 
 ## 2. Register the key with the gateway, over the cloud
 
