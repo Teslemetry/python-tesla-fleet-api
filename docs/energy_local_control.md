@@ -26,13 +26,13 @@ inherits it - `TeslaFleetApi`, `Teslemetry`, `Tessie`) loads an existing RSA
 private key or creates a new 4096-bit unencrypted PEM key file. This is the
 key you will register with the gateway and later hand to `aiopowerwall`.
 
-Creating a new key uses a worker process so RSA generation does not block the
-asyncio event loop. Call it from a script or module with a spawn-safe entry
-point (guard application startup with `if __name__ == "__main__":`) when
-possible. If the worker process cannot start, including from a REPL,
-`python -c`, or a notebook cell, generation falls back to the current process
-and logs a warning that the asyncio event loop may be blocked. Loading an
-existing key file does not start a worker process.
+Creating a new key uses a plain `sys.executable -c` subprocess so RSA generation
+does not block the asyncio event loop. The subprocess runs its own script as
+`__main__` and never imports the caller's entry point, so this works from
+scripts, REPLs, `python -c`, and notebooks without an entry-point guard. If the
+subprocess cannot start or exits unsuccessfully, generation falls back to the
+current process and logs a warning that the asyncio event loop may be blocked.
+Loading an existing key file does not start a subprocess.
 
 ## 2. Register the key with the gateway, over the cloud
 

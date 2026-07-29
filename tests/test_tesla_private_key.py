@@ -378,6 +378,46 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
 
             self.assertTrue(killed.is_set())
 
+    async def test_cancellation_preserves_cancel_when_subprocess_already_exited(
+        self,
+    ) -> None:
+        generation_started = asyncio.Event()
+        waited = asyncio.Event()
+
+        class _ExitedProc:
+            returncode = 0
+
+            async def communicate(self) -> tuple[bytes, bytes]:
+                generation_started.set()
+                await asyncio.Event().wait()
+                raise AssertionError("unreachable")
+
+            def kill(self) -> None:
+                raise ProcessLookupError
+
+            async def wait(self) -> int:
+                waited.set()
+                return self.returncode
+
+        async def fake_create_subprocess_exec(
+            *args: object, **kwargs: object
+        ) -> _ExitedProc:
+            return _ExitedProc()
+
+        with mock.patch(
+            "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+            side_effect=fake_create_subprocess_exec,
+        ):
+            task = asyncio.create_task(
+                Tesla().get_rsa_private_key("unused.pem", key_size=1024)
+            )
+            await generation_started.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+        self.assertTrue(waited.is_set())
+
     async def test_subprocess_launch_failure_falls_back_to_in_process_generation(
         self,
     ) -> None:

@@ -2,6 +2,7 @@
 
 import base64
 import asyncio
+from contextlib import suppress
 import os
 import sys
 import time
@@ -86,7 +87,8 @@ async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
     try:
         stdout, stderr = await proc.communicate()
     except asyncio.CancelledError:
-        proc.kill()
+        with suppress(ProcessLookupError):
+            proc.kill()
         await proc.wait()
         raise
     if proc.returncode != 0:
