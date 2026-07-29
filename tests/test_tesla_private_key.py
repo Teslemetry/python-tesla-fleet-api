@@ -481,3 +481,108 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertTrue(
                 any("isolated subprocess" in message for message in logs.output)
             )
+
+    async def test_frozen_bundle_falls_back_to_in_process_generation(self) -> None:
+        """In a PyInstaller/cx_Freeze/py2exe bundle, `sys.executable` is the app itself.
+
+        `-c` would relaunch the whole application rather than run the keygen
+        script, so isolation is skipped up front (via `sys.frozen`, the de
+        facto marker these freezers all set) rather than relying on it to
+        exit non-zero or produce no output.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            with (
+                mock.patch("tesla_fleet_api.tesla.tesla.sys.frozen", True, create=True),
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec"
+                ) as create_subprocess_exec,
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
+            ):
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            create_subprocess_exec.assert_not_called()
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated subprocess" in message for message in logs.output)
+            )
+
+    async def test_empty_subprocess_output_falls_back_to_in_process_generation(
+        self,
+    ) -> None:
+        """A subprocess that exits 0 but writes no PEM is treated as a failure.
+
+        Covers a wrong child (e.g. one that silently did nothing useful)
+        succeeding without ever emitting a key, which must not be trusted as
+        if it had.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            class _EmptyOutputProc:
+                returncode = 0
+
+                async def communicate(self) -> tuple[bytes, bytes]:
+                    return b"", b""
+
+            async def fake_create_subprocess_exec(
+                *args: object, **kwargs: object
+            ) -> _EmptyOutputProc:
+                return _EmptyOutputProc()
+
+            with (
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                    side_effect=fake_create_subprocess_exec,
+                ),
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
+            ):
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated subprocess" in message for message in logs.output)
+            )
+
+    async def test_invalid_subprocess_pem_falls_back_to_in_process_generation(
+        self,
+    ) -> None:
+        """A subprocess that exits 0 with non-empty but malformed output also falls back.
+
+        Covers a wrong-but-zero-exit child whose output isn't a usable PEM at
+        all, which must not be trusted as if it had produced one.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            class _GarbageOutputProc:
+                returncode = 0
+
+                async def communicate(self) -> tuple[bytes, bytes]:
+                    return b"not a pem", b""
+
+            async def fake_create_subprocess_exec(
+                *args: object, **kwargs: object
+            ) -> _GarbageOutputProc:
+                return _GarbageOutputProc()
+
+            with (
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                    side_effect=fake_create_subprocess_exec,
+                ),
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
+            ):
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated subprocess" in message for message in logs.output)
+            )

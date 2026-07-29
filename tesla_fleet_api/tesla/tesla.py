@@ -73,9 +73,22 @@ async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
     no daemonic-process restriction. `asyncio.create_subprocess_exec` is
     awaited natively, off the loop by construction, including cancellation:
     killing and awaiting the child's exit are both async, so cancelling the
-    caller can't block the loop either. Raises on any exec or non-zero-exit
-    failure, so the caller can fall back to in-process generation.
+    caller can't block the loop either. Raises on any exec, non-zero-exit, or
+    empty-output failure, so the caller can fall back to in-process
+    generation.
+
+    In a frozen bundle (PyInstaller, cx_Freeze, py2exe), `sys.executable` is
+    the application itself, not a Python interpreter - `-c` would relaunch
+    the whole application rather than run this script, which can exit 0
+    without ever emitting a PEM. `sys.frozen` is the de facto marker these
+    freezers all set, so that case is refused up front instead of relying on
+    the empty-output check alone to catch it after the fact.
     """
+    if getattr(sys, "frozen", False):
+        raise RuntimeError(
+            "sys.executable is a frozen application bundle, not a Python "
+            "interpreter; it cannot run the RSA keygen script"
+        )
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-c",
@@ -96,7 +109,29 @@ async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
             f"RSA key generation subprocess exited with code {proc.returncode}: "
             f"{stderr.decode(errors='replace').strip()}"
         )
+    if not stdout:
+        raise RuntimeError(
+            "RSA key generation subprocess exited successfully but produced no output"
+        )
     return stdout
+
+
+async def _deserialize_rsa_pem(pem: bytes) -> rsa.RSAPrivateKey:
+    """Deserialize a freshly generated RSA PEM off the event loop.
+
+    A malformed PEM (e.g. from a wrong-but-zero-exit isolated subprocess)
+    raises `ValueError` here rather than being trusted - the caller treats
+    that the same as any other isolation failure and falls back.
+    """
+    value = await asyncio.to_thread(
+        serialization.load_pem_private_key,
+        pem,
+        password=None,
+        backend=default_backend(),
+    )
+    if not isinstance(value, rsa.RSAPrivateKey):
+        raise AssertionError("Generated key is not an RSAPrivateKey")
+    return value
 
 
 async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
@@ -107,13 +142,16 @@ async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, b
     Falls back to in-process generation, which does block the loop, whenever
     that subprocess can't be used - the same environments this method could
     already generate keys in before process isolation was introduced. The
-    fallback catches any exception from launching or running the subprocess,
-    deliberately not enumerated by type, since process isolation is
-    best-effort here and any way it can fail should degrade to the working
-    (if blocking) legacy path rather than propagate.
+    fallback catches any exception from launching, running, or deserializing
+    the subprocess's output, deliberately not enumerated by type, since
+    process isolation is best-effort here and any way it can fail - including
+    producing a PEM that turns out not to deserialize - should degrade to the
+    working (if blocking) legacy path rather than propagate or return bad key
+    material.
     """
     try:
         pem = await _generate_rsa_private_key_pem_isolated(key_size)
+        value = await _deserialize_rsa_pem(pem)
     except Exception as err:
         LOGGER.warning(
             "RSA key generation could not use an isolated subprocess "
@@ -123,14 +161,7 @@ async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, b
             err,
         )
         pem = await asyncio.to_thread(_generate_rsa_private_key_pem, key_size)
-    value = await asyncio.to_thread(
-        serialization.load_pem_private_key,
-        pem,
-        password=None,
-        backend=default_backend(),
-    )
-    if not isinstance(value, rsa.RSAPrivateKey):
-        raise AssertionError("Generated key is not an RSAPrivateKey")
+        value = await _deserialize_rsa_pem(pem)
     return value, pem
 
 
