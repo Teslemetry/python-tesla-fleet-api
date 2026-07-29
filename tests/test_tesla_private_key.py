@@ -432,3 +432,44 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertTrue(
                 any("isolated worker process" in message for message in logs.output)
             )
+
+    async def test_daemonic_caller_assertion_error_falls_back_to_in_process_generation(
+        self,
+    ) -> None:
+        """A caller already running as a daemonic multiprocessing worker also falls back.
+
+        `multiprocessing.Process.start()` raises a bare `AssertionError`
+        ("daemonic processes are not allowed to have children") in that case
+        - a failure shape outside any specific exception type, which is why
+        the fallback catches broadly rather than enumerating types.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            class _DaemonicPool:
+                def submit(
+                    self, fn: object, *args: object, **kwargs: object
+                ) -> concurrent.futures.Future[bytes]:
+                    raise AssertionError(
+                        "daemonic processes are not allowed to have children"
+                    )
+
+                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
+                    pass
+
+            with (
+                mock.patch(
+                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
+                    return_value=_DaemonicPool(),
+                ),
+                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
+            ):
+                key = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertTrue(
+                any("isolated worker process" in message for message in logs.output)
+            )
+            self.assertTrue(any("AssertionError" in message for message in logs.output))
