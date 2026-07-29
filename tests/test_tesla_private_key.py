@@ -10,12 +10,9 @@ winner's file instead of raising.
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import os
 import stat
 import tempfile
-import threading
-from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, mock
 
@@ -179,10 +176,11 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertEqual(mode, 0o600)
 
     async def test_new_key_file_is_owner_only_with_restrictive_umask(self) -> None:
-        # Under 0o777 the isolated worker process's own semaphore can't be
-        # created, so this exercises the in-process fallback - which, like
-        # the pre-process-isolation implementation, still produces a correct
-        # owner-only key file.
+        # Unlike multiprocessing's semaphore file, a plain subprocess has no
+        # umask-sensitive IPC of its own, so this exercises the isolated
+        # subprocess path directly (no fallback needed) and still produces a
+        # correct owner-only key file via _owner_only_opener's explicit
+        # fchmod, which bypasses umask entirely.
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
             tesla = Tesla()
@@ -333,73 +331,71 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
 
             self.assertGreater(ticks, 10)
 
-    async def test_cancellation_does_not_block_the_event_loop(self) -> None:
+    async def test_cancellation_kills_the_subprocess(self) -> None:
+        """Cancelling mid-generation kills the child rather than leaving it orphaned.
+
+        Killing and awaiting the child's exit are both async operations, so
+        this also can't block the event loop the way a synchronous
+        `ProcessPoolExecutor.shutdown(wait=True)` could.
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
             generation_started = asyncio.Event()
-            shutdown_started = threading.Event()
-            release_shutdown = threading.Event()
+            killed = asyncio.Event()
 
-            class _SlowPool:
-                def submit(
-                    self, fn: object, *args: object, **kwargs: object
-                ) -> concurrent.futures.Future[bytes]:
-                    future: concurrent.futures.Future[bytes] = (
-                        concurrent.futures.Future()
-                    )
+            class _SlowProc:
+                returncode: int | None = None
+
+                async def communicate(self) -> tuple[bytes, bytes]:
                     generation_started.set()
-                    return future
+                    await asyncio.Event().wait()  # never resolves on its own
+                    raise AssertionError("unreachable")
 
-                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
-                    shutdown_started.set()
-                    release_shutdown.wait()
+                def kill(self) -> None:
+                    killed.set()
+
+                async def wait(self) -> int:
+                    await killed.wait()
+                    self.returncode = -9
+                    return self.returncode
+
+            async def fake_create_subprocess_exec(
+                *args: object, **kwargs: object
+            ) -> _SlowProc:
+                return _SlowProc()
 
             with mock.patch(
-                "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
-                return_value=_SlowPool(),
+                "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                side_effect=fake_create_subprocess_exec,
             ):
                 task = asyncio.create_task(
                     Tesla().get_rsa_private_key(path, key_size=1024)
                 )
                 await generation_started.wait()
                 task.cancel()
-                await asyncio.wait_for(
-                    asyncio.to_thread(shutdown_started.wait), timeout=0.1
-                )
-                await asyncio.sleep(0)
-                release_shutdown.set()
                 with self.assertRaises(asyncio.CancelledError):
                     await task
 
-    async def test_broken_process_pool_falls_back_to_in_process_generation(
+            self.assertTrue(killed.is_set())
+
+    async def test_subprocess_launch_failure_falls_back_to_in_process_generation(
         self,
     ) -> None:
-        """A spawn-incapable caller (REPL, `python -c`, notebook) still succeeds.
+        """A caller whose environment can't launch the subprocess still succeeds.
 
-        It falls back to in-process generation with a logged warning instead
-        of raising, matching the pre-process-isolation behavior these
-        environments already relied on.
+        Falls back to in-process generation with a logged warning instead of
+        raising, matching the pre-process-isolation behavior. The fallback
+        deliberately isn't specific to any one launch-failure cause (a
+        restrictive umask, a REPL/notebook caller, a sandboxed environment
+        without `sys.executable`, ...) - any of them lands here the same way.
         """
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
 
-            class _BrokenPool:
-                def submit(
-                    self, fn: object, *args: object, **kwargs: object
-                ) -> concurrent.futures.Future[bytes]:
-                    future: concurrent.futures.Future[bytes] = (
-                        concurrent.futures.Future()
-                    )
-                    future.set_exception(BrokenProcessPool("boom"))
-                    return future
-
-                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
-                    pass
-
             with (
                 mock.patch(
-                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
-                    return_value=_BrokenPool(),
+                    "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                    side_effect=OSError("boom"),
                 ),
                 self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
             ):
@@ -409,58 +405,31 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             mode = stat.S_IMODE(Path(path).stat().st_mode)
             self.assertEqual(mode, 0o600)
             self.assertTrue(
-                any("isolated worker process" in message for message in logs.output)
+                any("isolated subprocess" in message for message in logs.output)
             )
 
-    async def test_pool_setup_oserror_falls_back_to_in_process_generation(self) -> None:
-        """A restrictive umask (or any other OSError at pool setup) also falls back."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
-
-            with (
-                mock.patch(
-                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
-                    side_effect=PermissionError("boom"),
-                ),
-                self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
-            ):
-                key = await Tesla().get_rsa_private_key(path, key_size=1024)
-
-            self.assertIsInstance(key, rsa.RSAPrivateKey)
-            mode = stat.S_IMODE(Path(path).stat().st_mode)
-            self.assertEqual(mode, 0o600)
-            self.assertTrue(
-                any("isolated worker process" in message for message in logs.output)
-            )
-
-    async def test_daemonic_caller_assertion_error_falls_back_to_in_process_generation(
+    async def test_subprocess_nonzero_exit_falls_back_to_in_process_generation(
         self,
     ) -> None:
-        """A caller already running as a daemonic multiprocessing worker also falls back.
-
-        `multiprocessing.Process.start()` raises a bare `AssertionError`
-        ("daemonic processes are not allowed to have children") in that case
-        - a failure shape outside any specific exception type, which is why
-        the fallback catches broadly rather than enumerating types.
-        """
+        """A subprocess that launches but exits non-zero also falls back."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
 
-            class _DaemonicPool:
-                def submit(
-                    self, fn: object, *args: object, **kwargs: object
-                ) -> concurrent.futures.Future[bytes]:
-                    raise AssertionError(
-                        "daemonic processes are not allowed to have children"
-                    )
+            class _FailingProc:
+                returncode = 1
 
-                def shutdown(self, wait: bool, cancel_futures: bool) -> None:
-                    pass
+                async def communicate(self) -> tuple[bytes, bytes]:
+                    return b"", b"boom"
+
+            async def fake_create_subprocess_exec(
+                *args: object, **kwargs: object
+            ) -> _FailingProc:
+                return _FailingProc()
 
             with (
                 mock.patch(
-                    "tesla_fleet_api.tesla.tesla.ProcessPoolExecutor",
-                    return_value=_DaemonicPool(),
+                    "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                    side_effect=fake_create_subprocess_exec,
                 ),
                 self.assertLogs("tesla_fleet_api", level="WARNING") as logs,
             ):
@@ -470,6 +439,5 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             mode = stat.S_IMODE(Path(path).stat().st_mode)
             self.assertEqual(mode, 0o600)
             self.assertTrue(
-                any("isolated worker process" in message for message in logs.output)
+                any("isolated subprocess" in message for message in logs.output)
             )
-            self.assertTrue(any("AssertionError" in message for message in logs.output))

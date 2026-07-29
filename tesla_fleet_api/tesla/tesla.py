@@ -3,9 +3,8 @@
 import base64
 import asyncio
 import os
+import sys
 import time
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import get_context
 from os.path import exists
 import aiofiles
 
@@ -26,11 +25,12 @@ _KEY_READ_RETRY_INTERVAL = 0.05
 
 
 def _generate_rsa_private_key_pem(key_size: int) -> bytes:
-    """Generate an RSA key and serialize it, for use in a worker process.
+    """Generate an RSA key and serialize it.
 
     cryptography's RSA keygen holds the GIL for its full duration, so a
     thread (unlike a separate process) would still stall the caller's event
-    loop.
+    loop; used both as the isolated subprocess's script body and as the
+    in-process fallback.
     """
     key = rsa.generate_private_key(
         public_exponent=65537,
@@ -44,46 +44,77 @@ def _generate_rsa_private_key_pem(key_size: int) -> bytes:
     )
 
 
-async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
-    """Generate an RSA key's PEM in a short-lived worker process.
+_RSA_KEYGEN_SUBPROCESS_SCRIPT = """
+import sys
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
-    The pool is created fresh per call (not at import time) so importing this
-    module never requires a spawn-safe entry point; only actually generating a
-    key does. Process isolation is best-effort: pool creation or submission
-    can fail in ways this function does not attempt to enumerate - a
-    restrictive umask blocking the pool's own semaphore file,
-    `spawn` unable to re-import `__main__` from a REPL/`python -c`/notebook,
-    `AssertionError` from an already-daemonic calling process, or any other
-    environment that can't host a worker process - so the caller catches
-    broadly and falls back to in-process generation.
+key = rsa.generate_private_key(
+    public_exponent=65537, key_size=int(sys.argv[1]), backend=default_backend()
+)
+sys.stdout.buffer.write(
+    key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+)
+"""
+
+
+async def _generate_rsa_private_key_pem_isolated(key_size: int) -> bytes:
+    """Generate an RSA key's PEM in a plain, short-lived `sys.executable -c ...` subprocess.
+
+    Unlike `multiprocessing`, a plain subprocess's `-c` script is its own
+    `__main__` - it never re-imports the caller's actual entry point, so
+    there is nothing to guard, nothing to pickle, no semaphore to create, and
+    no daemonic-process restriction. `asyncio.create_subprocess_exec` is
+    awaited natively, off the loop by construction, including cancellation:
+    killing and awaiting the child's exit are both async, so cancelling the
+    caller can't block the loop either. Raises on any exec or non-zero-exit
+    failure, so the caller can fall back to in-process generation.
     """
-    pool = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        _RSA_KEYGEN_SUBPROCESS_SCRIPT,
+        str(key_size),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
     try:
-        return await asyncio.get_running_loop().run_in_executor(
-            pool, _generate_rsa_private_key_pem, key_size
+        stdout, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        proc.kill()
+        await proc.wait()
+        raise
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"RSA key generation subprocess exited with code {proc.returncode}: "
+            f"{stderr.decode(errors='replace').strip()}"
         )
-    finally:
-        await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=True)
+    return stdout
 
 
 async def _generate_rsa_private_key(key_size: int) -> tuple[rsa.RSAPrivateKey, bytes]:
     """Generate an RSA key and return it with its PEM.
 
-    Prefers a short-lived worker process so keygen - which holds the GIL for
-    its full duration, unlike a thread - never stalls the caller's event
-    loop. Falls back to in-process generation, which does block the loop,
-    whenever that worker process can't be used - the same environments this
-    method could already generate keys in before process isolation was
-    introduced. The fallback catches any exception from pool creation or
-    submission, deliberately not enumerated by type, since process isolation
-    is best-effort here and any way it can fail should degrade to the
-    working (if blocking) legacy path rather than propagate.
+    Prefers a short-lived subprocess so keygen - which holds the GIL for its
+    full duration, unlike a thread - never stalls the caller's event loop.
+    Falls back to in-process generation, which does block the loop, whenever
+    that subprocess can't be used - the same environments this method could
+    already generate keys in before process isolation was introduced. The
+    fallback catches any exception from launching or running the subprocess,
+    deliberately not enumerated by type, since process isolation is
+    best-effort here and any way it can fail should degrade to the working
+    (if blocking) legacy path rather than propagate.
     """
     try:
         pem = await _generate_rsa_private_key_pem_isolated(key_size)
     except Exception as err:
         LOGGER.warning(
-            "RSA key generation could not use an isolated worker process "
+            "RSA key generation could not use an isolated subprocess "
             "(%s: %s); falling back to in-process generation, which will "
             "block the event loop for the duration of key generation.",
             type(err).__name__,
