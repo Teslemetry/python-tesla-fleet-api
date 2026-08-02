@@ -8,6 +8,7 @@ while still exercising the real asyncio.sleep()-based polling loop.
 
 from __future__ import annotations
 
+import asyncio
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
@@ -95,6 +96,19 @@ class WaitUntilPairedTests(IsolatedAsyncioTestCase):
             )
         self.assertGreaterEqual(self.site.find_authorized_clients.await_count, 1)
 
+    async def test_enforces_timeout_when_client_lookup_hangs(self) -> None:
+        never_returns = asyncio.Event()
+        self.site.find_authorized_clients = AsyncMock(  # type: ignore[method-assign]
+            side_effect=never_returns.wait
+        )
+
+        with self.assertRaises(AuthorizedClientWaitExpired):
+            await self.site.wait_until_paired(
+                PUBLIC_KEY_B64, timeout=0.03, poll_interval=0.01
+            )
+
+        self.site.find_authorized_clients.assert_awaited_once()
+
     async def test_verify_by_use_confirms_after_verified_state(self) -> None:
         self.site.find_authorized_clients = AsyncMock(  # type: ignore[method-assign]
             return_value=AuthorizedClients(
@@ -143,6 +157,25 @@ class WaitUntilPairedTests(IsolatedAsyncioTestCase):
                 timeout=0.03,
                 poll_interval=0.01,
             )
+
+    async def test_enforces_timeout_when_verify_by_use_hangs(self) -> None:
+        self.site.find_authorized_clients = AsyncMock(  # type: ignore[method-assign]
+            return_value=AuthorizedClients(
+                clients=[_client(AuthorizedClientState.VERIFIED)], raw={}
+            )
+        )
+        never_returns = asyncio.Event()
+        verify_by_use = AsyncMock(side_effect=never_returns.wait)
+
+        with self.assertRaises(AuthorizedClientWaitExpired):
+            await self.site.wait_until_paired(
+                PUBLIC_KEY_B64,
+                verify_by_use=verify_by_use,
+                timeout=0.03,
+                poll_interval=0.01,
+            )
+
+        verify_by_use.assert_awaited_once()
 
     async def test_no_matching_client_yet_keeps_polling(self) -> None:
         self.site.find_authorized_clients = AsyncMock(  # type: ignore[method-assign]

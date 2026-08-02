@@ -487,11 +487,22 @@ class TeslemetryEnergySite(EnergySite):
 
         while True:
             match: AuthorizedClient | None = None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise AuthorizedClientWaitExpired(
+                    {"public_key": target, "state": last_state}
+                )
             try:
-                clients = await self.find_authorized_clients()
+                clients = await asyncio.wait_for(
+                    self.find_authorized_clients(), timeout=remaining
+                )
                 match = next(
                     (c for c in clients.clients if c.public_key == target), None
                 )
+            except asyncio.TimeoutError as exc:
+                raise AuthorizedClientWaitExpired(
+                    {"public_key": target, "state": last_state}
+                ) from exc
             except (TeslaFleetError, Exception):
                 match = None
 
@@ -504,9 +515,18 @@ class TeslemetryEnergySite(EnergySite):
                 if match.state == AuthorizedClientState.VERIFIED:
                     if verify_by_use is None:
                         return match
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        raise AuthorizedClientWaitExpired(
+                            {"public_key": target, "state": last_state}
+                        )
                     try:
-                        await verify_by_use()
+                        await asyncio.wait_for(verify_by_use(), timeout=remaining)
                         return match
+                    except asyncio.TimeoutError as exc:
+                        raise AuthorizedClientWaitExpired(
+                            {"public_key": target, "state": last_state}
+                        ) from exc
                     except (TeslaFleetError, Exception):
                         pass
 
