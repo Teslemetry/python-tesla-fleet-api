@@ -114,15 +114,15 @@ gateway's LAN IP over the cloud with
 interface (or `None` when no usable interface is reported) - see
 [Teslemetry](teslemetry.md#energy-site-gateway-address).
 
-## 4. Verify the key is paired by using it
+## 4. Wait for the key to be paired
 
 The gateway takes registration (step 2) and physical confirmation as two
 separate events, and there is a window
-between them where the key exists but is not yet usable. **The reliable way
-to tell that window has closed is to attempt a signed local read through
-`aiopowerwall` and retry until it succeeds** - a successful signed response
-*is* proof the key is `VERIFIED`, because the gateway would otherwise reject
-it.
+between them where the key exists but is not yet usable. The typed Teslemetry
+helper below uses the gateway's authorized-client state as its primary signal.
+Where local network access is available, a successful signed read through
+`aiopowerwall` can additionally confirm that the key is usable; the gateway
+would reject that read before verification.
 
 `get_system_info()`/`get_status()`-style reads are the natural choice for
 this, but `PowerwallEnergySite` does not implement them locally yet (they
@@ -182,14 +182,13 @@ async def wait_until_verified(
             delay = min(delay * 2, max_delay)
 ```
 
-Only fall back to polling the cloud `list_authorized_clients()` (or, on
-`Teslemetry`, `find_authorized_clients()`) as a **secondary, best-effort**
-check - for example while you have no local network path to the gateway yet.
-Tesla's cloud endpoint for this is undocumented, and Teslemetry's
+The base Fleet API has no typed equivalent of `wait_until_paired()`. Its
+callers can poll `list_authorized_clients()` and combine that with the manual
+signed-read loop above. Tesla's cloud endpoint is undocumented, and Teslemetry's
 `list_authorized_clients` in particular has been observed returning a bare
 JSON `null` with a `200` status rather than an envelope; that behavior may
-recur, so do not treat this endpoint as authoritative, and never let it
-override a signed local read that already succeeded or failed.
+recur. Treat an unavailable or malformed cloud response as no signal, and
+never let it override a successful signed local read.
 `TeslemetryEnergySite.find_authorized_clients()` parses the recognized
 shapes (list vs. dict envelope, `state` typing) into a typed
 `AuthorizedClients`, but raises
