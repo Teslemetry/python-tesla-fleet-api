@@ -131,6 +131,29 @@ the `EnergySiteRouter` note in step 5). Use `live_status()` instead: it is
 already implemented locally and, under the hood, issues a signed v1r
 request, so it fails exactly the way an unverified key would fail.
 
+`TeslemetryEnergySite.wait_until_paired()` implements this combined check as
+a library helper: it polls `find_authorized_clients()` for the registered
+key's state, returning as soon as it is `VERIFIED`, and raises
+`tesla_fleet_api.exceptions.AuthorizedClientPairingTimedOut` immediately if
+the gateway reports the terminal `PENDING_VERIFICATION_TIMEOUT` state rather
+than continuing to poll a dead registration - re-register the same key to
+retry. Its own bounded overall wait (default 600s) raises
+`tesla_fleet_api.exceptions.AuthorizedClientWaitExpired` instead if the
+window is simply still open. Pass an async `verify_by_use` callable (e.g.
+`local_energysite.live_status`) to additionally require a successful signed
+local read before returning:
+
+```python
+client = await teslemetry_energysite.wait_until_paired(
+    api.rsa_public_der_pkcs1_b64,
+    verify_by_use=local_energysite.live_status,
+)
+```
+
+The manual polling loop below predates this helper and remains as a
+reference for building a custom confirmation flow (e.g. against the base
+Fleet API, which has no typed `find_authorized_clients()`).
+
 Before verification, every signed request rejects with
 `aiopowerwall.PowerwallAuthenticationError` (the gateway's "unknown key id"
 or "authorization not verified" fault) - **that failure is expected and not

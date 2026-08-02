@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import socket
 import struct
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -14,8 +16,16 @@ from tesla_fleet_api.const import (
     AuthorizedVerificationType,
     Method,
 )
-from tesla_fleet_api.exceptions import InvalidResponse
+from tesla_fleet_api.exceptions import (
+    AuthorizedClientPairingTimedOut,
+    AuthorizedClientWaitExpired,
+    InvalidResponse,
+    TeslaFleetError,
+)
 from tesla_fleet_api.tesla.energysite import EnergySite, EnergySites
+
+DEFAULT_PAIRING_TIMEOUT = 600.0
+DEFAULT_PAIRING_POLL_INTERVAL = 5.0
 
 
 def _field(payload: dict[str, Any], *keys: str) -> Any:
@@ -401,6 +411,111 @@ class TeslemetryEnergySite(EnergySite):
             f"api/1/energy_sites/{self.energy_site_id}/command/remove_authorized_client",
             json={"public_key": public_key_b64},
         )
+
+    async def wait_until_paired(
+        self,
+        public_key: bytes | str,
+        *,
+        verify_by_use: Callable[[], Awaitable[Any]] | None = None,
+        timeout: float = DEFAULT_PAIRING_TIMEOUT,
+        poll_interval: float = DEFAULT_PAIRING_POLL_INTERVAL,
+    ) -> AuthorizedClient:
+        """Wait for a key already registered with ``add_authorized_client`` to finish pairing.
+
+        Polls :meth:`find_authorized_clients` for the entry matching
+        ``public_key`` and returns it as soon as its state is ``VERIFIED``.
+
+        The gateway's presence-proof window is ~9 minutes; a physical
+        breaker/switch toggle typically confirms a key in well under a
+        minute (observed as fast as 59s), with no cloud auto-verify
+        observed. ``timeout`` (default 600s / 10 minutes) bounds the overall
+        wait so this never blocks indefinitely - comfortably above the
+        window, but still a hard ceiling. Two distinct failure modes:
+
+        - If the window itself expires, the gateway reports the terminal
+          ``PENDING_VERIFICATION_TIMEOUT`` state and this raises
+          :class:`~tesla_fleet_api.exceptions.AuthorizedClientPairingTimedOut`
+          immediately rather than continuing to poll a dead registration.
+          The registration cannot recover on its own - the correct retry is
+          to call :meth:`add_authorized_client` again with the exact *same*
+          public key (never a newly generated one), which resets the window
+          without creating a duplicate record, then call this again.
+        - If ``timeout`` elapses first (e.g. nobody toggled the switch yet,
+          so the state is still ``PENDING_VERIFICATION``), this raises
+          :class:`~tesla_fleet_api.exceptions.AuthorizedClientWaitExpired`
+          instead. The registration is still alive at that point; call this
+          again, or with a longer timeout.
+
+        Cancelling the awaiting task raises ``asyncio.CancelledError`` as
+        usual - no separate handling is needed or attempted here.
+
+        Args:
+            public_key: The public key being paired, exactly as passed to
+                ``add_authorized_client`` (raw DER bytes, or an
+                already-base64-encoded string) - compared against listed
+                entries as base64, matching how the gateway reports keys.
+            verify_by_use: Optional async callable that performs a signed
+                local read (e.g. an ``aiopowerwall`` client's
+                ``live_status()``). Where the caller has local network
+                access, a successful call is definitive proof the key is
+                usable - the RSA key is the only signer the LAN TEDapi v1r
+                protocol accepts (never an ECC key; see
+                ``add_authorized_client``). When given, a ``VERIFIED`` cloud
+                state is combined with one confirming call before this
+                returns; a failing call is treated as "not yet confirmed"
+                and polling continues, since ``VERIFIED`` can be observed
+                slightly ahead of local usability. When omitted, the cloud
+                ``VERIFIED`` state alone is treated as success - the
+                captain's original shape, with authorized-client state as
+                the primary signal and verify-by-use as confirmation only
+                where available.
+            timeout: Overall bounded wait, in seconds (default 600s).
+            poll_interval: Delay between polls, in seconds (default 5s).
+
+        Returns:
+            The matched :class:`AuthorizedClient` once paired and (if
+            ``verify_by_use`` was given) confirmed usable.
+        """
+        target = (
+            base64.b64encode(public_key).decode("ascii")
+            if isinstance(public_key, bytes)
+            else public_key
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        last_state: AuthorizedClientState | int | str | None = None
+
+        while True:
+            match: AuthorizedClient | None = None
+            try:
+                clients = await self.find_authorized_clients()
+                match = next(
+                    (c for c in clients.clients if c.public_key == target), None
+                )
+            except (TeslaFleetError, Exception):
+                match = None
+
+            if match is not None:
+                last_state = match.state
+                if match.state == AuthorizedClientState.PENDING_VERIFICATION_TIMEOUT:
+                    raise AuthorizedClientPairingTimedOut(
+                        {"public_key": target, "state": match.state}
+                    )
+                if match.state == AuthorizedClientState.VERIFIED:
+                    if verify_by_use is None:
+                        return match
+                    try:
+                        await verify_by_use()
+                        return match
+                    except (TeslaFleetError, Exception):
+                        pass
+
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise AuthorizedClientWaitExpired(
+                    {"public_key": target, "state": last_state}
+                )
+            await asyncio.sleep(min(poll_interval, remaining))
 
 
 class TeslemetryEnergySites(EnergySites):
