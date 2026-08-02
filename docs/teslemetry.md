@@ -564,9 +564,9 @@ base64-encoded key string. Removal requires no physical presence proof, so any
 paired key can revoke every other key, including the owner's.
 
 These cloud helpers report the gateway's registered-client state as returned
-by the Teslemetry API. Confirming that a key can actually make signed LAN
-requests requires a successful signed local read through the paired client,
-as shown in [Energy: Local Control](energy_local_control.md).
+by the Teslemetry API. `wait_until_paired()` provides the bounded polling flow
+and can optionally confirm the cloud state with a signed LAN read; see
+[Energy: Local Control](energy_local_control.md).
 
 ```python
 async def main():

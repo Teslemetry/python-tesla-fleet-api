@@ -414,6 +414,37 @@ class SignedCommandRequired(TeslaFleetError):
     )
 
 
+class AuthorizedClientPairingTimedOut(TeslaFleetError):
+    """An energy gateway's presence-proof window expired before verification.
+
+    The gateway itself reported the terminal ``PENDING_VERIFICATION_TIMEOUT``
+    state (``AuthorizedClientState``) - the ~9-minute window to confirm the
+    key (typically via a physical breaker/switch toggle) closed with no
+    confirmation. The registration is dead; re-register the *same* public
+    key with ``add_authorized_client`` to reset the window and retry, rather
+    than generating a new key.
+    """
+
+    message = (
+        "Authorized-client pairing timed out: the presence-proof window "
+        "expired (PENDING_VERIFICATION_TIMEOUT). Re-register the same "
+        "public key to reset the window and retry."
+    )
+
+
+class AuthorizedClientWaitExpired(TeslaFleetError):
+    """``wait_until_paired()``'s own bounded overall wait elapsed.
+
+    Distinct from ``AuthorizedClientPairingTimedOut``: the gateway had not
+    reported a terminal state (the registration may still be alive, e.g.
+    still ``PENDING_VERIFICATION``, or the local ``verify_by_use`` check
+    kept failing) when the caller's ``timeout`` ran out. Retry by calling
+    ``wait_until_paired()`` again.
+    """
+
+    message = "Timed out waiting for authorized-client pairing to complete."
+
+
 class SessionInfoAuthenticationFault(TeslaFleetError):
     """A ``session_info`` reply failed local authentication and was discarded.
 
