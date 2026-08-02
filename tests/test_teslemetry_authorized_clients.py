@@ -22,7 +22,11 @@ from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
-from tesla_fleet_api.const import AuthorizedClientState
+from tesla_fleet_api.const import (
+    AuthorizationRole,
+    AuthorizedClientState,
+    AuthorizedVerificationType,
+)
 from tesla_fleet_api.exceptions import InvalidResponse
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
@@ -268,6 +272,45 @@ class ClientsKeyVariantTests(IsolatedAsyncioTestCase):
             result.clients[1].state,
             AuthorizedClientState.PENDING_VERIFICATION_TIMEOUT,
         )
+        self.assertTrue(
+            all(c.roles == [AuthorizationRole.CUSTOMER] for c in result.clients)
+        )
+        self.assertTrue(
+            all(
+                c.verification == AuthorizedVerificationType.PRESENCE_PROOF
+                for c in result.clients
+            )
+        )
+
+    async def test_unrecognized_role_and_verification_are_preserved(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "clients": [
+                        {
+                            "public_key": PUBLIC_KEY_B64,
+                            "roles": [99],
+                            "verification": 99,
+                        }
+                    ]
+                }
+            }
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(result.clients[0].roles, [99])
+        self.assertEqual(result.clients[0].verification, 99)
+
+    async def test_missing_roles_and_verification_are_none(self) -> None:
+        site = _make_site(
+            {"response": {"clients": [{"public_key": PUBLIC_KEY_B64}]}}
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertIsNone(result.clients[0].roles)
+        self.assertIsNone(result.clients[0].verification)
 
     async def test_clients_key_variant_is_recognized(self) -> None:
         site = _make_site(

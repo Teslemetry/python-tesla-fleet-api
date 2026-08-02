@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from tesla_fleet_api.const import (
+    AuthorizationRole,
     AuthorizedClientKeyType,
     AuthorizedClientState,
     AuthorizedClientType,
+    AuthorizedVerificationType,
     Method,
 )
 from tesla_fleet_api.exceptions import InvalidResponse
@@ -58,10 +60,53 @@ def _normalize_state(value: Any) -> AuthorizedClientState | int | str | None:
     return value
 
 
+def _normalize_role(value: Any) -> AuthorizationRole | int | str | None:
+    if value is None or isinstance(value, AuthorizationRole) or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        try:
+            return AuthorizationRole(value)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        try:
+            return AuthorizationRole[value.strip().upper()]
+        except KeyError:
+            return value
+    return value
+
+
+def _normalize_verification(
+    value: Any,
+) -> AuthorizedVerificationType | int | str | None:
+    if (
+        value is None
+        or isinstance(value, AuthorizedVerificationType)
+        or isinstance(value, bool)
+    ):
+        return value
+    if isinstance(value, int):
+        try:
+            return AuthorizedVerificationType(value)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        try:
+            return AuthorizedVerificationType[value.strip().upper()]
+        except KeyError:
+            return value
+    return value
+
+
 def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
+    roles = _field(payload, "roles")
     return AuthorizedClient(
         public_key=_field(payload, "public_key", "publicKey"),
         state=_normalize_state(_field(payload, "state", "authorized_client_state")),
+        roles=[_normalize_role(role) for role in roles]
+        if isinstance(roles, list)
+        else None,
+        verification=_normalize_verification(_field(payload, "verification")),
         raw=payload,
     )
 
@@ -70,16 +115,17 @@ def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
 class AuthorizedClient:
     """One entry from a Teslemetry ``list_authorized_clients`` response.
 
-    Only ``public_key`` and ``state`` are modeled - the two fields a
-    pairing flow needs to confirm a registered key. Tesla has not
-    published this response's schema, so anything else on an entry is
-    available via ``raw`` rather than guessed at. Each field accepts the
-    two key-name variants observed for it (``public_key``/``publicKey``,
-    ``state``/``authorized_client_state``).
+    ``public_key``, ``state``, ``roles``, and ``verification`` are modeled.
+    Tesla has not published this response's schema, so anything else on an
+    entry is available via ``raw`` rather than guessed at. Public key and
+    state accept the two key-name variants observed for them
+    (``public_key``/``publicKey``, ``state``/``authorized_client_state``).
     """
 
     public_key: str | None
     state: AuthorizedClientState | int | str | None
+    roles: list[AuthorizationRole | int | str | None] | None
+    verification: AuthorizedVerificationType | int | str | None
     raw: dict[str, Any]
 
 
