@@ -33,7 +33,17 @@ scripts, REPLs, `python -c`, and notebooks without an entry-point guard. If the
 subprocess cannot be used (including in a frozen application), exits
 unsuccessfully, or returns empty or invalid key data, generation falls back to
 the current process and logs a warning that the asyncio event loop may be
-blocked. Loading an existing key file does not start a subprocess.
+blocked. Loading and validating an existing key runs in a worker thread and
+does not start a subprocess.
+
+By default, existing keys receive cryptography's full RSA consistency check.
+For an existing key that your application already trusts, pass
+`skip_rsa_key_validation=True` to skip that potentially expensive check. This
+option does not weaken validation when loading the key's PEM structure. Pass
+`async_rsa_key_creation=False` only when subprocess spawning is unavailable or
+undesired: new-key generation then runs in the current process and blocks the
+event loop. Both options affect only RSA key handling; their defaults preserve
+the non-blocking and fully validated behavior described above.
 
 ## 2. Register the key with the gateway, over the cloud
 
