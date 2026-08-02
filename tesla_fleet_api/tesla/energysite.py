@@ -120,19 +120,33 @@ class EnergySite:
     ) -> dict[str, Any]:
         """Register an authorized client (public key) with the energy gateway.
 
-        Used to pair a local key (typically RSA-4096 in DER PKCS1 format) with
-        a Powerwall so it can be used for the LAN TEDapi v1r protocol. After
-        registration the key may be in PENDING or PENDING_VERIFICATION state
-        until the gateway confirms it - see ``AuthorizedClientState``. The
-        gateway may auto-verify via cloud, otherwise a physical breaker
-        toggle is required to confirm. Verify readiness with a signed local
-        read through the paired LAN client; ``list_authorized_clients`` is
-        only a secondary, best-effort cloud check.
+        Used to pair a local key with a Powerwall so it can be used for the
+        LAN TEDapi v1r protocol. The public key encoding is per ``key_type``:
+        RSA is raw PKCS1 ``RSAPublicKey`` DER (``Tesla.rsa_public_der_pkcs1``);
+        ECC is DER SubjectPublicKeyInfo (SPKI), not a raw X9.62 uncompressed
+        point (``Tesla.ec_public_der_spki``) - the gateway rejects a raw
+        point with an asn1 structure error. Do not offer ECC as an
+        alternative to RSA for TEDapi v1r signing: a fully VERIFIED ECC key
+        cannot authenticate that protocol (its ``SignatureData`` oneof has no
+        ECDSA member), even though ECC registers and lists back fine.
+
+        After registration the key is PENDING_VERIFICATION until the
+        gateway confirms it within a ~9-minute presence-proof window, a
+        physical breaker toggle (verified in as little as 59s) - no
+        cloud auto-verify was observed. A window that elapses without
+        confirmation moves the key to the terminal
+        PENDING_VERIFICATION_TIMEOUT state - see ``AuthorizedClientState``;
+        a register-then-poll helper must surface that state rather than
+        wait indefinitely. Re-registering the same public key resets the
+        window without creating a second record, and is the correct retry
+        for a missed window. Verify readiness with a signed local read
+        through the paired LAN client; ``list_authorized_clients`` is only a
+        secondary, best-effort cloud check.
 
         Args:
-            public_key: The public key to register. Either raw DER PKCS1
-                bytes (which will be base64-encoded), or an already
-                base64-encoded string.
+            public_key: The public key to register. Either raw DER bytes in
+                the encoding matching ``key_type`` (which will be
+                base64-encoded), or an already base64-encoded string.
             description: Human-readable description of the client.
             key_type: The type of key being registered (default RSA).
             authorized_client_type: The authorized client type (default
@@ -151,6 +165,38 @@ class EnergySite:
                 "authorized_client_type": int(authorized_client_type),
                 "description": description,
             },
+        )
+
+    async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
+        """Remove an authorized client (public key) from the energy gateway.
+
+        [UNVERIFIED]: removal was live-verified only over the local v1r
+        transport; this Fleet-API ``_command`` route is inferred from
+        ``add_authorized_client`` using the same mechanism and has not been
+        confirmed against hardware. The response message is empty, so
+        callers must not assert on response fields - some firmware may
+        return no body at all.
+
+        Security note: unlike adding a client, removal requires no physical
+        presence proof - an authenticated session is sufficient, including
+        to remove a VERIFIED record. Any paired key can therefore revoke
+        every other key, including the owner's.
+
+        Args:
+            public_key: The public key to remove, exactly as reported by
+                ``list_authorized_clients`` - either raw DER bytes (which
+                will be base64-encoded) or an already base64-encoded string,
+                so a listed record round-trips to removal with no
+                re-encoding.
+        """
+        if isinstance(public_key, bytes):
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+        else:
+            public_key_b64 = public_key
+        return await self._command(
+            "authorization",
+            "remove_authorized_client_request",
+            {"public_key": public_key_b64},
         )
 
     async def get_signed_commands_public_key(self) -> dict[str, Any]:

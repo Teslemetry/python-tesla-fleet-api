@@ -22,7 +22,11 @@ from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
-from tesla_fleet_api.const import AuthorizedClientState
+from tesla_fleet_api.const import (
+    AuthorizationRole,
+    AuthorizedClientState,
+    AuthorizedVerificationType,
+)
 from tesla_fleet_api.exceptions import InvalidResponse
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
@@ -91,7 +95,9 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
         result = await site.find_authorized_clients()
 
         self.assertEqual(len(result.clients), 1)
-        self.assertEqual(result.clients[0].state, AuthorizedClientState.PENDING)
+        self.assertEqual(
+            result.clients[0].state, AuthorizedClientState.PENDING_VERIFICATION
+        )
 
     async def test_camel_case_entry_fields_are_recognized(self) -> None:
         site = _make_site(
@@ -133,16 +139,16 @@ class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
         site = _make_site(
             {
                 "response": {
-                    "authorized_clients": [{"public_key": PUBLIC_KEY_B64, "state": 0}]
+                    "authorized_clients": [{"public_key": PUBLIC_KEY_B64, "state": 99}]
                 }
             }
         )
 
         result = await site.find_authorized_clients()
 
-        # 0 is not a member of AuthorizedClientState, but it is a present
+        # 99 is not a member of AuthorizedClientState, but it is a present
         # value - it must not be coerced to None (which means "absent").
-        self.assertEqual(result.clients[0].state, 0)
+        self.assertEqual(result.clients[0].state, 99)
         self.assertIsNotNone(result.clients[0].state)
 
     async def test_explicitly_empty_list_returns_typed_empty_list(self) -> None:
@@ -263,8 +269,48 @@ class ClientsKeyVariantTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.clients[0].state, AuthorizedClientState.VERIFIED)
         self.assertEqual(
-            result.clients[1].state, AuthorizedClientState.PENDING_VERIFICATION
+            result.clients[1].state,
+            AuthorizedClientState.PENDING_VERIFICATION_TIMEOUT,
         )
+        self.assertTrue(
+            all(c.roles == [AuthorizationRole.CUSTOMER] for c in result.clients)
+        )
+        self.assertTrue(
+            all(
+                c.verification == AuthorizedVerificationType.PRESENCE_PROOF
+                for c in result.clients
+            )
+        )
+
+    async def test_unrecognized_role_and_verification_are_preserved(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "clients": [
+                        {
+                            "public_key": PUBLIC_KEY_B64,
+                            "roles": [99],
+                            "verification": 99,
+                        }
+                    ]
+                }
+            }
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(result.clients[0].roles, [99])
+        self.assertEqual(result.clients[0].verification, 99)
+
+    async def test_missing_roles_and_verification_are_none(self) -> None:
+        site = _make_site(
+            {"response": {"clients": [{"public_key": PUBLIC_KEY_B64}]}}
+        )
+
+        result = await site.find_authorized_clients()
+
+        self.assertIsNone(result.clients[0].roles)
+        self.assertIsNone(result.clients[0].verification)
 
     async def test_clients_key_variant_is_recognized(self) -> None:
         site = _make_site(

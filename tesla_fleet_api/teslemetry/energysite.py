@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from tesla_fleet_api.const import (
+    AuthorizationRole,
     AuthorizedClientKeyType,
     AuthorizedClientState,
     AuthorizedClientType,
+    AuthorizedVerificationType,
     Method,
 )
 from tesla_fleet_api.exceptions import InvalidResponse
@@ -58,10 +60,53 @@ def _normalize_state(value: Any) -> AuthorizedClientState | int | str | None:
     return value
 
 
+def _normalize_role(value: Any) -> AuthorizationRole | int | str | None:
+    if value is None or isinstance(value, AuthorizationRole) or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        try:
+            return AuthorizationRole(value)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        try:
+            return AuthorizationRole[value.strip().upper()]
+        except KeyError:
+            return value
+    return value
+
+
+def _normalize_verification(
+    value: Any,
+) -> AuthorizedVerificationType | int | str | None:
+    if (
+        value is None
+        or isinstance(value, AuthorizedVerificationType)
+        or isinstance(value, bool)
+    ):
+        return value
+    if isinstance(value, int):
+        try:
+            return AuthorizedVerificationType(value)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        try:
+            return AuthorizedVerificationType[value.strip().upper()]
+        except KeyError:
+            return value
+    return value
+
+
 def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
+    roles = _field(payload, "roles")
     return AuthorizedClient(
         public_key=_field(payload, "public_key", "publicKey"),
         state=_normalize_state(_field(payload, "state", "authorized_client_state")),
+        roles=[_normalize_role(role) for role in cast(list[object], roles)]
+        if isinstance(roles, list)
+        else None,
+        verification=_normalize_verification(_field(payload, "verification")),
         raw=payload,
     )
 
@@ -70,16 +115,17 @@ def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
 class AuthorizedClient:
     """One entry from a Teslemetry ``list_authorized_clients`` response.
 
-    Only ``public_key`` and ``state`` are modeled - the two fields a
-    pairing flow needs to confirm a registered key. Tesla has not
-    published this response's schema, so anything else on an entry is
-    available via ``raw`` rather than guessed at. Each field accepts the
-    two key-name variants observed for it (``public_key``/``publicKey``,
-    ``state``/``authorized_client_state``).
+    ``public_key``, ``state``, ``roles``, and ``verification`` are modeled.
+    Tesla has not published this response's schema, so anything else on an
+    entry is available via ``raw`` rather than guessed at. Public key and
+    state accept the two key-name variants observed for them
+    (``public_key``/``publicKey``, ``state``/``authorized_client_state``).
     """
 
     public_key: str | None
     state: AuthorizedClientState | int | str | None
+    roles: list[AuthorizationRole | int | str | None] | None
+    verification: AuthorizedVerificationType | int | str | None
     raw: dict[str, Any]
 
 
@@ -250,9 +296,10 @@ class TeslemetryEnergySite(EnergySite):
         pre-populates the request with its own key details.
 
         Args:
-            public_key: The public key to register. Either raw DER PKCS1
-                bytes (which will be base64-encoded), or an already
-                base64-encoded string.
+            public_key: The public key to register. Either raw DER bytes in
+                the encoding matching ``key_type`` (RSA PKCS1 or ECC SPKI;
+                bytes are base64-encoded), or an already base64-encoded
+                string.
             description: Human-readable description of the client.
             key_type: The type of key being registered.
             authorized_client_type: The authorized client type.
@@ -329,19 +376,30 @@ class TeslemetryEnergySite(EnergySite):
         """
         return _parse_authorized_clients(await self.list_authorized_clients())
 
-    async def remove_authorized_client(
-        self, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
         """Remove an authorized client from the energy gateway via the
         Teslemetry custom endpoint.
 
-        Accepts raw protobuf request fields. Keys and nesting must match
-        Tesla's snake_case proto field names.
+        Security note: unlike adding a client, removal requires no physical
+        presence proof - an authenticated session is sufficient, including
+        to remove a VERIFIED record. Any paired key can therefore revoke
+        every other key, including the owner's.
+
+        Args:
+            public_key: The public key to remove, exactly as reported by
+                ``list_authorized_clients`` - either raw DER bytes (which
+                will be base64-encoded) or an already base64-encoded string,
+                so a listed record round-trips to removal with no
+                re-encoding.
         """
+        if isinstance(public_key, bytes):
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+        else:
+            public_key_b64 = public_key
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command/remove_authorized_client",
-            json=params or {},
+            json={"public_key": public_key_b64},
         )
 
 

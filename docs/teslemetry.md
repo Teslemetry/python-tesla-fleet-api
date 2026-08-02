@@ -549,14 +549,19 @@ consumers that need to inspect the client list. The helper returns an
 endpoint, so the typed helper only unwraps the confirmed envelope shape - the
 client list may arrive under either the `authorized_clients` key or the
 `clients` key (the latter observed live from Tesla Release 953) - and models
-the two client fields (`public_key`, `state`) confirmed by the endpoint's own
-known consumer; `clients` is always a list. Only an explicitly empty list
+the confirmed `public_key`, `state`, `roles`, and `verification` fields;
+`clients` is always a list. `state`, each role, and verification are typed as
+`AuthorizedClientState`, `AuthorizationRole`, and
+`AuthorizedVerificationType`, while unknown values are preserved. Only an explicitly empty list
 under either accepted key parses to `clients == []`; a null response body or
 an unrecognized response shape raises
 `tesla_fleet_api.exceptions.InvalidResponse` instead, so malformed data is
-never mistaken for "no authorized clients". `state` is typed as
-`AuthorizedClientState`. The raw response is still available on `raw` for
-anything not modeled.
+never mistaken for "no authorized clients". The raw response is still
+available on `raw` for anything not modeled.
+
+`remove_authorized_client(public_key)` accepts raw DER bytes or an already
+base64-encoded key string. Removal requires no physical presence proof, so any
+paired key can revoke every other key, including the owner's.
 
 These cloud helpers report the gateway's registered-client state as returned
 by the Teslemetry API. Confirming that a key can actually make signed LAN
@@ -575,7 +580,7 @@ async def main():
 
         result = await energy_site.find_authorized_clients()
         for client in result.clients:
-            print(client.public_key, client.state)
+            print(client.public_key, client.state, client.roles, client.verification)
 
         # The untyped response is still available when callers need the exact
         # Teslemetry payload.
