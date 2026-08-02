@@ -412,6 +412,7 @@ reading the file that won the create race.
 | `get_device_cert()` | Common | Device certificate (subject, issuer, validity) |
 | `list_authorized_clients()` | Authorization | Best-effort cloud listing of paired keys; not authoritative for local key verification |
 | `add_authorized_client()` | Authorization | Register a public key for local signed LAN control |
+| `remove_authorized_client()` | Authorization | Remove a paired public key; Fleet API route is inferred and not hardware-verified |
 | `get_signed_commands_public_key()` | Authorization | Gateway's public key for signed commands |
 | `get_backup_events()` | TEG | Backup event history (may timeout on some firmware) |
 | `schedule_backup_event()` | TEG | Schedule a manual backup event |

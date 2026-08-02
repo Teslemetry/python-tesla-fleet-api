@@ -48,10 +48,17 @@ the non-blocking and fully validated behavior described above.
 ## 2. Register the key with the gateway, over the cloud
 
 `EnergySite.add_authorized_client` registers the public half of that key with
-the gateway. After registration the key sits in `PENDING`/
-`PENDING_VERIFICATION` state (`AuthorizedClientState`) until the gateway
-confirms it - either auto-verified via cloud, or by a physical breaker toggle
-at the gateway.
+the gateway. After registration the key sits in `PENDING_VERIFICATION` state
+(`AuthorizedClientState`) during a roughly nine-minute presence-proof window.
+A physical breaker toggle confirms it (observed in as little as 59 seconds);
+cloud auto-verification was not observed. If the window expires, the key moves
+to the terminal `PENDING_VERIFICATION_TIMEOUT` state. Re-register the same key
+to reset the window and retry; this does not create a duplicate record.
+
+The gateway can also register an ECC public key when it is encoded as DER
+SubjectPublicKeyInfo (`Tesla.ec_public_der_spki`), but ECC cannot authenticate
+the LAN TEDapi v1r protocol because that protocol has no ECDSA signature
+variant. Use the RSA/PKCS1 path shown here for local control.
 
 ```python
 import aiohttp
@@ -109,8 +116,8 @@ interface (or `None` when no usable interface is reported) - see
 
 ## 4. Verify the key is paired by using it
 
-The gateway takes registration (step 2) and confirmation (auto-verify, or a
-physical breaker toggle) as two separate events, and there is a window
+The gateway takes registration (step 2) and physical confirmation as two
+separate events, and there is a window
 between them where the key exists but is not yet usable. **The reliable way
 to tell that window has closed is to attempt a signed local read through
 `aiopowerwall` and retry until it succeeds** - a successful signed response
@@ -170,6 +177,13 @@ a genuinely empty client list. Catch `InvalidResponse` (or
 `TeslaFleetError` subclasses `BaseException`, so a bare `except Exception`
 will not catch it. Either way, a `null` response here tells you nothing
 about whether the key actually works.
+
+To revoke a key, call `remove_authorized_client(public_key)` with its DER bytes
+or the base64 string returned by `list_authorized_clients()`. Removal does not
+require physical presence proof: any paired key can revoke every other key,
+including the owner's. The base Fleet API command route is inferred and has
+not been hardware-verified; only removal over the local v1r transport has been
+verified.
 
 ## 5. Compose local + cloud with EnergySiteRouter
 

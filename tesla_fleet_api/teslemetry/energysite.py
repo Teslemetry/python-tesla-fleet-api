@@ -103,7 +103,7 @@ def _parse_client(payload: dict[str, Any]) -> AuthorizedClient:
     return AuthorizedClient(
         public_key=_field(payload, "public_key", "publicKey"),
         state=_normalize_state(_field(payload, "state", "authorized_client_state")),
-        roles=[_normalize_role(role) for role in roles]
+        roles=[_normalize_role(role) for role in cast(list[object], roles)]
         if isinstance(roles, list)
         else None,
         verification=_normalize_verification(_field(payload, "verification")),
@@ -296,9 +296,10 @@ class TeslemetryEnergySite(EnergySite):
         pre-populates the request with its own key details.
 
         Args:
-            public_key: The public key to register. Either raw DER PKCS1
-                bytes (which will be base64-encoded), or an already
-                base64-encoded string.
+            public_key: The public key to register. Either raw DER bytes in
+                the encoding matching ``key_type`` (RSA PKCS1 or ECC SPKI;
+                bytes are base64-encoded), or an already base64-encoded
+                string.
             description: Human-readable description of the client.
             key_type: The type of key being registered.
             authorized_client_type: The authorized client type.
