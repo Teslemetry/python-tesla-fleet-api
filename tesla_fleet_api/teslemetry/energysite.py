@@ -329,19 +329,30 @@ class TeslemetryEnergySite(EnergySite):
         """
         return _parse_authorized_clients(await self.list_authorized_clients())
 
-    async def remove_authorized_client(
-        self, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
         """Remove an authorized client from the energy gateway via the
         Teslemetry custom endpoint.
 
-        Accepts raw protobuf request fields. Keys and nesting must match
-        Tesla's snake_case proto field names.
+        Security note: unlike adding a client, removal requires no physical
+        presence proof - an authenticated session is sufficient, including
+        to remove a VERIFIED record. Any paired key can therefore revoke
+        every other key, including the owner's.
+
+        Args:
+            public_key: The public key to remove, exactly as reported by
+                ``list_authorized_clients`` - either raw DER bytes (which
+                will be base64-encoded) or an already base64-encoded string,
+                so a listed record round-trips to removal with no
+                re-encoding.
         """
+        if isinstance(public_key, bytes):
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+        else:
+            public_key_b64 = public_key
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command/remove_authorized_client",
-            json=params or {},
+            json={"public_key": public_key_b64},
         )
 
 

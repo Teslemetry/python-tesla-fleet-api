@@ -226,13 +226,14 @@ class EnergyDeviceIdentifierType(IntEnum):
 class AuthorizedClientKeyType(IntEnum):
     """Key type for energy gateway authorized clients.
 
-    Note: Tesla has not published the full ``key_type`` enum body. The RSA
-    value below is empirically known to work for registering an RSA-4096
-    key via ``add_authorized_client_request``; other values may exist but
-    are not publicly documented.
+    Sourced from the gateway's ``AUTHORIZED_KEY_TYPE_*`` protobuf enum;
+    both RSA and ECC are live-verified to register and list back with the
+    key type intact.
     """
 
+    INVALID = 0
     RSA = 1
+    ECC = 2
 
 
 class AuthorizedClientType(IntEnum):
@@ -252,11 +253,41 @@ class AuthorizedClientType(IntEnum):
 
 
 class AuthorizedClientState(IntEnum):
-    """State of an authorized client registered on an energy gateway."""
+    """State of an authorized client registered on an energy gateway.
 
-    PENDING = 1
-    PENDING_VERIFICATION = 2
+    BREAKING (as of the release introducing this docstring): the previous
+    ``PENDING``/``PENDING_VERIFICATION`` names were mislabelled against the
+    gateway's actual enum and are renamed here - ``PENDING`` is now
+    ``PENDING_VERIFICATION`` and the old ``PENDING_VERIFICATION`` (value 2)
+    is now ``PENDING_VERIFICATION_TIMEOUT``. Value 2 is a **terminal**
+    failure state (the ~9-minute presence-proof window expired) - a
+    register-then-poll pairing flow that treats it as still-in-progress
+    hangs forever. ``INVALID``/``REMOVED`` were previously unmodeled.
+    """
+
+    INVALID = 0
+    PENDING_VERIFICATION = 1
+    PENDING_VERIFICATION_TIMEOUT = 2
     VERIFIED = 3
+    REMOVED = 4
+
+
+class AuthorizationRole(IntEnum):
+    """Role granted to an authorized client on an energy gateway."""
+
+    INVALID = 0
+    CUSTOMER = 1
+    VEHICLE = 2
+
+
+class AuthorizedVerificationType(IntEnum):
+    """How an authorized client's presence was verified on an energy gateway."""
+
+    INVALID = 0
+    PRESENCE_PROOF = 1
+    BLE = 2
+    SIGNED = 3
+    HERMES_COMMAND = 4
 
 
 class ClosureState(StrEnum):

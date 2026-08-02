@@ -385,6 +385,27 @@ class Tesla:
         return base64.b64encode(self.rsa_public_der_pkcs1).decode("ascii")
 
     @property
+    def ec_public_der_spki(self) -> bytes:
+        """Return the EC public key in DER SubjectPublicKeyInfo (SPKI) format.
+
+        This is the format the Tesla energy gateway expects when
+        registering an ECC authorized client - a raw X9.62 uncompressed
+        point (the vehicle-BLE form) is rejected with an asn1 structure
+        error.
+        """
+        if self.private_key is None:
+            raise ValueError("EC private key is not set")
+        return self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
+    @property
+    def ec_public_der_spki_b64(self) -> str:
+        """Return the EC public key in base64-encoded DER SPKI format."""
+        return base64.b64encode(self.ec_public_der_spki).decode("ascii")
+
+    @property
     def rsa_public_pem(self) -> str:
         """Get the RSA public key in PEM (SubjectPublicKeyInfo) format."""
         if self.rsa_private_key is None:
