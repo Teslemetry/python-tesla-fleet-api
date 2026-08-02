@@ -586,3 +586,132 @@ class GetRsaPrivateKeyPermissionsTests(IsolatedAsyncioTestCase):
             self.assertTrue(
                 any("isolated subprocess" in message for message in logs.output)
             )
+
+
+class GetRsaPrivateKeyOptionalValidationTests(IsolatedAsyncioTestCase):
+    async def test_existing_key_read_validates_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.serialization.load_pem_private_key",
+                wraps=serialization.load_pem_private_key,
+            ) as load:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            load.assert_called_once()
+            self.assertFalse(load.call_args.kwargs["unsafe_skip_rsa_key_validation"])
+
+    async def test_skip_rsa_key_validation_forwarded_on_existing_key_read(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            created = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.serialization.load_pem_private_key",
+                wraps=serialization.load_pem_private_key,
+            ) as load:
+                key = await Tesla().get_rsa_private_key(
+                    path, key_size=1024, skip_rsa_key_validation=True
+                )
+
+            load.assert_called_once()
+            self.assertTrue(load.call_args.kwargs["unsafe_skip_rsa_key_validation"])
+            self.assertEqual(_rsa_pem(key), _rsa_pem(created))
+
+    async def test_internally_generated_pem_deserialization_skips_validation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.serialization.load_pem_private_key",
+                wraps=serialization.load_pem_private_key,
+            ) as load:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            load.assert_called_once()
+            self.assertTrue(load.call_args.kwargs["unsafe_skip_rsa_key_validation"])
+
+    async def test_async_rsa_key_creation_true_uses_isolated_subprocess(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+                wraps=asyncio.create_subprocess_exec,
+            ) as create_subprocess_exec:
+                key = await Tesla().get_rsa_private_key(
+                    path, key_size=1024, async_rsa_key_creation=True
+                )
+
+            create_subprocess_exec.assert_called_once()
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+
+    async def test_async_rsa_key_creation_false_skips_isolated_subprocess(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.asyncio.create_subprocess_exec",
+            ) as create_subprocess_exec:
+                key = await Tesla().get_rsa_private_key(
+                    path, key_size=1024, async_rsa_key_creation=False
+                )
+
+            create_subprocess_exec.assert_not_called()
+            self.assertIsInstance(key, rsa.RSAPrivateKey)
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            self.assertEqual(mode, 0o600)
+
+    async def test_existing_key_read_does_not_block_event_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            real_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+            Path(path).write_bytes(_rsa_pem(real_key))
+            os.chmod(path, 0o600)
+
+            def slow_load_pem_private_key(
+                *args: object, **kwargs: object
+            ) -> rsa.RSAPrivateKey:
+                import time as time_module
+
+                time_module.sleep(0.15)
+                return real_key
+
+            ticks = 0
+
+            async def heartbeat() -> None:
+                nonlocal ticks
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks += 1
+
+            with mock.patch(
+                "tesla_fleet_api.tesla.tesla.serialization.load_pem_private_key",
+                side_effect=slow_load_pem_private_key,
+            ):
+                heart = asyncio.create_task(heartbeat())
+                try:
+                    key = await Tesla().get_rsa_private_key(path, key_size=1024)
+                finally:
+                    heart.cancel()
+
+            self.assertGreater(ticks, 10)
+            self.assertEqual(_rsa_pem(key), _rsa_pem(real_key))
+
+    async def test_defaults_unchanged_for_existing_rsa_key_read(self) -> None:
+        """No new params behaves identically to before this change."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            created = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            read_back = await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertEqual(_rsa_pem(read_back), _rsa_pem(created))
