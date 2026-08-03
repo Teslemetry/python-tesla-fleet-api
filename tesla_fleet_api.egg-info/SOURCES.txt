@@ -59,6 +59,7 @@ tests/test_ble_charging_utility_commands.py
 tests/test_ble_climate_commands.py
 tests/test_ble_command_verification.py
 tests/test_ble_confirmation_mode.py
+tests/test_ble_connection_status.py
 tests/test_ble_connectivity_diagnostics_commands.py
 tests/test_ble_destructive_commands.py
 tests/test_ble_expects_data.py

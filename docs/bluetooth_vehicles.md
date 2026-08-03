@@ -556,6 +556,30 @@ the `unsubscribe()` closure returned at registration.
 Callback exceptions are logged and do not stop later listeners or normal
 message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 
+### Connection-status events
+
+Use `listen_connection_status(callback)` to receive BLE session transitions
+without polling `is_connected`. The synchronous callback receives `True` after
+`connect()` has successfully subscribed to GATT notifications and `False` when
+that session is lost, whether through `disconnect()` or an unexpected transport
+drop detected by bleak during an operation:
+
+```python
+def on_connection_status(connected: bool):
+    print(f"BLE connected: {connected}")
+
+unsubscribe = vehicle.listen_connection_status(on_connection_status)
+...
+unsubscribe()
+```
+
+Only actual transitions are emitted, so redundant `connect()`/`disconnect()`
+calls and reconnect loops do not duplicate an unchanged state. Registration
+persists across reconnects until the returned, idempotent `unsubscribe()`
+closure is called. As with broadcast listeners, one callback raising an
+exception is logged and does not prevent later callbacks from running;
+`KeyboardInterrupt` and `SystemExit` still propagate.
+
 ## Media Commands
 
 `VehicleBluetooth` inherits the signed media commands from `Commands`, so media
