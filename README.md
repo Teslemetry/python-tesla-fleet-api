@@ -201,7 +201,10 @@ hierarchy.
 `VehicleBluetooth` can also register persistent BLE broadcast listeners for
 unsolicited VCSEC `VehicleStatus` updates. Use typed `listen_*` helpers for the
 decoded vehicle-status fields, or `listen_broadcast(domain, callback)` for raw
-per-domain broadcast messages.
+per-domain broadcast messages. Use `listen_connection_status(callback)` for
+`True`/`False` BLE session transition notifications. See
+[Bluetooth for Vehicles](docs/bluetooth_vehicles.md#connection-status-events)
+for the connection-event contract.
 
 ### Routing and Failover
 
