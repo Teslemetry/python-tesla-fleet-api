@@ -15,6 +15,7 @@ MODELS = {
     "C": "Cybertruck",
     "R": "Roadster",
     "T": "Semi",
+    "A": "Cybercab",
 }
 
 
