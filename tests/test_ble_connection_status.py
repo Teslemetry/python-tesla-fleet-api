@@ -123,6 +123,26 @@ class UnexpectedDropTests(IsolatedAsyncioTestCase):
         self.assertEqual(events, [False])
         self.assertFalse(vehicle._connected)
 
+    async def test_stale_client_disconnect_does_not_change_active_session(self) -> None:
+        vehicle = _make_vehicle()
+        stale_client = _make_client()
+        active_client = _make_client()
+        events: list[bool] = []
+
+        with patch(
+            "tesla_fleet_api.tesla.vehicle.bluetooth.establish_connection",
+            AsyncMock(side_effect=[stale_client, active_client]),
+        ):
+            await vehicle.connect()
+            await vehicle.connect()
+        vehicle.listen_connection_status(events.append)
+
+        vehicle._on_ble_disconnected(stale_client)
+
+        self.assertEqual(events, [])
+        self.assertTrue(vehicle._connected)
+        self.assertIs(vehicle.client, active_client)
+
     async def test_explicit_disconnect_after_unexpected_drop_does_not_double_fire(
         self,
     ) -> None:

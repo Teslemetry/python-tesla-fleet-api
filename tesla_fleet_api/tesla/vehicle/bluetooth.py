@@ -675,6 +675,8 @@ class VehicleBluetooth(
         mid-operation; ``_set_connected`` collapses either into at most one
         ``False`` dispatch.
         """
+        if client is not self.client:
+            return
         self._set_connected(False)
 
     async def connect_if_needed(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
