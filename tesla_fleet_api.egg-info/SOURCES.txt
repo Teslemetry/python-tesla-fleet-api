@@ -100,3 +100,4 @@ tests/test_teslemetry_gateway_address.py
 tests/test_teslemetry_wait_until_paired.py
 tests/test_tessie_vehicle_params.py
 tests/test_vehicle_image_state.py
+tests/test_vehicle_model.py
