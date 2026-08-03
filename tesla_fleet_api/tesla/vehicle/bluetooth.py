@@ -27,7 +27,7 @@ from tesla_fleet_api.exceptions import (
     TeslaFleetError,
     WhitelistOperationStatus,
 )
-from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners
+from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners, Unsubscribe
 from tesla_fleet_api.tesla.vehicle.commands import (
     Commands,
     infotainment_command_name,
@@ -496,6 +496,8 @@ class VehicleBluetooth(
     _keepalive_timeout: float = 2
     _keepalive_task: asyncio.Task[None] | None = None
     _last_activity: float = 0.0
+    _connected: bool = False
+    _connection_listeners: list[Callable[[bool], None]]
 
     def __init__(
         self,
@@ -559,6 +561,7 @@ class VehicleBluetooth(
         self._stream_sinks = {}
         self._retired_streams = deque(maxlen=_STREAM_TOMBSTONE_MAXSIZE)
         self._init_broadcast_listeners()
+        self._connection_listeners = []
         self.device = device
         self._connect_lock = asyncio.Lock()
         self._buffer = ReassemblingBuffer(self._on_message)
@@ -615,12 +618,14 @@ class VehicleBluetooth(
                 BleakClient,
                 self.device,
                 self.vin,
+                disconnected_callback=self._on_ble_disconnected,
                 max_attempts=max_attempts,
                 # ble_device_callback=self.get_device,
                 services=[SERVICE_UUID],
             )
             await self.client.start_notify(READ_UUID, self._on_notify)
             await self._start_keepalive()
+            self._set_connected(True)
         # bleak-esphome converts an aioesphomeapi transport timeout into a
         # builtin TimeoutError, not a BleakError, so catch both to keep every
         # connect transport failure within TeslaFleetError.
@@ -640,7 +645,37 @@ class VehicleBluetooth(
         if not self.client:
             return False
         await self.client.disconnect()
+        self._set_connected(False)
         return True
+
+    def listen_connection_status(self, callback: Callable[[bool], None]) -> Unsubscribe:
+        """Listen for BLE session connect/disconnect events.
+
+        Fires ``True`` once a connection is fully established (GATT
+        notifications subscribed) and ``False`` once that session is lost -
+        cleanly via ``disconnect()`` or unexpectedly via bleak's own
+        ``disconnected_callback``, including a loss detected mid-operation.
+        Only genuine state transitions fire; a redundant ``connect()``/
+        ``disconnect()`` call, or a reconnect loop, does not re-fire while the
+        state hasn't actually changed.
+        """
+        return self._register(self._connection_listeners, callback)
+
+    def _set_connected(self, connected: bool) -> None:
+        if self._connected == connected:
+            return
+        self._connected = connected
+        for callback in list(self._connection_listeners):
+            self._dispatch_callback(callback, connected)
+
+    def _on_ble_disconnected(self, client: BleakClient) -> None:
+        """bleak's own disconnect callback - fires on any real session loss.
+
+        Covers both a clean ``disconnect()`` and an unexpected drop detected
+        mid-operation; ``_set_connected`` collapses either into at most one
+        ``False`` dispatch.
+        """
+        self._set_connected(False)
 
     async def connect_if_needed(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device if not already connected."""
