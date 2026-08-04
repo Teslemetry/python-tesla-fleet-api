@@ -1,7 +1,7 @@
 """Tesla Fleet API"""
 
 __author__ = "hello@teslemetry.com"
-__version__ = "1.7.7"
+__version__ = "1.8.0"
 
 from tesla_fleet_api.const import Region, is_valid_region
 from tesla_fleet_api.tariff import (
