@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import re
 from typing import Any
-from bleak import BleakClient
+import bleak
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 from google.protobuf.json_format import MessageToJson, MessageToDict
@@ -40,8 +40,13 @@ class TeslaBluetooth(Tesla):
         self, device: BLEDevice, max_attempts: int = 5
     ) -> str | None:
         """Queries the name of a bluetooth vehicle."""
+        # Resolve BleakClient dynamically so habluetooth's late-installed
+        # multi-adapter/proxy client is honored regardless of import order.
         client = await establish_connection(
-            BleakClient, device, device.name or "Unknown", max_attempts=max_attempts
+            bleak.BleakClient,
+            device,
+            device.name or "Unknown",
+            max_attempts=max_attempts,
         )
         name: str | None = None
         for i in range(max_attempts):
