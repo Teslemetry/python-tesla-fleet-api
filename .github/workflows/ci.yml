@@ -6,8 +6,24 @@ on:
   pull_request:
 
 jobs:
-  check:
-    name: Lint, typecheck, test (py${{ matrix.python-version }})
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync
+      - name: Ruff
+        run: uv run ruff check tesla_fleet_api tests
+      - name: Pyright
+        run: uv run pyright tesla_fleet_api
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -23,9 +39,24 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --python ${{ matrix.python-version }}
-      - name: Ruff lint
-        run: uv run ruff check tesla_fleet_api tests
-      - name: Pyright
-        run: uv run pyright tesla_fleet_api
       - name: Pytest
         run: uv run pytest tests -q
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Build
+        run: uv build
+      - name: Check distribution
+        run: uvx twine check dist/*
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
