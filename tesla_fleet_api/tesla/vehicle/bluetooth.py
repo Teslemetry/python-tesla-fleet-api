@@ -9,7 +9,7 @@ from collections import deque
 from random import randbytes
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
-from bleak import BleakClient, BleakScanner
+import bleak
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakCharacteristicNotFoundError, BleakError
@@ -116,6 +116,11 @@ APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 DEFAULT_KEEPALIVE_INTERVAL = 20.0
 
 if TYPE_CHECKING:
+    # Resolved dynamically as ``bleak.BleakClient``/``bleak.BleakScanner`` at
+    # call time so habluetooth's late-installed multi-adapter wrappers win
+    # regardless of import order; imported here only for type annotations.
+    from bleak import BleakClient, BleakScanner
+
     from tesla_fleet_api.tesla.tesla import Tesla
 
 BluetoothParentT = TypeVar("BluetoothParentT", bound="Tesla")
@@ -588,7 +593,7 @@ class VehicleBluetooth(
             # No service_uuids filter: the vehicle advertises no service UUID
             # (SERVICE_UUID is GATT-only, post-connect); active scan is needed
             # since the name lives in the scan response, not the advertisement.
-            scanner = BleakScanner(scanning_mode="active")
+            scanner = bleak.BleakScanner(scanning_mode="active")
 
         if address is not None:
             device = await scanner.find_device_by_address(address)
@@ -613,9 +618,13 @@ class VehicleBluetooth(
         """Connect to the Tesla BLE device."""
         if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
+        # Resolve BleakClient dynamically: habluetooth replaces
+        # ``bleak.BleakClient`` with its proxy/multi-adapter client at runtime,
+        # and an import-time binding would ignore that replacement.
+        stage = "establish_connection"
         try:
             self.client = await establish_connection(
-                BleakClient,
+                bleak.BleakClient,
                 self.device,
                 self.vin,
                 disconnected_callback=self._on_ble_disconnected,
@@ -623,13 +632,25 @@ class VehicleBluetooth(
                 # ble_device_callback=self.get_device,
                 services=[SERVICE_UUID],
             )
+            stage = "start_notify"
             await self.client.start_notify(READ_UUID, self._on_notify)
+            stage = "is_connected"
+            if not self.client.is_connected:
+                raise BleakError("client not connected after establish_connection")
+            stage = "keepalive"
             await self._start_keepalive()
             self._set_connected(True)
         # bleak-esphome converts an aioesphomeapi transport timeout into a
         # builtin TimeoutError, not a BleakError, so catch both to keep every
         # connect transport failure within TeslaFleetError.
         except (BleakError, TimeoutError) as e:
+            LOGGER.debug(
+                "BLE connect failed vin=%s stage=%s %s: %s",
+                self.vin,
+                stage,
+                type(e).__name__,
+                e,
+            )
             client = self.client
             self.client = None
             if client:
@@ -917,6 +938,12 @@ class VehicleBluetooth(
                 # the connected GATT server, strictly before any backend I/O -
                 # the write never reached the transport, so a fallback router
                 # can safely retry it on another backend.
+                LOGGER.debug(
+                    "BLE send failed vin=%s stage=characteristic_resolution %s: %s",
+                    self.vin,
+                    type(e).__name__,
+                    e,
+                )
                 self._disarm_broadcast_confirmation(domain, broadcast_watcher)
                 raise BluetoothTransportError from e
             except (BleakError, TimeoutError) as e:

@@ -40,7 +40,7 @@ class FindVehicleScanFilterTests(IsolatedAsyncioTestCase):
             async def find_device_by_name(self, name):
                 return fake_device
 
-        with patch("tesla_fleet_api.tesla.vehicle.bluetooth.BleakScanner", FakeScanner):
+        with patch("bleak.BleakScanner", FakeScanner):
             device = await vehicle.find_vehicle()
 
         self.assertIs(device, fake_device)
