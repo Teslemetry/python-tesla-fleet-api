@@ -13,7 +13,7 @@ import bleak
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakCharacteristicNotFoundError, BleakError
-from bleak_retry_connector import MAX_CONNECT_ATTEMPTS, establish_connection
+from bleak_retry_connector import establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.message import DecodeError
 
@@ -114,6 +114,10 @@ APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 # An idle held BLE link to the vehicle drops at ~42s mean; a trivial GATT read
 # every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
 DEFAULT_KEEPALIVE_INTERVAL = 20.0
+
+# The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
+# transient failures without delaying Router fallback for its full default.
+DEFAULT_CONNECT_ATTEMPTS = 2
 
 if TYPE_CHECKING:
     # Resolved dynamically as ``bleak.BleakClient``/``bleak.BleakScanner`` at
@@ -614,7 +618,7 @@ class VehicleBluetooth(
         """Return the currently assigned BLE device, if one has been discovered."""
         return self.device
 
-    async def connect(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
+    async def connect(self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device."""
         if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
@@ -700,7 +704,9 @@ class VehicleBluetooth(
             return
         self._set_connected(False)
 
-    async def connect_if_needed(self, max_attempts: int = MAX_CONNECT_ATTEMPTS) -> None:
+    async def connect_if_needed(
+        self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS
+    ) -> None:
         """Connect to the Tesla BLE device if not already connected."""
         async with self._connect_lock:
             if not self.client or not self.client.is_connected:
