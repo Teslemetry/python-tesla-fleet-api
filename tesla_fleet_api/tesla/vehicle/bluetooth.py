@@ -115,12 +115,8 @@ APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 # every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
 DEFAULT_KEEPALIVE_INTERVAL = 20.0
 
-# bleak_retry_connector's own default (4 attempts) pairs with its fixed ~20s
-# per-attempt connect timeout to burn ~81s before a contended connection slot
-# (all phone/watch slots held) surfaces failure - indistinguishable from a
-# hang, and far past the point a Router should have already failed over to
-# cloud. Two attempts still allows one retry for a genuinely transient
-# failure (car waking, weak RF) while capping the worst case at ~40s.
+# The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
+# transient failures without delaying Router fallback for its full default.
 DEFAULT_CONNECT_ATTEMPTS = 2
 
 if TYPE_CHECKING:

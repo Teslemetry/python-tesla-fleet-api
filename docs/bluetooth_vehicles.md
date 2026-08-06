@@ -74,6 +74,24 @@ Tradeoff: because these reads generate link traffic, they keep an already-awake
 car awake and defer vehicle sleep. If you want the vehicle to sleep while idle,
 disable keepalive or disconnect when you have no work for it.
 
+## Connection Retry Budget
+
+`connect()` and `connect_if_needed()` make at most two connection attempts by
+default. This allows one retry for a waking vehicle or weak signal while
+limiting a failed connection to roughly 40 seconds before raising
+`BluetoothTransportError`. In particular, this lets a `VehicleRouter` move to
+its cloud fallback promptly when the vehicle is discoverable but all of its BLE
+connection slots are occupied.
+
+Pass `max_attempts` explicitly when an environment needs a larger retry budget:
+
+```python
+await vehicle.connect(max_attempts=4)
+```
+
+The underlying connector's per-attempt timeout is fixed at about 20 seconds, so
+increasing this value increases the worst-case connection delay accordingly.
+
 ## Pair Vehicle
 
 You can pair a `VehicleBluetooth` instance using the `pair` method. Here's a basic example to pair a `VehicleBluetooth` instance:
