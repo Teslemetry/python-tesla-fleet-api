@@ -1,0 +1,99 @@
+name: Release gate & publish
+
+on:
+  workflow_call:
+    inputs:
+      package-dir:
+        description: Import package directory to lint/type-check (passed to ruff/pyright)
+        required: true
+        type: string
+      python-version:
+        description: Python version to build/test/publish with
+        required: false
+        type: string
+        default: "3.13"
+      pypi-project-url:
+        description: PyPI project URL shown on the environment deployment
+        required: true
+        type: string
+      environment-name:
+        description: Protected GitHub environment gating the publish step
+        required: false
+        type: string
+        default: pypi
+
+jobs:
+  gate:
+    name: Full CI gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python ${{ inputs.python-version }}
+        run: uv python install ${{ inputs.python-version }}
+      - name: Install dependencies
+        run: uv sync --python ${{ inputs.python-version }}
+      - name: Ruff
+        run: uv run ruff check ${{ inputs.package-dir }} tests
+      - name: Pyright
+        run: uv run pyright ${{ inputs.package-dir }}
+      - name: Pytest
+        run: uv run pytest tests -q
+      - name: Build
+        run: uv build
+      - name: Check distribution
+        run: uvx twine check dist/*
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-to-pypi:
+    name: Publish distribution to PyPI
+    needs: gate
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment-name }}
+      url: ${{ inputs.pypi-project-url }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Upload distribution to GitHub Release
+    needs: publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # mandatory for making GitHub Releases
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create
+          '${{ github.ref_name }}'
+          --repo '${{ github.repository }}'
+          --generate-notes
+      - name: Upload artifacts to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload
+          '${{ github.ref_name }}' dist/**
+          --repo '${{ github.repository }}'

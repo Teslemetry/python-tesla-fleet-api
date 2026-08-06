@@ -93,7 +93,7 @@ Scope flags on `TeslaFleetApi.__init__` control which submodules are instantiate
 
 ### Release Process
 
-No release-please or version-bump automation. To ship: bump `version` in `pyproject.toml` and `__version__` in `tesla_fleet_api/__init__.py` in a `Bump version to X.Y.Z` commit on `main`, then push a matching `vX.Y.Z` tag. `.github/workflows/python-publish.yml` runs on every push but only builds+publishes to PyPI (and creates a GitHub Release) when `github.ref` starts with `refs/tags/` — pushing the tag is what actually ships the release; merging to `main` alone does not.
+No release-please or version-bump automation. To ship: bump `version` in `pyproject.toml` and `__version__` in `tesla_fleet_api/__init__.py` in a `Bump version to X.Y.Z` commit on `main`, then push a matching `vX.Y.Z` tag. `.github/workflows/python-publish.yml` only triggers on that tag push and calls the reusable `.github/workflows/release.yml` workflow, which reruns the full CI gate (ruff, pyright, pytest, `uv build` + `twine check`) on the exact tagged commit, then requires approval on the `pypi` GitHub environment (required reviewers configured via the Environments API - there's no repo Settings UI for it) before publishing via the existing PyPA OIDC trusted-publishing action and cutting the GitHub Release. `release.yml` is written as a `workflow_call` reusable workflow (parameterized by `package-dir`/`pypi-project-url`) specifically so sibling repos can call it with `uses: Teslemetry/python-tesla-fleet-api/.github/workflows/release.yml@main` instead of copying the job.
 
 ### Error Handling
 
