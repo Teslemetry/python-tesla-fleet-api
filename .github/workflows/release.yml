@@ -1,45 +1,36 @@
 name: Release gate & publish
 
 on:
-  workflow_call:
-    inputs:
-      package-dir:
-        description: Import package directory to lint/type-check (passed to ruff/pyright)
-        required: true
-        type: string
-      python-version:
-        description: Python version to build/test/publish with
-        required: false
-        type: string
-        default: "3.13"
-      pypi-project-url:
-        description: PyPI project URL shown on the environment deployment
-        required: true
-        type: string
-      environment-name:
-        description: Protected GitHub environment gating the publish step
-        required: false
-        type: string
-        default: pypi
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  PACKAGE_DIR: tesla_fleet_api
+  PYTHON_VERSION: "3.13"
+  PYPI_PROJECT_URL: https://pypi.org/p/tesla_fleet_api
+  ENVIRONMENT_NAME: pypi
 
 jobs:
   gate:
     name: Full CI gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Set up Python ${{ inputs.python-version }}
-        run: uv python install ${{ inputs.python-version }}
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
-        run: uv sync --python ${{ inputs.python-version }}
+        run: uv sync --python ${{ env.PYTHON_VERSION }}
       - name: Ruff
-        run: uv run ruff check ${{ inputs.package-dir }} tests
+        run: uv run ruff check ${{ env.PACKAGE_DIR }} tests
       - name: Pyright
-        run: uv run pyright ${{ inputs.package-dir }}
+        run: uv run pyright ${{ env.PACKAGE_DIR }}
       - name: Pytest
         run: uv run pytest tests -q
       - name: Build
@@ -57,8 +48,8 @@ jobs:
     needs: gate
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment-name }}
-      url: ${{ inputs.pypi-project-url }}
+      name: ${{ env.ENVIRONMENT_NAME }}
+      url: ${{ env.PYPI_PROJECT_URL }}
     permissions:
       id-token: write
     steps:
@@ -69,9 +60,6 @@ jobs:
           path: dist/
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # Reusable-workflow identity mismatch breaks PyPI attestation verification (PEP 740).
-          attestations: false
 
   github-release:
     name: Upload distribution to GitHub Release
