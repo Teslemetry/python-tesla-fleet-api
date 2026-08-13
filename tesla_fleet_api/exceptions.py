@@ -205,6 +205,18 @@ class OAuthExpired(TeslaFleetError):
     key = "token expired (401)"
 
 
+class TeslemetryRegistrationError(TeslaFleetError):  # Teslemetry specific
+    """Teslemetry OAuth dynamic client registration (RFC 7591) failed.
+
+    Covers a transport/timeout failure reaching the registration endpoint, a
+    non-2xx response, a response body that isn't valid JSON, and a
+    well-formed response missing a usable ``client_id``. The specific reason
+    is carried in ``data``.
+    """
+
+    message = "Teslemetry dynamic client registration failed."
+
+
 class LoginRequired(TeslaFleetError):  # Native and Teslemetry
     """The user has reset their password and a new auth code is required, or the refresh_token has already been used."""
 

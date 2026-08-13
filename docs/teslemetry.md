@@ -645,3 +645,41 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## OAuth Dynamic Client Registration
+
+Teslemetry supports OAuth 2.0 Dynamic Client Registration
+([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)) so each installation can
+register its own `client_id` instead of every client sharing one hardcoded
+value. `register_client` is a standalone helper - it needs only an
+`aiohttp.ClientSession`, not a `Teslemetry` instance, since no `client_id` or
+access token exists yet at registration time. It always registers a new
+client; callers are responsible for persisting the returned `client_id` and
+skipping registration on subsequent runs.
+
+It raises `tesla_fleet_api.exceptions.TeslemetryRegistrationError` if the
+registration endpoint can't be reached, the response isn't valid JSON, or the
+response doesn't contain a usable `client_id`.
+
+```python
+import aiohttp
+from tesla_fleet_api import register_client
+from tesla_fleet_api.exceptions import TeslemetryRegistrationError
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        try:
+            registration = await register_client(
+                session,
+                client_name="Home Assistant",
+                software_id="home-assistant",
+                software_version="2026.1.0",
+            )
+        except TeslemetryRegistrationError as e:
+            print(e)
+            return
+
+        print(registration.client_id)
+
+asyncio.run(main())
+```

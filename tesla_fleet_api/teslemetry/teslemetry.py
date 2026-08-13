@@ -1,13 +1,94 @@
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from time import time
-from typing import Any
+from typing import Any, Final, cast
 
 import aiohttp
 
 from tesla_fleet_api.const import LOGGER, Method, is_valid_region
+from tesla_fleet_api.exceptions import TeslemetryRegistrationError
 from tesla_fleet_api.tesla import TeslaFleetApi
 from tesla_fleet_api.teslemetry.energysite import TeslemetryEnergySites
 from tesla_fleet_api.teslemetry.vehicle import TeslemetryVehicles
+
+REGISTER_URL: Final = "https://api.teslemetry.com/oauth/register"
+
+
+@dataclass(frozen=True, slots=True)
+class TeslemetryClientRegistration:
+    """Parsed result of :func:`register_client`.
+
+    ``client_id`` is the OAuth client identifier this installation should
+    present for every future authorization, including reauthentication.
+    ``raw`` is the full decoded registration response for anything this
+    wrapper doesn't model.
+    """
+
+    client_id: str
+    raw: dict[str, Any]
+
+
+async def register_client(
+    session: aiohttp.ClientSession,
+    client_name: str,
+    software_id: str,
+    software_version: str,
+) -> TeslemetryClientRegistration:
+    """Dynamically register an OAuth client with Teslemetry (RFC 7591).
+
+    Posts to Teslemetry's client-registration endpoint and parses the
+    result. This is a bare transport call - it always registers a new
+    client and has no knowledge of whether the caller already has one;
+    callers are responsible for persisting the returned ``client_id`` and
+    skipping registration on subsequent runs.
+
+    Args:
+        session: An aiohttp session to issue the request on.
+        client_name: Human-readable client name shown during consent.
+        software_id: Identifier for the calling application.
+        software_version: Version string for the calling application.
+
+    Returns:
+        The parsed registration result.
+
+    Raises:
+        TeslemetryRegistrationError: The endpoint could not be reached, the
+            response was not valid JSON, or the response didn't contain a
+            usable ``client_id``.
+    """
+    try:
+        async with session.post(
+            REGISTER_URL,
+            json={
+                "client_name": client_name,
+                "software_id": software_id,
+                "software_version": software_version,
+            },
+        ) as response:
+            response.raise_for_status()
+            registration = await response.json()
+    except (aiohttp.ClientError, TimeoutError) as err:
+        raise TeslemetryRegistrationError(
+            "Could not reach Teslemetry to register a client",
+            status=getattr(err, "status", None),
+        ) from err
+    except ValueError as err:
+        raise TeslemetryRegistrationError(
+            "Teslemetry returned a malformed registration response"
+        ) from err
+
+    registration_dict = (
+        cast("dict[str, Any]", registration) if isinstance(registration, dict) else None
+    )
+    client_id = registration_dict.get("client_id") if registration_dict else None
+    if not isinstance(client_id, str) or not client_id:
+        raise TeslemetryRegistrationError(
+            "Teslemetry registration response did not contain a client_id"
+        )
+
+    return TeslemetryClientRegistration(
+        client_id=client_id, raw=registration_dict or {}
+    )
 
 
 class Teslemetry(TeslaFleetApi):
