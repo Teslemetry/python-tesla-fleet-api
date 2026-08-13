@@ -48,8 +48,8 @@ jobs:
     needs: gate
     runs-on: ubuntu-latest
     environment:
-      name: ${{ env.ENVIRONMENT_NAME }}
-      url: ${{ env.PYPI_PROJECT_URL }}
+      name: pypi
+      url: https://pypi.org/p/tesla_fleet_api
     permissions:
       id-token: write
     steps:
