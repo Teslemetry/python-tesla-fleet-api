@@ -250,7 +250,40 @@ class TessieVehicleParameterTests(IsolatedAsyncioTestCase):
                 lon=4.56,
             )
 
-    async def test_tessie_add_precondition_schedule_uses_documented_parameters(self) -> None:
+    async def test_set_roles_uses_documented_parameters(self) -> None:
+        """set_roles should send the documented JSON body with only provided fields."""
+
+        vehicle, request = self.create_vehicle()
+
+        response = await vehicle.set_roles(
+            role="SUBSCRIPTION",
+            account_id="555555555",
+        )
+
+        self.assertEqual(response, {"result": True})
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"{self.VIN}/roles",
+            json={"role": "SUBSCRIPTION", "account_id": "555555555"},
+        )
+
+    async def test_set_roles_omits_unset_optional_fields(self) -> None:
+        """set_roles should omit account_id/federation_id when not provided."""
+
+        vehicle, request = self.create_vehicle()
+
+        response = await vehicle.set_roles(role="CHARGING")
+
+        self.assertEqual(response, {"result": True})
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"{self.VIN}/roles",
+            json={"role": "CHARGING"},
+        )
+
+    async def test_tessie_add_precondition_schedule_uses_documented_parameters(
+        self,
+    ) -> None:
         """Precondition schedule requests should follow the Tessie schema."""
 
         vehicle, request = self.create_vehicle()

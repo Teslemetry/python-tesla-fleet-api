@@ -1080,6 +1080,20 @@ class TessieVehicle(VehicleFleet["Tessie"]):
             f"{self.vin}/invitations/{id}/revoke",
         )
 
+    async def set_roles(
+        self,
+        role: str,
+        account_id: str | None = None,
+        federation_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Assign the subscription or charging payer role (requires a Tesla Business account)."""
+        payload: dict[str, str] = {"role": role}
+        if account_id is not None:
+            payload["account_id"] = account_id
+        if federation_id is not None:
+            payload["federation_id"] = federation_id
+        return await self._request(Method.POST, f"{self.vin}/roles", json=payload)
+
     # Fleet Telemetry
     async def get_fleet_telemetry_config(self) -> dict[str, Any]:
         """Retrieve telemetry configuration."""

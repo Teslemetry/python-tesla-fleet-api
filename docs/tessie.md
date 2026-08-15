@@ -415,6 +415,9 @@ async def main():
         response = await vehicle.delete_driver(id=1)
         print(response)
 
+        response = await vehicle.set_roles(role="SUBSCRIPTION", account_id="555555555")
+        print(response)
+
         response = await vehicle.get_fleet_telemetry_config()
         print(response)
 
