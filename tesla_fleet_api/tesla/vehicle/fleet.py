@@ -239,6 +239,14 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
             json={"id": id, "order": order},
         )
 
+    async def navigation_waypoints_request(self, waypoints: str) -> dict[str, Any]:
+        """Sends a list of waypoints to the vehicle's navigation system."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/command/navigation_waypoints_request",
+            json={"waypoints": waypoints},
+        )
+
     async def remote_auto_seat_climate_request(
         self,
         auto_seat_position: int | AutoSeat,

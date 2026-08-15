@@ -235,3 +235,26 @@ class TakeDrivenoteParityTests(MockedBleTransportTestCase):
         await ble.take_drivenote("brake noise up front")
         action = _sent_vehicle_action(ble, send)
         self.assertEqual(action.takeDrivenoteAction.note, "brake noise up front")
+
+
+class NavigationWaypointsRequestParityTests(MockedBleTransportTestCase):
+    """``navigation_waypoints_request`` must carry the same ``waypoints``
+    string on both the new REST cloud path and its existing signed-command
+    BLE sibling."""
+
+    async def test_waypoints_survive_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.navigation_waypoints_request("some-waypoints-payload")
+        assert request.await_args is not None
+        self.assertEqual(
+            request.await_args.kwargs["json"],
+            {"waypoints": "some-waypoints-payload"},
+        )
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.navigation_waypoints_request("some-waypoints-payload")
+        action = _sent_vehicle_action(ble, send)
+        self.assertEqual(
+            action.navigationWaypointsRequest.waypoints, "some-waypoints-payload"
+        )
