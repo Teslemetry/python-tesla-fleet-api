@@ -41,18 +41,18 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             Method.GET, f"api/1/vehicles/{VIN}/custom_command/charge_on_solar"
         )
 
-    async def test_front_zone_light(self) -> None:
+    async def test_set_front_zone_lights(self) -> None:
         vehicle, request = _make_vehicle()
-        await vehicle.front_zone_light(2)
+        await vehicle.set_front_zone_lights(2)
         request.assert_awaited_once_with(
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/front_zone_light",
             json={"level": 2},
         )
 
-    async def test_rear_zone_light(self) -> None:
+    async def test_set_rear_zone_lights(self) -> None:
         vehicle, request = _make_vehicle()
-        await vehicle.rear_zone_light(1)
+        await vehicle.set_rear_zone_lights(1)
         request.assert_awaited_once_with(
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/rear_zone_light",
@@ -176,9 +176,9 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             json={"percent": 20},
         )
 
-    async def test_hvac_recirculation(self) -> None:
+    async def test_set_recirculation(self) -> None:
         vehicle, request = _make_vehicle()
-        await vehicle.hvac_recirculation(True)
+        await vehicle.set_recirculation(True)
         request.assert_awaited_once_with(
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/hvac_recirculation",
@@ -310,9 +310,11 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             json={"limit_mph": 65.0},
         )
 
-    async def test_navigation_gps_destination(self) -> None:
+    async def test_navigation_gps_destination_request(self) -> None:
         vehicle, request = _make_vehicle()
-        await vehicle.navigation_gps_destination(37.3230, -122.0322, "Tesla HQ", 1)
+        await vehicle.navigation_gps_destination_request(
+            37.3230, -122.0322, "Tesla HQ", 1
+        )
         request.assert_awaited_once_with(
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/navigation_gps_destination",
@@ -366,9 +368,9 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             f"api/1/vehicles/{VIN}/custom_command/get_rate_tariff",
         )
 
-    async def test_set_rate_tariff(self) -> None:
+    async def test_trigger_rate_tariff_update(self) -> None:
         vehicle, request = _make_vehicle()
-        await vehicle.set_rate_tariff()
+        await vehicle.trigger_rate_tariff_update()
         request.assert_awaited_once_with(
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/set_rate_tariff",

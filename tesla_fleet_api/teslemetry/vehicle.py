@@ -304,16 +304,24 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
     # set_keep_accessory_power_mode {on: bool} shape, not independently
     # verified against Tesla/Teslemetry documentation.
 
-    async def front_zone_light(self, level: int) -> dict[str, Any]:
-        """Sets front zone light level (0=off, 1=low, 2=med, 3=high)."""
+    async def set_front_zone_lights(self, level: int) -> dict[str, Any]:
+        """Sets front zone light level (0=off, 1=low, 2=med, 3=high).
+
+        Named to match the BLE ``Commands.set_front_zone_lights`` sibling so
+        ``VehicleRouter`` failover can find this method by attribute name.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/custom_command/front_zone_light",
             json={"level": level},
         )
 
-    async def rear_zone_light(self, level: int) -> dict[str, Any]:
-        """Sets rear zone light level (0=off, 1=low, 2=med, 3=high)."""
+    async def set_rear_zone_lights(self, level: int) -> dict[str, Any]:
+        """Sets rear zone light level (0=off, 1=low, 2=med, 3=high).
+
+        Named to match the BLE ``Commands.set_rear_zone_lights`` sibling so
+        ``VehicleRouter`` failover can find this method by attribute name.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/custom_command/rear_zone_light",
@@ -424,8 +432,12 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             json={"percent": percent},
         )
 
-    async def hvac_recirculation(self, on: bool) -> dict[str, Any]:
-        """Sets HVAC recirculation mode on/off."""
+    async def set_recirculation(self, on: bool) -> dict[str, Any]:
+        """Sets HVAC recirculation mode on/off.
+
+        Named to match the BLE ``Commands.set_recirculation`` sibling so
+        ``VehicleRouter`` failover can find this method by attribute name.
+        """
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/custom_command/hvac_recirculation",
@@ -553,13 +565,15 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             json={"limit_mph": limit_mph},
         )
 
-    async def navigation_gps_destination(
+    async def navigation_gps_destination_request(
         self, lat: float, lon: float, destination: str, order: int
     ) -> dict[str, Any]:
         """Navigates to coordinates with a named destination string.
 
         ``order`` is the Tesla remote-nav order integer: 1 replaces the
-        trip, 2 prepends a stop, and 3 appends a stop.
+        trip, 2 prepends a stop, and 3 appends a stop. Named to match the
+        BLE ``Commands.navigation_gps_destination_request`` sibling so
+        ``VehicleRouter`` failover can find this method by attribute name.
         """
         return await self._request(
             Method.POST,
@@ -613,12 +627,16 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             f"api/1/vehicles/{self.vin}/custom_command/get_rate_tariff",
         )
 
-    async def set_rate_tariff(self) -> dict[str, Any]:
-        """Sets a time-of-use rate tariff schedule.
+    async def trigger_rate_tariff_update(self) -> dict[str, Any]:
+        """Triggers a time-of-use rate tariff update with no schedule payload.
 
-        Takes no schedule payload - Teslemetry's backend does not forward
-        one to the vehicle for this route today, so it functions as a
-        trigger, not a configurable setter, until a real schema is published.
+        Teslemetry's backend does not forward a schedule to the vehicle for
+        this route today, so it functions as a trigger, not a configurable
+        setter, until a real schema is published. Deliberately not named
+        ``set_rate_tariff`` - the BLE ``Commands.set_rate_tariff`` sibling
+        takes a required ``seasons``/``tariff`` schedule, and a same-named,
+        payload-free method here would raise ``TypeError`` if ``VehicleRouter``
+        failover forwarded those arguments to it.
         """
         return await self._request(
             Method.POST,
