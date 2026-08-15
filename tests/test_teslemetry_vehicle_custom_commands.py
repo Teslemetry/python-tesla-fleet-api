@@ -275,23 +275,6 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             json={"activate": True, "pin": "1234"},
         )
 
-    async def test_parental_controls_clear_pin(self) -> None:
-        vehicle, request = _make_vehicle()
-        await vehicle.parental_controls_clear_pin("1234")
-        request.assert_awaited_once_with(
-            Method.POST,
-            f"api/1/vehicles/{VIN}/custom_command/parental_controls_clear_pin",
-            json={"pin": "1234"},
-        )
-
-    async def test_parental_controls_clear_pin_admin(self) -> None:
-        vehicle, request = _make_vehicle()
-        await vehicle.parental_controls_clear_pin_admin()
-        request.assert_awaited_once_with(
-            Method.POST,
-            f"api/1/vehicles/{VIN}/custom_command/parental_controls_clear_pin_admin",
-        )
-
     async def test_parental_controls_enable_setting(self) -> None:
         vehicle, request = _make_vehicle()
         await vehicle.parental_controls_enable_setting(1, True)

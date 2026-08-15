@@ -530,21 +530,6 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             json={"activate": activate, "pin": pin},
         )
 
-    async def parental_controls_clear_pin(self, pin: str) -> dict[str, Any]:
-        """Clears the parental controls PIN."""
-        return await self._request(
-            Method.POST,
-            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_clear_pin",
-            json={"pin": pin},
-        )
-
-    async def parental_controls_clear_pin_admin(self) -> dict[str, Any]:
-        """Clears the parental controls PIN as admin (fleet manager/owner)."""
-        return await self._request(
-            Method.POST,
-            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_clear_pin_admin",
-        )
-
     async def parental_controls_enable_setting(
         self, setting: int, enable: bool
     ) -> dict[str, Any]:
