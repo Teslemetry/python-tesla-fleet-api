@@ -4,9 +4,14 @@ from typing import TYPE_CHECKING, Any
 
 from tesla_fleet_api.const import (
     BluetoothConfirmation,
+    DistanceUnit,
+    EnergyDisplayFormat,
     Method,
     ClosureState,
     SeatHeaterLevel,
+    TemperatureUnit,
+    TimeDisplayFormat,
+    TirePressureUnit,
 )
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
@@ -285,6 +290,339 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
         return await self._request(
             Method.POST,
             f"api/1/vehicles/{self.vin}/custom_command/remove_key",
+        )
+
+    async def get_charge_on_solar(self) -> dict[str, Any]:
+        """Gets the current charge-on-solar feature settings."""
+        return await self._request(
+            Method.GET,
+            f"api/1/vehicles/{self.vin}/custom_command/charge_on_solar",
+        )
+
+    # Below: custom_command routes with no public OpenAPI schema. Body key
+    # names are inferred from tesla-protocol field names and the confirmed
+    # set_keep_accessory_power_mode {on: bool} shape, not independently
+    # verified against Tesla/Teslemetry documentation.
+
+    async def front_zone_light(self, level: int) -> dict[str, Any]:
+        """Sets front zone light level (0=off, 1=low, 2=med, 3=high)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/front_zone_light",
+            json={"level": level},
+        )
+
+    async def rear_zone_light(self, level: int) -> dict[str, Any]:
+        """Sets rear zone light level (0=off, 1=low, 2=med, 3=high)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/rear_zone_light",
+            json={"level": level},
+        )
+
+    async def set_outlets(self, request: int) -> dict[str, Any]:
+        """Sets outlets on/off (0=off, 1=cabin+bed, 2=cabin)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_outlets",
+            json={"request": request},
+        )
+
+    async def set_outlet_soc_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the outlet SOC limit percentage."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_outlet_soc_limit",
+            json={"percent": percent},
+        )
+
+    async def set_power_feed(self, request: int) -> dict[str, Any]:
+        """Sets power feed on/off (0=off, 1=feed1, 2=feed2, 3=both)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_power_feed",
+            json={"request": request},
+        )
+
+    async def set_power_feed_soc_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the power feed SOC limit percentage."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_power_feed_soc_limit",
+            json={"percent": percent},
+        )
+
+    async def set_lightbar_brightness(self, brightness: int) -> dict[str, Any]:
+        """Sets the lightbar brightness."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_lightbar_brightness",
+            json={"brightness": brightness},
+        )
+
+    async def set_lightbar_middle(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the lightbar middle light."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_lightbar_middle",
+            json={"on": on},
+        )
+
+    async def set_lightbar_ditch(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the ditch lights."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_lightbar_ditch",
+            json={"on": on},
+        )
+
+    async def set_trailer_light_test(self, on: bool) -> dict[str, Any]:
+        """Starts or stops the trailer light test."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_trailer_light_test",
+            json={"on": on},
+        )
+
+    async def set_truck_bed_light_auto(self, on: bool) -> dict[str, Any]:
+        """Sets truck bed light auto state."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_truck_bed_light_auto",
+            json={"on": on},
+        )
+
+    async def set_truck_bed_light_brightness(self, brightness: int) -> dict[str, Any]:
+        """Sets truck bed light brightness."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_truck_bed_light_brightness",
+            json={"brightness": brightness},
+        )
+
+    async def set_powershare_feature(self, on: bool) -> dict[str, Any]:
+        """Enables or disables the Powershare feature."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_powershare_feature",
+            json={"on": on},
+        )
+
+    async def set_powershare_request(self, on: bool) -> dict[str, Any]:
+        """Enables or disables an active Powershare session."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_powershare_request",
+            json={"on": on},
+        )
+
+    async def set_powershare_discharge_limit(self, percent: int) -> dict[str, Any]:
+        """Sets the Powershare discharge limit percentage."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_powershare_discharge_limit",
+            json={"percent": percent},
+        )
+
+    async def hvac_recirculation(self, on: bool) -> dict[str, Any]:
+        """Sets HVAC recirculation mode on/off."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/hvac_recirculation",
+            json={"on": on},
+        )
+
+    async def set_tent_mode(self, on: bool) -> dict[str, Any]:
+        """Enables or disables tent mode."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_tent_mode",
+            json={"on": on},
+        )
+
+    async def set_suspension_level(self, level: int) -> dict[str, Any]:
+        """Sets the vehicle suspension level (1=entry, 2=low, 3=medium, 4=high, 5=very_high, 6=extract)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_suspension_level",
+            json={"level": level},
+        )
+
+    async def set_low_power_mode(self, on: bool) -> dict[str, Any]:
+        """Turns Low Power mode on and off, reducing standby power consumption while the vehicle is parked."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_low_power_mode",
+            json={"on": on},
+        )
+
+    async def set_keep_accessory_power_mode(self, on: bool) -> dict[str, Any]:
+        """Turns Keep Accessory Power mode on and off, keeping 12V accessory power available while the vehicle is parked."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_keep_accessory_power_mode",
+            json={"on": on},
+        )
+
+    async def set_temperature_unit(self, unit: TemperatureUnit | int) -> dict[str, Any]:
+        """Sets the vehicle's displayed temperature unit."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_temperature_unit",
+            json={"unit": unit},
+        )
+
+    async def set_distance_unit(self, unit: DistanceUnit | int) -> dict[str, Any]:
+        """Sets the vehicle's displayed distance unit."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_distance_unit",
+            json={"unit": unit},
+        )
+
+    async def set_time_display_format(
+        self, format: TimeDisplayFormat | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed clock format (12h/24h)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_time_display_format",
+            json={"format": format},
+        )
+
+    async def set_tire_pressure_unit(
+        self, unit: TirePressureUnit | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed tire pressure unit."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_tire_pressure_unit",
+            json={"unit": unit},
+        )
+
+    async def set_energy_display_format(
+        self, format: EnergyDisplayFormat | int
+    ) -> dict[str, Any]:
+        """Sets the vehicle's displayed energy/range unit (percentage/distance)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_energy_display_format",
+            json={"format": format},
+        )
+
+    async def parental_controls(self, activate: bool, pin: str) -> dict[str, Any]:
+        """Activates or deactivates parental controls with a PIN."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/parental_controls",
+            json={"activate": activate, "pin": pin},
+        )
+
+    async def parental_controls_clear_pin(self, pin: str) -> dict[str, Any]:
+        """Clears the parental controls PIN."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_clear_pin",
+            json={"pin": pin},
+        )
+
+    async def parental_controls_clear_pin_admin(self) -> dict[str, Any]:
+        """Clears the parental controls PIN as admin (fleet manager/owner)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_clear_pin_admin",
+        )
+
+    async def parental_controls_enable_setting(
+        self, setting: int, enable: bool
+    ) -> dict[str, Any]:
+        """Enables or disables a parental controls setting (1=speed_limit, 2=acceleration, 3=safety_features, 4=curfew)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_enable_setting",
+            json={"setting": setting, "enable": enable},
+        )
+
+    async def parental_controls_set_speed_limit(
+        self, limit_mph: float
+    ) -> dict[str, Any]:
+        """Sets the parental controls speed limit."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/parental_controls_set_speed_limit",
+            json={"limit_mph": limit_mph},
+        )
+
+    async def navigation_gps_destination(
+        self, lat: float, lon: float, destination: str, order: int
+    ) -> dict[str, Any]:
+        """Navigates to coordinates with a named destination string.
+
+        ``order`` is the Tesla remote-nav order integer: 1 replaces the
+        trip, 2 prepends a stop, and 3 appends a stop.
+        """
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/navigation_gps_destination",
+            json={
+                "lat": lat,
+                "lon": lon,
+                "destination": destination,
+                "order": order,
+            },
+        )
+
+    async def auto_secure_vehicle(self) -> dict[str, Any]:
+        """Auto-secures the vehicle (locks, closes windows, etc.)."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/auto_secure_vehicle",
+        )
+
+    async def cancel_soh_test(self) -> dict[str, Any]:
+        """Cancels a State of Health test."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/cancel_soh_test",
+        )
+
+    async def get_nearby_charging_sites(
+        self,
+        count: int | None = None,
+        radius: int | None = None,
+        detail: bool | None = None,
+    ) -> dict[str, Any]:
+        """Returns the charging sites near the current location of the vehicle."""
+        data: dict[str, Any] = {}
+        if count is not None:
+            data["count"] = count
+        if radius is not None:
+            data["radius"] = radius
+        if detail is not None:
+            data["detail"] = detail
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/get_nearby_charging_sites",
+            json=data,
+        )
+
+    async def get_rate_tariff(self) -> dict[str, Any]:
+        """Gets the current time-of-use rate tariff schedule."""
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/get_rate_tariff",
+        )
+
+    async def set_rate_tariff(self) -> dict[str, Any]:
+        """Sets a time-of-use rate tariff schedule.
+
+        Takes no schedule payload - Teslemetry's backend does not forward
+        one to the vehicle for this route today, so it functions as a
+        trigger, not a configurable setter, until a real schema is published.
+        """
+        return await self._request(
+            Method.POST,
+            f"api/1/vehicles/{self.vin}/custom_command/set_rate_tariff",
         )
 
 
