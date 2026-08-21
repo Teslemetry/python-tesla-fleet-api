@@ -209,24 +209,36 @@ _GATEWAY_INTERFACES = ("eth", "wifi")
 
 
 def _decode_ipv4(value: Any) -> str | None:
-    """Decode a raw big-endian uint32 into dotted-quad form.
+    """Decode a ``networking_status`` ipv4 field into dotted-quad form.
 
-    ``ipv4_config.address``/``subnet_mask``/``gateway`` in a
-    ``networking_status`` response are network-byte-order uint32 integers,
-    not strings - confirmed against a live Powerwall 3 capture where
-    ``3232235914`` decodes to ``192.168.1.138``. ``bool`` is excluded since
-    it subclasses ``int``; an out-of-range or non-int value returns
-    ``None`` rather than raising, since a single bad address shouldn't
-    fail the whole lookup. ``0`` and ``0xFFFFFFFF`` are also rejected -
-    ``0.0.0.0``/``255.255.255.255`` are never a usable host address, and an
-    unconfigured interface reporting ``address: 0`` must not shadow a real
-    address on another interface in the fallback selection.
+    ``ipv4_config.address``/``subnet_mask``/``gateway`` were originally a
+    network-byte-order uint32 int (confirmed live: ``3232235914`` decodes to
+    ``192.168.1.138``), but the same field is now also observed as a
+    dotted-quad string directly - both forms are accepted. ``bool`` is
+    excluded since it subclasses ``int``; a malformed string, out-of-range
+    int, or unsupported type returns ``None`` rather than raising, since a
+    single bad address shouldn't fail the whole lookup. ``0.0.0.0`` and
+    ``255.255.255.255`` are rejected in either representation - never a
+    usable host address, and an unconfigured interface reporting the
+    all-zero form must not shadow a real address on another interface in
+    the fallback selection.
     """
-    if not isinstance(value, int) or isinstance(value, bool):
+    address: str | None = None
+    if isinstance(value, int) and not isinstance(value, bool):
+        if not 0 < value < 0xFFFFFFFF:
+            return None
+        address = socket.inet_ntoa(struct.pack(">I", value))
+    elif isinstance(value, str):
+        try:
+            socket.inet_aton(value)
+        except OSError:
+            return None
+        address = value
+        if address in ("0.0.0.0", "255.255.255.255"):
+            return None
+    else:
         return None
-    if not 0 < value < 0xFFFFFFFF:
-        return None
-    return socket.inet_ntoa(struct.pack(">I", value))
+    return address
 
 
 def _interface_address(interface: Any) -> str | None:
