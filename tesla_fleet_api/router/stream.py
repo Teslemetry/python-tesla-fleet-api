@@ -207,6 +207,7 @@ class StreamRouter:
         self._usable_until: dict[FieldPath, float] = {}
         self._announced_availability: dict[FieldPath, bool] = {}
         self._revision: dict[FieldPath, int] = {}
+        self._availability_revision: dict[FieldPath, int] = {}
 
     # -- Publishers --------------------------------------------------------
 
@@ -397,7 +398,14 @@ class StreamRouter:
         if self._announced_availability.get(path) == available:
             return
         self._announced_availability[path] = available
+        revision = self._availability_revision[path] = (
+            self._availability_revision.get(path, 0) + 1
+        )
         for callback in list(self._availability_listeners.get(path, ())):
+            # A callback may re-enter and re-run this dispatch; continuing here
+            # would leave the rest holding availability the router superseded.
+            if self._availability_revision[path] != revision:
+                return
             _dispatch(callback, available)
 
     # -- Public listeners ---------------------------------------------------
@@ -486,7 +494,15 @@ class StreamRouter:
         self._demand_observers.append(observer)
         _dispatch(callback, observer.active)
 
+        released = False
+
         def unsubscribe() -> None:
+            # Guarded per registration: the same callback may be registered
+            # twice, and a repeated release must not drop the other one.
+            nonlocal released
+            if released:
+                return
+            released = True
             try:
                 self._demand_observers.remove(observer)
             except ValueError:

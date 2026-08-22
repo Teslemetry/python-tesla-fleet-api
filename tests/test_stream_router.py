@@ -7,6 +7,7 @@ involved; the router is synchronous by construction.
 from __future__ import annotations
 
 import ast
+from itertools import count
 from pathlib import Path
 from typing import Any
 from unittest import TestCase
@@ -376,6 +377,39 @@ class TestAvailabilityAnnouncement(TestCase):
         self.assertEqual(late.availability, [False, True])
         self.assertTrue(router.is_available(FieldPath.LOCKED))
 
+    def test_a_re_entrant_availability_change_leaves_no_listener_on_the_stale_value(
+        self,
+    ) -> None:
+        """A nested availability change supersedes the one being delivered.
+
+        Mirrors test_a_callback_that_publishes_leaves_no_listener_on_the_old_value
+        for the sibling availability dispatch loop: without a revision guard
+        there, the outer dispatch keeps handing listeners it has not yet
+        reached the availability the router no longer holds.
+        """
+        ticks = count(step=0.001)
+        router = StreamRouter(clock=lambda: next(ticks), grace=0.0)
+        source = _FakePublisher("source")
+        router.attach(source)
+
+        first: list[bool] = []
+        second: list[bool] = []
+
+        def on_first(available: bool) -> None:
+            first.append(available)
+            if available is True:
+                source.health(False)
+
+        router.listen_availability(FieldPath.LOCKED, on_first)
+        router.listen_availability(FieldPath.LOCKED, second.append)
+
+        source.health(True)
+        source.emit(FieldPath.LOCKED, True, observed_at=0.0)
+
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+        self.assertEqual(first, [False, True, False])
+        self.assertEqual(second, [False, False])
+
 
 class TestFreshness(TestCase):
     def test_connection_bound_source_never_goes_stale_while_healthy(self) -> None:
@@ -692,6 +726,26 @@ class TestDemand(TestCase):
         # Only when every path in the set is back to zero.
         trunk()
         self.assertEqual(seen, [False, True, False])
+
+    def test_releasing_one_demand_registration_twice_keeps_the_other(self) -> None:
+        """Two registrations of one callback are two subscriptions, not one.
+
+        _DemandObserver is a plain dataclass compared by field values, so two
+        registrations with the same paths and callback are equal; unsubscribe
+        must not let a repeated release of one drop the other via that
+        equality match.
+        """
+        router = StreamRouter(clock=_Clock())
+        seen: list[bool] = []
+        first = router.listen_demand(ALL_PATHS, seen.append)
+        router.listen_demand(ALL_PATHS, seen.append)
+        self.assertEqual(seen, [False, False])
+
+        first()
+        first()
+
+        router.listen(FieldPath.LOCKED, lambda _: None)
+        self.assertEqual(seen, [False, False, True])
 
     def test_demand_starts_true_when_a_listener_already_exists(self) -> None:
         router = StreamRouter(clock=_Clock())
