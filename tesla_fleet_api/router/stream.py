@@ -251,6 +251,10 @@ class StreamRouter:
         state = self._sources.get(observation.source_id)
         if state is None or observation.path not in state.capabilities:
             return
+        # A frame racing its own transport loss cannot be cached, or reconnect
+        # would resurrect it as a current reading of the recovered session.
+        if not state.healthy:
+            return
         previous = state.observations.get(observation.path)
         if previous is not None and previous.observed_at > observation.observed_at:
             return

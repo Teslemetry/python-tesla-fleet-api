@@ -175,6 +175,52 @@ class TestSelectionAndFailover(TestCase):
         # One False at registration, one True on the first value: never dipped.
         self.assertEqual(recorder.availability, [False, True])
 
+    def test_a_frame_racing_a_disconnect_is_not_resurrected_by_reconnect(self) -> None:
+        """A dead source's reading may not come back as a live one.
+
+        A broadcast already in flight can land after the transport loss is
+        recorded. Broadcast capabilities are connection-bound, so caching it
+        would let reconnect present a pre-disconnect value as an observation of
+        the recovered session, and nothing would ever expire it.
+        """
+        clock = _Clock()
+        router = StreamRouter(clock=clock, grace=50.0)
+        ble = _FakePublisher("ble", priority=PRIORITY_BROADCAST, max_age=None)
+        router.attach(ble)
+        ble.health(True)
+
+        recorder = _Recorder()
+        router.listen(FieldPath.LOCKED, recorder.on_value)
+        router.listen_availability(FieldPath.LOCKED, recorder.on_availability)
+        ble.emit(FieldPath.LOCKED, False, observed_at=0.0)
+        self.assertEqual(recorder.values, [False])
+
+        clock.now = 10.0
+        ble.health(False)
+
+        # The race: the frame for a lock that happened as the link dropped
+        # arrives after the loss was recorded.
+        clock.now = 11.0
+        ble.emit(FieldPath.LOCKED, True, observed_at=11.0)
+
+        # The car is unlocked again while the link is down, so that frame is
+        # already wrong by the time the link comes back.
+        clock.now = 20.0
+        ble.health(True)
+        self.assertEqual(recorder.values, [False])
+        self.assertIs(router.value(FieldPath.LOCKED), False)
+
+        # Nor may it hold the field open: with nothing observed in the new
+        # session, last-known availability still expires on the grace window.
+        clock.now = 70.0
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+        self.assertEqual(recorder.values, [False])
+
+        # The recovered session itself is unaffected.
+        ble.emit(FieldPath.LOCKED, True, observed_at=70.0)
+        self.assertEqual(recorder.values, [False, True])
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+
     def test_losing_every_source_keeps_last_known_and_emits_nothing(self) -> None:
         clock = _Clock()
         router = StreamRouter(clock=clock, grace=50.0)
