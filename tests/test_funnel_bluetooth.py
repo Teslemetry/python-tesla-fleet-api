@@ -14,13 +14,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from tesla_fleet_api.router import (
+from tesla_fleet_api.funnel import (
     BleBroadcastPublisher,
     FieldPath,
     Observation,
-    StreamRouter,
+    ObservationFunnel,
+    Value,
+    VehicleDataResultPublisher,
 )
-from tesla_fleet_api.router.stream import PRIORITY_BROADCAST, PRIORITY_STREAM
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_protocol.command.universal_message_pb2 import (
     Destination,
@@ -83,17 +84,13 @@ CLOSURE_PATHS = frozenset(
 
 
 class _Sink:
-    """Collects observations and health straight off the publisher."""
+    """Collects observations straight off the publisher."""
 
     def __init__(self) -> None:
         self.observations: list[Observation] = []
-        self.health: list[tuple[str, bool]] = []
 
     def publish(self, observation: Observation) -> None:
         self.observations.append(observation)
-
-    def set_health(self, source_id: str, healthy: bool) -> None:
-        self.health.append((source_id, healthy))
 
 
 def _attached(
@@ -166,29 +163,29 @@ class TestBroadcastTranslation(TestCase):
         self.assertEqual(sink.observations, [])
 
     def test_a_broadcast_without_closures_emits_no_closure_observation(self) -> None:
-        """proto3 tracks presence for the submessage, so absence is not CLOSED."""
+        """Closures have proto3 presence, so an absent submessage says nothing."""
         vehicle = _make_vehicle()
-        _, sink = _attached(vehicle)
+        _, sink = _attached(vehicle, paths=CLOSURE_PATHS)
 
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
 
-        self.assertEqual([o.path for o in sink.observations], [FieldPath.LOCKED])
+        self.assertEqual(sink.observations, [])
 
     def test_every_status_broadcast_carries_a_lock_state(self) -> None:
-        """UNLOCKED is 0, so the wire cannot distinguish it from an absent field.
-
-        A closure-only broadcast therefore still reports the lock state, and
-        the router deduplicates the repeat rather than the publisher guessing.
-        """
+        """UNLOCKED is 0 with no presence, so the funnel dedupes the repeats."""
         vehicle = _make_vehicle()
-        _, sink = _attached(vehicle, paths=frozenset({FieldPath.LOCKED}))
+        funnel = ObservationFunnel()
+        publisher = BleBroadcastPublisher(vehicle, clock=_Clock(1.0))
+        funnel.attach(publisher)
 
-        vehicle._on_message(_closures(chargePort=ClosureState_E.CLOSURESTATE_OPEN))
+        seen: list[Value] = []
+        funnel.listen(FieldPath.LOCKED, seen.append)
 
-        self.assertEqual(
-            [(o.path, o.value) for o in sink.observations],
-            [(FieldPath.LOCKED, False)],
-        )
+        # A closure-only broadcast still reports vehicleLockState = UNLOCKED.
+        vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_CLOSED))
+        vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_OPEN))
+
+        self.assertEqual(seen, [False])
 
 
 class TestBroadcastActivation(TestCase):
@@ -205,7 +202,7 @@ class TestBroadcastActivation(TestCase):
 
     def test_only_requested_paths_are_subscribed(self) -> None:
         vehicle = _make_vehicle()
-        _, sink = _attached(vehicle, paths=frozenset({FieldPath.CHARGE_PORT_DOOR_OPEN}))
+        _, sink = _attached(vehicle, paths=frozenset({FieldPath.LOCKED}))
 
         vehicle._on_message(
             _closures(
@@ -213,10 +210,8 @@ class TestBroadcastActivation(TestCase):
                 frontTrunk=ClosureState_E.CLOSURESTATE_OPEN,
             )
         )
-        self.assertEqual(
-            [(o.path, o.value) for o in sink.observations],
-            [(FieldPath.CHARGE_PORT_DOOR_OPEN, True)],
-        )
+
+        self.assertEqual([o.path for o in sink.observations], [FieldPath.LOCKED])
 
     def test_detach_drops_every_subscription(self) -> None:
         vehicle = _make_vehicle()
@@ -224,157 +219,114 @@ class TestBroadcastActivation(TestCase):
         sink = _Sink()
         detach = publisher.attach(sink)
         publisher.request(frozenset(FieldPath))
+
         detach()
-
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
+
         self.assertEqual(sink.observations, [])
-
-    def test_health_follows_the_existing_connection_status_seam(self) -> None:
-        vehicle = _make_vehicle(connected=False)
-        publisher = BleBroadcastPublisher(vehicle, clock=_Clock())
-        sink = _Sink()
-        publisher.attach(sink)
-        self.assertEqual(sink.health, [("ble-broadcast", False)])
-
-        vehicle._set_connected(True)
-        vehicle._set_connected(False)
-        self.assertEqual(
-            sink.health,
-            [
-                ("ble-broadcast", False),
-                ("ble-broadcast", True),
-                ("ble-broadcast", False),
-            ],
-        )
-
-    def test_a_session_already_up_at_attach_is_reported_healthy(self) -> None:
-        """listen_connection_status only fires on transitions."""
-        vehicle = _make_vehicle(connected=True)
-        publisher = BleBroadcastPublisher(vehicle, clock=_Clock())
-        sink = _Sink()
-        publisher.attach(sink)
-        self.assertEqual(sink.health, [("ble-broadcast", True)])
 
     def test_the_publisher_never_drives_the_transport(self) -> None:
         vehicle = _make_vehicle()
         publisher, _ = _attached(vehicle)
-        vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
         publisher.release(frozenset(FieldPath))
 
         vehicle.connect.assert_not_awaited()  # type: ignore[attr-defined]
         vehicle.connect_if_needed.assert_not_awaited()  # type: ignore[attr-defined]
         vehicle.client.write_gatt_char.assert_not_awaited()
 
+    def test_a_lost_session_publishes_nothing(self) -> None:
+        """A dropped link ends the broadcasts; it is not a reading of the field."""
+        vehicle = _make_vehicle()
+        funnel = ObservationFunnel()
+        detach = funnel.attach(BleBroadcastPublisher(vehicle, clock=_Clock(1.0)))
+
+        seen: list[Value] = []
+        funnel.listen(FieldPath.LOCKED, seen.append)
+        vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
+
+        vehicle.client.is_connected = False
+        detach()
+
+        self.assertEqual(seen, [True])
+        self.assertIs(funnel.value(FieldPath.LOCKED), True)
+
 
 class TestRegressionWalkthrough(TestCase):
-    """The captain's 6.1.1 failure: Bluetooth cannot connect, the stream can.
+    """The reported failure: lock, charge port and front trunk go unavailable.
 
-    Charge port, front trunk and lock must stay available with real values
-    rather than going unavailable because a source they were bound to is down.
+    Firmware routed the three fields to Bluetooth broadcasts. With Bluetooth
+    unreachable they had no other source, so the entities blanked. Here the
+    same funnel is fed by both a supplied ``vehicle_data`` result and BLE
+    broadcasts, and each field keeps a value whichever source is producing.
     """
 
-    def _router_with_stream_and_ble(
-        self, vehicle: VehicleBluetooth[Any], clock: _Clock
-    ) -> tuple[StreamRouter, _StubStreamPublisher]:
-        router = StreamRouter(clock=clock)
-        stream = _StubStreamPublisher(clock)
-        router.attach(stream)
-        router.attach(
-            BleBroadcastPublisher(vehicle, priority=PRIORITY_BROADCAST, clock=clock)
+    def _compose(
+        self,
+    ) -> tuple[
+        ObservationFunnel,
+        VehicleBluetooth[Any],
+        VehicleDataResultPublisher,
+        dict[FieldPath, list[Value]],
+    ]:
+        vehicle = _make_vehicle()
+        funnel = ObservationFunnel()
+        funnel.attach(BleBroadcastPublisher(vehicle, clock=_Clock(100.0)))
+        result_publisher = VehicleDataResultPublisher(clock=_Clock(0.0))
+        funnel.attach(result_publisher)
+
+        seen: dict[FieldPath, list[Value]] = {path: [] for path in FieldPath}
+        for path in FieldPath:
+            funnel.listen(path, seen[path].append)
+        return funnel, vehicle, result_publisher, seen
+
+    def test_unreachable_bluetooth_does_not_blank_the_three_fields(self) -> None:
+        funnel, _, result_publisher, seen = self._compose()
+
+        # Bluetooth never connects, so it broadcasts nothing at all.
+        result_publisher.publish_result(
+            {
+                "response": {
+                    "vehicle_state": {"locked": True, "ft": 0},
+                    "charge_state": {"charge_port_door_open": False},
+                }
+            },
+            observed_at=1.0,
         )
-        return router, stream
 
-    def test_unavailable_bluetooth_does_not_blank_streamed_fields(self) -> None:
-        clock = _Clock()
-        vehicle = _make_vehicle(connected=False)
-        router, stream = self._router_with_stream_and_ble(vehicle, clock)
-
-        seen: dict[FieldPath, list[Any]] = {p: [] for p in FieldPath}
+        self.assertEqual(
+            seen,
+            {
+                FieldPath.LOCKED: [True],
+                FieldPath.CHARGE_PORT_DOOR_OPEN: [False],
+                FieldPath.DOOR_STATE_TRUNK_FRONT: [False],
+            },
+        )
         for path in FieldPath:
-            router.listen(path, seen[path].append)
+            self.assertIsNotNone(funnel.value(path))
 
-        stream.emit(FieldPath.CHARGE_PORT_DOOR_OPEN, False)
-        stream.emit(FieldPath.DOOR_STATE_TRUNK_FRONT, False)
-        stream.emit(FieldPath.LOCKED, True)
+    def test_bluetooth_recovering_updates_the_same_listeners(self) -> None:
+        funnel, vehicle, result_publisher, seen = self._compose()
+        result_publisher.publish_result(
+            {
+                "response": {
+                    "vehicle_state": {"locked": True, "ft": 0},
+                    "charge_state": {"charge_port_door_open": False},
+                }
+            },
+            observed_at=1.0,
+        )
 
-        self.assertEqual(seen[FieldPath.CHARGE_PORT_DOOR_OPEN], [False])
-        self.assertEqual(seen[FieldPath.DOOR_STATE_TRUNK_FRONT], [False])
-        self.assertEqual(seen[FieldPath.LOCKED], [True])
-        for path in FieldPath:
-            self.assertTrue(router.is_available(path), msg=str(path))
-            self.assertNotIn(None, seen[path])
-
-    def test_ble_takes_over_when_the_stream_drops_then_hands_back(self) -> None:
-        clock = _Clock()
-        vehicle = _make_vehicle(connected=True)
-        router, stream = self._router_with_stream_and_ble(vehicle, clock)
-
-        seen: list[Any] = []
-        available: list[Any] = []
-        router.listen(FieldPath.LOCKED, seen.append)
-        router.listen_availability(FieldPath.LOCKED, available.append)
-
-        stream.emit(FieldPath.LOCKED, True)
-        vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
-        self.assertEqual(seen, [True])
-
-        clock.now = 10.0
-        stream.set_health(False)
+        # Bluetooth comes up and the vehicle is opened up.
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED))
-        self.assertEqual(seen, [True, False])
-
-        # The stream must hold health for the failback delay before it takes
-        # the field back off a working Bluetooth session.
-        clock.now = 100.0
-        stream.set_health(True)
-        stream.emit(FieldPath.LOCKED, True)
-        self.assertEqual(seen, [True, False])
-
-        clock.now = 200.0
-        stream.emit(FieldPath.LOCKED, True)
-        self.assertEqual(seen, [True, False, True])
-
-        self.assertNotIn(None, seen)
-        self.assertEqual(available, [False, True])
-
-
-class _StubStreamPublisher:
-    """Stands in for the stream library's SSE adapter, which is a later slice."""
-
-    def __init__(self, clock: _Clock) -> None:
-        self.source_id = "stream"
-        self.priority = PRIORITY_STREAM
-        self._clock = clock
-        self._sink: Any = None
-
-    @property
-    def capabilities(self) -> tuple[Any, ...]:
-        from tesla_fleet_api.router.stream import Capability, Delivery
-
-        return tuple(
-            Capability(path=path, delivery=Delivery.ON_CHANGE) for path in FieldPath
-        )
-
-    def attach(self, sink: Any) -> Any:
-        self._sink = sink
-        sink.set_health(self.source_id, True)
-        return lambda: None
-
-    def request(self, paths: frozenset[FieldPath]) -> None:
-        return None
-
-    def release(self, paths: frozenset[FieldPath]) -> None:
-        return None
-
-    def emit(self, path: FieldPath, value: bool) -> None:
-        self._sink.publish(
-            Observation(
-                path=path,
-                value=value,
-                observed_at=self._clock(),
-                source_id=self.source_id,
+        vehicle._on_message(
+            _closures(
+                chargePort=ClosureState_E.CLOSURESTATE_OPEN,
+                frontTrunk=ClosureState_E.CLOSURESTATE_OPEN,
             )
         )
 
-    def set_health(self, healthy: bool) -> None:
-        self._sink.set_health(self.source_id, healthy)
+        self.assertEqual(seen[FieldPath.LOCKED], [True, False])
+        self.assertEqual(seen[FieldPath.CHARGE_PORT_DOOR_OPEN], [False, True])
+        self.assertEqual(seen[FieldPath.DOOR_STATE_TRUNK_FRONT], [False, True])
+        for values in seen.values():
+            self.assertNotIn(None, values)
