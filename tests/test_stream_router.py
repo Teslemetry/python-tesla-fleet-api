@@ -390,6 +390,80 @@ class TestFreshness(TestCase):
         self.assertTrue(router.is_available(FieldPath.LOCKED))
         self.assertIs(router.value(FieldPath.LOCKED), True)
 
+    def test_grace_runs_from_source_loss_not_from_the_last_change(self) -> None:
+        """The window a grace period exists to provide, for an on-change source.
+
+        A connection-bound source only speaks when the value changes, so a
+        healthy one is legitimately hours behind. Measuring grace from the
+        observation would expire the field the instant that source dropped,
+        which is precisely the case grace is there to cover.
+        """
+        clock = _Clock()
+        router = StreamRouter(clock=clock, grace=300.0)
+        ble = _FakePublisher("ble", priority=PRIORITY_BROADCAST, max_age=None)
+        router.attach(ble)
+        recorder = _Recorder()
+        router.listen_availability(FieldPath.LOCKED, recorder.on_availability)
+
+        ble.health(True)
+        ble.emit(FieldPath.LOCKED, True, observed_at=0.0)
+        self.assertEqual(recorder.availability, [False, True])
+
+        # Hours of a locked car: nothing changed, so nothing was broadcast.
+        clock.now = 20_000.0
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+
+        ble.health(False)
+        self.assertEqual(recorder.availability, [False, True])
+
+        clock.now = 20_299.0
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+        self.assertIs(router.value(FieldPath.LOCKED), True)
+
+        clock.now = 20_301.0
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+        self.assertIs(router.value(FieldPath.LOCKED), True)
+
+    def test_grace_after_a_silent_expiry_runs_from_that_expiry(self) -> None:
+        """An age-bounded source expires with no event to fire on.
+
+        Grace is anchored to when candidacy actually ended, so the first caller
+        to ask cannot restart the window merely by asking late.
+        """
+        clock = _Clock()
+        router = StreamRouter(clock=clock, grace=100.0)
+        result = _FakePublisher("result", max_age=60.0)
+        router.attach(result)
+        result.health(True)
+        result.emit(FieldPath.LOCKED, True, observed_at=0.0)
+
+        clock.now = 159.0
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+        clock.now = 161.0
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+
+    def test_grace_restarts_when_a_recovered_source_is_lost_again(self) -> None:
+        clock = _Clock()
+        router = StreamRouter(clock=clock, grace=100.0)
+        source = _FakePublisher("source", max_age=None)
+        router.attach(source)
+        source.health(True)
+        source.emit(FieldPath.LOCKED, True, observed_at=0.0)
+
+        clock.now = 10.0
+        source.health(False)
+        clock.now = 50.0
+        source.health(True)
+        source.emit(FieldPath.LOCKED, True, observed_at=50.0)
+        clock.now = 60.0
+        source.health(False)
+
+        # Anchored to the second loss, not the first.
+        clock.now = 159.0
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+        clock.now = 161.0
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+
     def test_expired_observation_is_rejected_and_yields_to_a_fresh_source(self) -> None:
         clock = _Clock()
         router = StreamRouter(clock=clock)
@@ -528,6 +602,56 @@ class TestActivation(TestCase):
             )
         )
         self.assertEqual(recorder.values, [])
+
+    def test_releasing_one_availability_registration_twice_keeps_the_other(
+        self,
+    ) -> None:
+        """Two registrations of one callback are two subscriptions, not one."""
+        router = StreamRouter()
+        source = _FakePublisher("source")
+        router.attach(source)
+        recorder = _Recorder()
+        first = router.listen_availability(FieldPath.LOCKED, recorder.on_availability)
+        router.listen_availability(FieldPath.LOCKED, recorder.on_availability)
+        self.assertEqual(recorder.availability, [False, False])
+
+        first()
+        first()
+
+        source.health(True)
+        source.emit(FieldPath.LOCKED, True, observed_at=0.0)
+        self.assertEqual(recorder.availability, [False, False, True])
+
+    def test_a_callback_that_publishes_leaves_no_listener_on_the_old_value(
+        self,
+    ) -> None:
+        """A nested update supersedes the one being delivered.
+
+        Without that, the outer dispatch carries on handing the superseded
+        value to the listeners it had not reached yet, and they are left
+        holding a value the router itself no longer holds.
+        """
+        router = StreamRouter()
+        source = _FakePublisher("source")
+        router.attach(source)
+        source.health(True)
+
+        first: list[bool] = []
+        second: list[bool] = []
+
+        def on_first(value: bool) -> None:
+            first.append(value)
+            if value is True:
+                source.emit(FieldPath.LOCKED, False, observed_at=2.0)
+
+        router.listen(FieldPath.LOCKED, on_first)
+        router.listen(FieldPath.LOCKED, second.append)
+
+        source.emit(FieldPath.LOCKED, True, observed_at=1.0)
+
+        self.assertIs(router.value(FieldPath.LOCKED), False)
+        self.assertEqual(first, [True, False])
+        self.assertEqual(second, [False])
 
     def test_a_listener_exception_does_not_stop_later_listeners(self) -> None:
         router = StreamRouter(clock=_Clock())

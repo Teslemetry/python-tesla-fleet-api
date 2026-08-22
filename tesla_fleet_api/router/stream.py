@@ -13,6 +13,7 @@ it could be made to poll.
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -203,8 +204,9 @@ class StreamRouter:
         self._demand_observers: list[_DemandObserver] = []
         self._selected: dict[FieldPath, str] = {}
         self._values: dict[FieldPath, bool] = {}
-        self._observed_at: dict[FieldPath, float] = {}
+        self._usable_until: dict[FieldPath, float] = {}
         self._announced_availability: dict[FieldPath, bool] = {}
+        self._revision: dict[FieldPath, int] = {}
 
     # -- Publishers --------------------------------------------------------
 
@@ -297,12 +299,32 @@ class StreamRouter:
             candidates.append(_Candidate(state, observation, capability))
         return candidates
 
+    def _usable_deadline(self, candidates: list[_Candidate]) -> float:
+        """When last-known data would stop being usable if nothing else arrives."""
+        ends = [
+            c.observation.observed_at + c.capability.max_age
+            for c in candidates
+            if c.capability.max_age is not None
+        ]
+        if len(ends) < len(candidates):
+            # A connection-bound source is silent, not stale, so nothing but
+            # its loss can end candidacy, and that loss sets the deadline.
+            return math.inf
+        return max(ends) + self._grace
+
     def _reselect(self, path: FieldPath) -> None:
         candidates = self._candidates(path)
         if not candidates:
+            # Grace runs from the loss of the last candidate. An on-change
+            # field that simply has not changed is legitimately old, so
+            # measuring it from the observation would expire the field at once.
+            self._usable_until[path] = min(
+                self._usable_until.get(path, math.inf), self._clock() + self._grace
+            )
             self._selected.pop(path, None)
             self._announce_availability(path)
             return
+        self._usable_until[path] = self._usable_deadline(candidates)
 
         selected_id = self._selected.get(path)
         current = next(
@@ -333,14 +355,19 @@ class StreamRouter:
             chosen = max(better, key=lambda c: c.observation.observed_at)
 
         self._selected[path] = chosen.state.publisher.source_id
-        self._observed_at[path] = chosen.observation.observed_at
         changed = (
             path not in self._values or self._values[path] != chosen.observation.value
         )
         self._values[path] = chosen.observation.value
+        revision = self._revision[path] = self._revision.get(path, 0) + 1
         self._announce_availability(path)
         if changed:
             for callback in list(self._listeners.get(path, ())):
+                # A callback may publish, and that nested update has already
+                # given every listener the newer value; continuing here would
+                # leave the rest holding a value the router no longer holds.
+                if self._revision[path] != revision:
+                    return
                 _dispatch(callback, chosen.observation.value)
 
     # -- Values and availability --------------------------------------------
@@ -363,7 +390,7 @@ class StreamRouter:
             return True
         if path not in self._values:
             return False
-        return self._clock() - self._observed_at[path] <= self._grace
+        return self._clock() <= self._usable_until[path]
 
     def _announce_availability(self, path: FieldPath) -> None:
         available = self.is_available(path)
@@ -427,7 +454,15 @@ class StreamRouter:
         self._announced_availability[path] = available
         _dispatch(callback, available)
 
+        released = False
+
         def unsubscribe() -> None:
+            # Guarded per registration: the same callback may be registered
+            # twice, and a repeated release must not drop the other one.
+            nonlocal released
+            if released:
+                return
+            released = True
             try:
                 listeners.remove(callback)
             except ValueError:
