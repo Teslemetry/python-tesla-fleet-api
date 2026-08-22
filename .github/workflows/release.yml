@@ -26,7 +26,7 @@ jobs:
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         run: uv python install ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
-        run: uv sync --python ${{ env.PYTHON_VERSION }}
+        run: uv sync --locked --python ${{ env.PYTHON_VERSION }}
       - name: Ruff
         run: uv run ruff check ${{ env.PACKAGE_DIR }} tests
       - name: Pyright
