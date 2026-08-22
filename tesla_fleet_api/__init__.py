@@ -4,6 +4,15 @@ __author__ = "hello@teslemetry.com"
 __version__ = "1.10.1"
 
 from tesla_fleet_api.const import Region, is_valid_region
+from tesla_fleet_api.funnel import (
+    BleBroadcastPublisher,
+    FieldPath,
+    Observation,
+    ObservationFunnel,
+    ObservationSink,
+    Publisher,
+    VehicleDataResultPublisher,
+)
 from tesla_fleet_api.tariff import (
     TariffPeriod,
     TariffRate,
@@ -23,6 +32,12 @@ from tesla_fleet_api.tessie.tessie import Tessie
 from tesla_fleet_api.util import firmware_at_least, firmware_compare
 
 __all__ = [
+    "BleBroadcastPublisher",
+    "FieldPath",
+    "Observation",
+    "ObservationFunnel",
+    "ObservationSink",
+    "Publisher",
     "Region",
     "TariffPeriod",
     "TariffRate",
@@ -33,6 +48,7 @@ __all__ = [
     "Teslemetry",
     "TeslemetryClientRegistration",
     "Tessie",
+    "VehicleDataResultPublisher",
     "firmware_at_least",
     "firmware_compare",
     "get_tariff_periods",
