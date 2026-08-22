@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import re
 import socket
 import struct
 from collections.abc import Awaitable, Callable
@@ -207,26 +208,45 @@ def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
 
 _GATEWAY_INTERFACES = ("eth", "wifi")
 
+_DOTTED_QUAD_OCTET = r"(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+_DOTTED_QUAD_RE = re.compile(
+    rf"^{_DOTTED_QUAD_OCTET}\.{_DOTTED_QUAD_OCTET}\.{_DOTTED_QUAD_OCTET}\.{_DOTTED_QUAD_OCTET}$"
+)
+
 
 def _decode_ipv4(value: Any) -> str | None:
-    """Decode a raw big-endian uint32 into dotted-quad form.
+    """Decode a ``networking_status`` ipv4 field into dotted-quad form.
 
-    ``ipv4_config.address``/``subnet_mask``/``gateway`` in a
-    ``networking_status`` response are network-byte-order uint32 integers,
-    not strings - confirmed against a live Powerwall 3 capture where
-    ``3232235914`` decodes to ``192.168.1.138``. ``bool`` is excluded since
-    it subclasses ``int``; an out-of-range or non-int value returns
-    ``None`` rather than raising, since a single bad address shouldn't
-    fail the whole lookup. ``0`` and ``0xFFFFFFFF`` are also rejected -
-    ``0.0.0.0``/``255.255.255.255`` are never a usable host address, and an
-    unconfigured interface reporting ``address: 0`` must not shadow a real
-    address on another interface in the fallback selection.
+    The live API serves ``ipv4_config.address``/``subnet_mask``/``gateway``
+    as a dotted-quad string directly (confirmed live 2026-08-22) - the
+    uint32 network-byte-order int form (e.g. ``3232235914`` decodes to
+    ``192.168.1.138``) is also accepted, defensively/for backward
+    compatibility, not because it was ever the primary wire format. ``bool``
+    is excluded since it subclasses ``int``; a malformed string, out-of-range
+    int, or unsupported type returns ``None`` rather than raising, since a
+    single bad address shouldn't fail the whole lookup. The string form must
+    be a strict dotted-quad (exactly four 0-255 decimal octets, no leading
+    zeros beyond a bare ``0``, no surrounding whitespace, no hex/octal/bare-
+    decimal forms) - anything looser is treated as malformed and returns
+    ``None``. ``0.0.0.0`` and ``255.255.255.255`` are rejected in either
+    representation - never a usable host address, and an unconfigured
+    interface reporting the all-zero form must not shadow a real address on
+    another interface in the fallback selection.
     """
-    if not isinstance(value, int) or isinstance(value, bool):
+    address: str | None = None
+    if isinstance(value, int) and not isinstance(value, bool):
+        if not 0 < value < 0xFFFFFFFF:
+            return None
+        address = socket.inet_ntoa(struct.pack(">I", value))
+    elif isinstance(value, str):
+        if not _DOTTED_QUAD_RE.fullmatch(value):
+            return None
+        address = value
+        if address in ("0.0.0.0", "255.255.255.255"):
+            return None
+    else:
         return None
-    if not 0 < value < 0xFFFFFFFF:
-        return None
-    return socket.inet_ntoa(struct.pack(">I", value))
+    return address
 
 
 def _interface_address(interface: Any) -> str | None:

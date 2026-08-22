@@ -4,9 +4,10 @@ over the Teslemetry ``command/networking_status`` endpoint.
 Only ``eth``/``wifi`` are considered (never ``gsm`` - cellular isn't a LAN
 path). An interface with ``active_route`` set wins; otherwise the first of
 ``eth``, ``wifi`` (in that order) with a decodable address is used. Address
-fields on the wire are raw big-endian uint32 integers, not strings - see
-``GatewayAddressRealCaptureTests`` for the real captured sample this decoding
-is pinned against (see ``_parse_gateway_address`` in
+fields on the wire have been observed as both raw big-endian uint32 integers
+and dotted-quad strings - see ``GatewayAddressRealCaptureTests`` and
+``GatewayAddressStringFormatTests`` for the real captured samples this
+decoding is pinned against (see ``_decode_ipv4``/``_parse_gateway_address`` in
 ``tesla_fleet_api/teslemetry/energysite.py``).
 
 A null body or an unrecognized response shape is malformed data and must
@@ -256,6 +257,243 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
         result = await site.find_gateway_address()
 
         self.assertEqual(result, "192.168.1.138")
+
+
+class GatewayAddressStringFormatTests(IsolatedAsyncioTestCase):
+    """The API now also serves ipv4 fields as dotted-quad strings directly,
+    alongside the legacy uint32 int form - both must decode to the same
+    address. ``STRING_CAPTURE_RESPONSE`` is the real captured response body
+    (2026-08-22), with ``eth`` carrying a gateway-internal address and
+    ``wifi`` the real LAN address as the active route.
+    """
+
+    STRING_CAPTURE_RESPONSE = {
+        "response": {
+            "wifi_config": {"ssid": "ANONYMIZED_SSID"},
+            "wifi": {
+                "mac_address": "ANONYMIZED_MAC_1",
+                "enabled": True,
+                "active_route": True,
+                "ipv4_config": {
+                    "dhcp_enabled": True,
+                    "address": "192.168.1.138",
+                    "subnet_mask": "255.255.255.0",
+                    "gateway": "192.168.1.1",
+                },
+                "connectivity_status": {
+                    "connected_physical": True,
+                    "connected_internet": True,
+                    "connected_tesla": True,
+                    "rssi": {"signal_strength_percent": 45},
+                },
+                "device_state": 6,
+                "device_state_reason": 1,
+            },
+            "eth": {
+                "mac_address": "ANONYMIZED_MAC_2",
+                "enabled": True,
+                "ipv4_config": {
+                    "dhcp_enabled": True,
+                    "address": "192.168.90.2",
+                    "subnet_mask": "255.255.255.0",
+                },
+                "connectivity_status": {"rssi": {}},
+            },
+            "gsm": {
+                "enabled": True,
+                "ipv4_config": {
+                    "address": "10.17.123.246",
+                    "subnet_mask": "255.255.255.255",
+                    "gateway": "10.17.123.246",
+                },
+                "connectivity_status": {
+                    "connected_physical": True,
+                    "connected_internet": True,
+                    "connected_tesla": True,
+                    "rssi": {"signal_strength_percent": 60},
+                },
+            },
+        }
+    }
+
+    async def test_string_captured_sample_selects_active_route_wifi(self) -> None:
+        site = _make_site(self.STRING_CAPTURE_RESPONSE)
+
+        result = await site.find_gateway_address()
+
+        self.assertEqual(result, "192.168.1.138")
+
+    async def test_string_address_matches_equivalent_uint32_address(self) -> None:
+        string_site = _make_site(
+            {"response": {"eth": {"ipv4_config": {"address": "192.168.1.138"}}}}
+        )
+        int_site = _make_site(
+            {"response": {"eth": {"ipv4_config": {"address": 3232235914}}}}
+        )
+
+        string_result = await string_site.find_gateway_address()
+        int_result = await int_site.find_gateway_address()
+
+        self.assertEqual(string_result, "192.168.1.138")
+        self.assertEqual(string_result, int_result)
+
+    async def test_string_zero_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "0.0.0.0"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_string_broadcast_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "255.255.255.255"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_malformed_string_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "not-an-ip"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_trailing_newline_address_is_undecodable(self) -> None:
+        """``$`` in Python regex matches before a trailing newline, so a
+        naive ``re.match`` (rather than ``fullmatch``/``\\Z``) would accept
+        ``"192.168.1.138\\n"`` as valid. It must be rejected like any other
+        malformed string.
+        """
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "192.168.1.138\n"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 192.168.1.138 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_trailing_newline_zero_sentinel_falls_back_to_wifi(self) -> None:
+        """A trailing newline must not let ``"0.0.0.0\\n"`` slip past the
+        regex undetected - it must be treated as undecodable (not as a
+        validated ``0.0.0.0``) so the active-route ``eth`` interface is
+        skipped and selection properly falls back to ``wifi``'s real
+        address instead of either raising or returning the bad value.
+        """
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "0.0.0.0\n"},
+                    },
+                    "wifi": {"ipv4_config": {"address": "192.168.1.138"}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertEqual(result, "192.168.1.138")
+
+    async def test_trailing_newline_broadcast_sentinel_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "255.255.255.255\n"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_zero_sentinel_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 0.0.0.0 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_broadcast_sentinel_is_undecodable(
+        self,
+    ) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 255.255.255.255 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
 
 
 class GatewayAddressInvalidResponseTests(IsolatedAsyncioTestCase):
