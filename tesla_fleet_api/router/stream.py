@@ -308,33 +308,29 @@ class StreamRouter:
         current = next(
             (c for c in candidates if c.state.publisher.source_id == selected_id), None
         )
-        best_rank = min(_rank(c) for c in candidates)
+        eligible = candidates
+        if current is not None:
+            # A source that just regained health holds it briefly before it can
+            # take the field back off a working standby. Ineligible sources are
+            # removed before ranking so a delayed top priority cannot mask a
+            # better source that is eligible right now.
+            now = self._clock()
+            eligible = [
+                c
+                for c in candidates
+                if c is current
+                or c.state.recovered_at is None
+                or now - c.state.recovered_at >= self._failback_delay
+            ]
+
+        best_rank = min(_rank(c) for c in eligible)
         if current is not None and _rank(current) == best_rank:
             # Stickiness within a tier: an equally ranked source does not
             # displace the one already selected.
             chosen = current
         else:
-            better = [c for c in candidates if _rank(c) == best_rank]
-            if current is not None:
-                # A source that just regained health holds it briefly before it
-                # can take the field back off a working standby.
-                now = self._clock()
-                better = [
-                    c
-                    for c in better
-                    if c.state.recovered_at is None
-                    or now - c.state.recovered_at >= self._failback_delay
-                ]
-            chosen = (
-                max(better, key=lambda c: c.observation.observed_at)
-                if better
-                else current
-            )
-
-        if chosen is None:
-            self._selected.pop(path, None)
-            self._announce_availability(path)
-            return
+            better = [c for c in eligible if _rank(c) == best_rank]
+            chosen = max(better, key=lambda c: c.observation.observed_at)
 
         self._selected[path] = chosen.state.publisher.source_id
         self._observed_at[path] = chosen.observation.observed_at
@@ -426,7 +422,9 @@ class StreamRouter:
         listeners = self._availability_listeners.setdefault(path, [])
         listeners.append(callback)
         available = self.is_available(path)
-        self._announced_availability.setdefault(path, available)
+        # Assigned, not defaulted: a cache still holding True for a field that
+        # has since aged out of grace would suppress the next real recovery.
+        self._announced_availability[path] = available
         _dispatch(callback, available)
 
         def unsubscribe() -> None:

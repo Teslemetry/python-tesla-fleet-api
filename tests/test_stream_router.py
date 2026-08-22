@@ -21,8 +21,10 @@ from tesla_fleet_api.router import (
     StreamRouter,
 )
 from tesla_fleet_api.router.stream import (
+    PRIORITY_BLE_PUSH,
     PRIORITY_BROADCAST,
     PRIORITY_STREAM,
+    PRIORITY_SUPPLIED_RESULT,
     Unsubscribe,
 )
 
@@ -282,6 +284,97 @@ class TestSelectionAndFailover(TestCase):
         first.emit(FieldPath.LOCKED, True, observed_at=0.0)
         second.emit(FieldPath.LOCKED, False, observed_at=1.0)
         self.assertEqual(recorder.values, [True])
+
+    def test_a_delayed_top_source_does_not_mask_an_eligible_middle_one(self) -> None:
+        """A field must not sit on a worse backend while a better one is ready.
+
+        The top source is inside its failback delay, so it cannot take the field
+        back yet. That must not stop an untouched middle-priority source from
+        displacing the worst one it is currently sitting on.
+        """
+        clock = _Clock()
+        router = StreamRouter(clock=clock, failback_delay=5.0)
+        stream = _FakePublisher("stream", priority=PRIORITY_STREAM)
+        ble = _FakePublisher("ble", priority=PRIORITY_BLE_PUSH)
+        supplied = _FakePublisher("supplied", priority=PRIORITY_SUPPLIED_RESULT)
+        for publisher in (stream, ble, supplied):
+            router.attach(publisher)
+            publisher.health(True)
+
+        recorder = _Recorder()
+        router.listen(FieldPath.LOCKED, recorder.on_value)
+
+        # The top source holds the field; the middle one has said nothing yet.
+        stream.emit(FieldPath.LOCKED, True, observed_at=0.0)
+        supplied.emit(FieldPath.LOCKED, False, observed_at=0.0)
+        self.assertEqual(recorder.values, [True])
+
+        # The top source drops, leaving only the worst source with a reading.
+        clock.now = 10.0
+        stream.health(False)
+        self.assertEqual(recorder.values, [True, False])
+
+        # It comes back and reports, but is held by the failback delay.
+        clock.now = 20.0
+        stream.health(True)
+        stream.emit(FieldPath.LOCKED, True, observed_at=20.0)
+        self.assertEqual(recorder.values, [True, False])
+
+        # The middle source never lost health, so it is eligible now and must
+        # take the field off the worst source rather than waiting out a delay
+        # that belongs to a different source.
+        ble.emit(FieldPath.LOCKED, True, observed_at=21.0)
+        self.assertEqual(recorder.values, [True, False, True])
+
+        # Prove the middle source really holds it: only the selected source can
+        # move the value, and the held top source still cannot.
+        stream.emit(FieldPath.LOCKED, False, observed_at=22.0)
+        self.assertEqual(recorder.values, [True, False, True])
+        ble.emit(FieldPath.LOCKED, False, observed_at=23.0)
+        self.assertEqual(recorder.values, [True, False, True, False])
+
+
+class TestAvailabilityAnnouncement(TestCase):
+    def test_a_listener_registered_after_grace_expiry_still_gets_the_recovery(
+        self,
+    ) -> None:
+        """A late listener must not be permanently stuck on unavailable.
+
+        Grace expiry has no event to announce, so a listener registering after
+        it is told the recomputed truth. If that recomputation did not also
+        correct what the router believes it has announced, the next real
+        recovery looks like a repeat and this listener never hears it.
+        """
+        clock = _Clock()
+        router = StreamRouter(clock=clock, grace=300.0)
+        source = _FakePublisher("source")
+        router.attach(source)
+        source.health(True)
+
+        source.emit(FieldPath.LOCKED, True, observed_at=0.0)
+        early = _Recorder()
+        router.listen_availability(FieldPath.LOCKED, early.on_availability)
+        self.assertEqual(early.availability, [True])
+
+        # Transport loss: last known data still stands during grace.
+        source.health(False)
+        self.assertEqual(early.availability, [True])
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
+
+        # Grace lapses silently; there is no event to fire on.
+        clock.now = 400.0
+        self.assertFalse(router.is_available(FieldPath.LOCKED))
+        self.assertEqual(early.availability, [True])
+
+        late = _Recorder()
+        router.listen_availability(FieldPath.LOCKED, late.on_availability)
+        self.assertEqual(late.availability, [False])
+
+        # A real recovery must reach the listener that was told False.
+        source.health(True)
+        source.emit(FieldPath.LOCKED, True, observed_at=400.0)
+        self.assertEqual(late.availability, [False, True])
+        self.assertTrue(router.is_available(FieldPath.LOCKED))
 
 
 class TestFreshness(TestCase):
