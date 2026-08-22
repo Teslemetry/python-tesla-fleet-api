@@ -385,6 +385,116 @@ class GatewayAddressStringFormatTests(IsolatedAsyncioTestCase):
 
         self.assertIsNone(result)
 
+    async def test_trailing_newline_address_is_undecodable(self) -> None:
+        """``$`` in Python regex matches before a trailing newline, so a
+        naive ``re.match`` (rather than ``fullmatch``/``\\Z``) would accept
+        ``"192.168.1.138\\n"`` as valid. It must be rejected like any other
+        malformed string.
+        """
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "192.168.1.138\n"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_address_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 192.168.1.138 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_trailing_newline_zero_sentinel_falls_back_to_wifi(self) -> None:
+        """A trailing newline must not let ``"0.0.0.0\\n"`` slip past the
+        regex undetected - it must be treated as undecodable (not as a
+        validated ``0.0.0.0``) so the active-route ``eth`` interface is
+        skipped and selection properly falls back to ``wifi``'s real
+        address instead of either raising or returning the bad value.
+        """
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "0.0.0.0\n"},
+                    },
+                    "wifi": {"ipv4_config": {"address": "192.168.1.138"}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertEqual(result, "192.168.1.138")
+
+    async def test_trailing_newline_broadcast_sentinel_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": "255.255.255.255\n"},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_zero_sentinel_is_undecodable(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 0.0.0.0 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
+    async def test_surrounding_whitespace_broadcast_sentinel_is_undecodable(
+        self,
+    ) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {
+                        "active_route": True,
+                        "ipv4_config": {"address": " 255.255.255.255 "},
+                    },
+                }
+            }
+        )
+
+        result = await site.find_gateway_address()
+
+        self.assertIsNone(result)
+
 
 class GatewayAddressInvalidResponseTests(IsolatedAsyncioTestCase):
     async def test_null_body_raises_invalid_response(self) -> None:

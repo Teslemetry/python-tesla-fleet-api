@@ -239,7 +239,7 @@ def _decode_ipv4(value: Any) -> str | None:
             return None
         address = socket.inet_ntoa(struct.pack(">I", value))
     elif isinstance(value, str):
-        if not _DOTTED_QUAD_RE.match(value):
+        if not _DOTTED_QUAD_RE.fullmatch(value):
             return None
         address = value
         if address in ("0.0.0.0", "255.255.255.255"):
