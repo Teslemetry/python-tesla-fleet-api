@@ -1,4 +1,4 @@
-"""Routing wrappers that chain backends with per-command failover."""
+"""Routing wrappers: per-command failover (`Router`) and read-side arbitration (`StreamRouter`)."""
 
 from tesla_fleet_api.router.base import HealthCheck, Router
 from tesla_fleet_api.router.vehicle import VehicleRouter
