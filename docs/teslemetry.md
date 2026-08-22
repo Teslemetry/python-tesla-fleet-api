@@ -596,9 +596,10 @@ Teslemetry energy sites expose the raw `get_networking_status` command, plus
 a typed `find_gateway_address` helper that discovers the gateway's LAN IPv4
 address - for example to pre-fill the host for the signed local control path
 shown in [Energy: Local Control](energy_local_control.md). The `ipv4_config`
-fields in a `networking_status` response are raw big-endian uint32 integers,
-not dotted-quad strings; the helper decodes them and selects an interface for
-you. Only the `eth` and `wifi` interfaces are considered (never `gsm` -
+fields in a `networking_status` response have been observed as either raw
+big-endian uint32 integers or dotted-quad strings; the helper decodes either
+form and selects an interface for you. Only the `eth` and `wifi` interfaces
+are considered (never `gsm` -
 cellular is not a LAN path): the helper prefers whichever has `active_route`
 set and a decodable address, then falls back to the first of the two (in
 `eth`, `wifi` order) with any decodable address. A null response body or an
