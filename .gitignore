@@ -5,6 +5,7 @@ test*.py
 register.py
 *.pyc
 __pycache__
+*.egg-info/
 auth.json
 opensource.py
 *.pem
