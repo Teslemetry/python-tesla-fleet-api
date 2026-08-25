@@ -11,6 +11,7 @@ from tesla_fleet_api.funnel import (
     ObservationFunnel,
     ObservationSink,
     Publisher,
+    TeslemetryStreamPublisher,
     VehicleDataResultPublisher,
 )
 from tesla_fleet_api.tariff import (
@@ -47,6 +48,7 @@ __all__ = [
     "TeslaFleetOAuth",
     "Teslemetry",
     "TeslemetryClientRegistration",
+    "TeslemetryStreamPublisher",
     "Tessie",
     "VehicleDataResultPublisher",
     "firmware_at_least",
