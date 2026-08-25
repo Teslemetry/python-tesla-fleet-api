@@ -118,3 +118,24 @@ class SignedOperationOnNullKeyTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(SigningDisabled):
             await vehicle.handshakeVehicleSecurity()
+
+    async def test_pair_raises_signing_disabled_without_touching_transport(
+        self,
+    ) -> None:
+        """pair() must fail before it builds/sends a whitelist request.
+
+        A key-less vehicle has an empty ``_public_key``; without this guard
+        pair() would proceed to connect and send a malformed whitelist
+        request to real hardware instead of failing clearly up front.
+        """
+        parent = MagicMock()
+        parent.private_key = None
+        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        vehicle.connect_if_needed = AsyncMock()  # type: ignore[method-assign]
+        vehicle._send = AsyncMock()  # type: ignore[method-assign]
+
+        with self.assertRaises(SigningDisabled):
+            await vehicle.pair()
+
+        vehicle.connect_if_needed.assert_not_awaited()
+        vehicle._send.assert_not_awaited()
