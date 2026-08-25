@@ -18,12 +18,11 @@ from tesla_fleet_api.tesla.vehicle import (
 )
 
 if TYPE_CHECKING:
-    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
-    from tesla_fleet_api.tesla.vehicle import VehicleBluetooth
+    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth as TeslaBluetooth
+    from tesla_fleet_api.tesla.vehicle import VehicleBluetooth as VehicleBluetooth
 
 __all__ = [
     "TeslaFleetApi",
-    "TeslaBluetooth",
     "TeslaFleetOAuth",
     "Charging",
     "EnergySites",
@@ -36,7 +35,6 @@ __all__ = [
     "VehiclesBluetooth",
     "VehicleFleet",
     "VehicleSigned",
-    "VehicleBluetooth",
     "Router",
     "VehicleRouter",
 ]

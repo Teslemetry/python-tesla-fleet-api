@@ -35,7 +35,7 @@ from tesla_fleet_api.tessie.tessie import Tessie
 from tesla_fleet_api.util import firmware_at_least, firmware_compare
 
 if TYPE_CHECKING:
-    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
+    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth as TeslaBluetooth
 
 __all__ = [
     "BleBroadcastPublisher",
@@ -51,7 +51,6 @@ __all__ = [
     "TariffRate",
     "TariffResolution",
     "TeslaFleetApi",
-    "TeslaBluetooth",
     "TeslaFleetOAuth",
     "Teslemetry",
     "TeslemetryClientRegistration",

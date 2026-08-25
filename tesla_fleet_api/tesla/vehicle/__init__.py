@@ -8,14 +8,15 @@ from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 if TYPE_CHECKING:
-    from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+    from tesla_fleet_api.tesla.vehicle.bluetooth import (
+        VehicleBluetooth as VehicleBluetooth,
+    )
 
 __all__ = [
     "Vehicles",
     "VehiclesBluetooth",
     "Vehicle",
     "VehicleFleet",
-    "VehicleBluetooth",
     "VehicleSigned",
 ]
 
