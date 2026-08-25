@@ -408,6 +408,23 @@ class LibraryError(Exception):
     """Errors related to this library."""
 
 
+class SigningDisabled(LibraryError):
+    """A signed operation was attempted on a vehicle constructed with signing explicitly disabled.
+
+    Pass ``private_key=None`` explicitly only for a passive listener that
+    never sends a command; construct with a real key (or omit the argument to
+    inherit the parent's) to issue signed commands.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This vehicle was constructed with private_key=None, explicitly "
+            "disabling command signing. It can only observe unsolicited "
+            "broadcasts (the listen_* methods); any signed command or read "
+            "needs a real private_key."
+        )
+
+
 class SignedCommandRequired(TeslaFleetError):
     """The requested action requires a signed command; the unsigned cloud API cannot actuate it.
 

@@ -5,6 +5,7 @@ from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.const import BluetoothConfirmation
+from tesla_fleet_api.tesla.vehicle.commands import KEY_OMITTED, KeyOmitted
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.bluetooth import (
     DEFAULT_KEEPALIVE_INTERVAL,
@@ -101,7 +102,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     def create(
         self,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None = None,
+        key: ec.EllipticCurvePrivateKey | None | KeyOmitted = KEY_OMITTED,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -123,6 +124,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         success. ``verify_commands``/``optimistic`` are deprecated aliases for
         ``confirmation="verify"``/``confirmation="optimistic"``. See
         ``VehicleBluetooth``'s docstring for the full ladder.
+        ``key=None`` explicitly disables signing, for a passive listener;
+        omitting ``key`` keeps the usual parent-key fallback.
         """
         return self.createBluetooth(
             vin,
@@ -138,7 +141,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     def createBluetooth(
         self,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None = None,
+        key: ec.EllipticCurvePrivateKey | None | KeyOmitted = KEY_OMITTED,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -160,6 +163,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         success. ``verify_commands``/``optimistic`` are deprecated aliases for
         ``confirmation="verify"``/``confirmation="optimistic"``. See
         ``VehicleBluetooth``'s docstring for the full ladder.
+        ``key=None`` explicitly disables signing, for a passive listener;
+        omitting ``key`` keeps the usual parent-key fallback.
         """
         vehicle = self.Bluetooth(
             self._parent,

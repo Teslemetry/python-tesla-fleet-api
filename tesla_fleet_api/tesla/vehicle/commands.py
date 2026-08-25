@@ -29,6 +29,7 @@ from tesla_fleet_api.exceptions import (
     NotOnWhitelistFault,
     SessionInfoAuthenticationFault,
     SignedCommandResponseReplayed,
+    SigningDisabled,
     TeslaFleetError,
     # TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
@@ -425,10 +426,19 @@ class Session(Generic[CommandParentT]):
         )
 
 
+class KeyOmitted:
+    """Sentinel distinguishing an omitted ``private_key`` argument from an explicit ``None``."""
+
+
+# Distinct from ``None`` so a caller can explicitly pass ``private_key=None`` to
+# disable signing, rather than that meaning "use the parent's key".
+KEY_OMITTED = KeyOmitted()
+
+
 class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
-    private_key: ec.EllipticCurvePrivateKey
+    private_key: ec.EllipticCurvePrivateKey | None
     _public_key: bytes
     _from_destination: bytes
     _sessions: dict[int, Session[CommandParentT]]
@@ -440,9 +450,16 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         self,
         parent: CommandParentT,
         vin: str,
-        private_key: ec.EllipticCurvePrivateKey | None = None,
+        private_key: ec.EllipticCurvePrivateKey | None | KeyOmitted = KEY_OMITTED,
         public_key: bytes | None = None,
     ):
+        """Initialize with a signing key, or ``private_key=None`` to disable signing.
+
+        Omitting ``private_key`` falls back to the parent's key (raising if it
+        has none, same as always). Passing ``private_key=None`` explicitly
+        disables signing for this vehicle - for a passive BLE listener that
+        only observes broadcasts and never sends a command.
+        """
         super().__init__(parent, vin)
 
         self._from_destination = randbytes(16)
@@ -453,19 +470,26 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Domain.DOMAIN_INFOTAINMENT: Session(self, Domain.DOMAIN_INFOTAINMENT),
         }
 
-        if private_key:
-            self.private_key = private_key
-        elif parent.private_key:
-            self.private_key = parent.private_key
+        if isinstance(private_key, KeyOmitted):
+            if parent.private_key:
+                self.private_key = parent.private_key
+            else:
+                raise ValueError("No private key.")
         else:
-            raise ValueError("No private key.")
+            self.private_key = private_key
 
-        self._public_key = public_key or self.private_key.public_key().public_bytes(
-            encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
+        self._public_key = public_key or (
+            self.private_key.public_key().public_bytes(
+                encoding=Encoding.X962, format=PublicFormat.UncompressedPoint
+            )
+            if self.private_key is not None
+            else b""
         )
 
     def shared_key(self, vehicleKey: bytes) -> bytes:
         """Derive the 16-byte shared key used for signed-command session encryption."""
+        if self.private_key is None:
+            raise SigningDisabled()
         exchange = self.private_key.exchange(
             ec.ECDH(),
             ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), vehicleKey),
@@ -1088,6 +1112,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
     async def _handshake(self, domain: Domain) -> bool:
         """Perform a handshake with the vehicle."""
+        if self.private_key is None:
+            raise SigningDisabled()
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
         msg = RoutableMessage(

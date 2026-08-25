@@ -574,6 +574,22 @@ the `unsubscribe()` closure returned at registration.
 Callback exceptions are logged and do not stop later listeners or normal
 message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 
+### Passive listening without a private key
+
+A vehicle that only decodes broadcasts and never sends a command has no
+reason to hold a signing key. Pass `key=None` explicitly to `vehicles.create`
+(or `VehicleBluetooth` directly) to construct without one:
+
+```python
+vehicle = tesla_bluetooth.vehicles.create("<vin>", key=None)
+```
+
+Omitting `key` still falls back to the parent's private key as before -
+`key=None` must be passed explicitly to disable signing. Reads and listeners
+that don't need a signed session still work; any command that does raises
+`SigningDisabled` naming that signing was explicitly disabled for this
+vehicle.
+
 ### Connection-status events
 
 Use `listen_connection_status(callback)` to receive BLE session transitions
