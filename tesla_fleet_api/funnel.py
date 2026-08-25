@@ -456,3 +456,88 @@ class VehicleDataResultPublisher:
         # boolean meaning.
         elif (code := _int_code(front_trunk)) in (0, 1):
             yield Observation(FieldPath.DOOR_STATE_TRUNK_FRONT, code == 1, observed_at)
+
+
+# -- Supplied Teslemetry stream publisher -----------------------------------
+
+
+def _coerce_stream_bool(value: object) -> object:
+    """``"true"``/``"false"`` become real booleans; anything else passes through.
+
+    Some vehicles stream a boolean signal as that literal string rather than a
+    JSON boolean even when the stream prefers typed values.
+    """
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return value
+
+
+class TeslemetryStreamPublisher:
+    """Translates a caller-supplied Teslemetry stream signal update into observations.
+
+    The update is an argument, keyed by signal name the way a Teslemetry
+    stream push does (``Locked``, ``ChargePortDoorOpen``, ``DoorState`` with a
+    nested ``TrunkFront``). This class holds no stream client, connection, or
+    callable able to obtain one, so nothing here can originate a subscription
+    or a connection - the same shape ``VehicleDataResultPublisher`` uses for a
+    supplied ``vehicle_data`` result, kept here rather than depending on the
+    separate stream client package for a type this library does not need.
+    """
+
+    def __init__(self, *, clock: Clock = time.monotonic) -> None:
+        self._clock = clock
+        self._sink: ObservationSink | None = None
+
+    @property
+    def paths(self) -> frozenset[FieldPath]:
+        return frozenset(FieldPath)
+
+    def attach(self, sink: ObservationSink) -> Unsubscribe:
+        self._sink = sink
+
+        def detach() -> None:
+            self._sink = None
+
+        return detach
+
+    def request(self, paths: frozenset[FieldPath]) -> None:
+        """Passive source: activation subscribes to nothing."""
+
+    def release(self, paths: frozenset[FieldPath]) -> None:
+        """Passive source: activation subscribes to nothing."""
+
+    def publish_update(
+        self, data: Mapping[str, Any], *, observed_at: float | None = None
+    ) -> tuple[Observation, ...]:
+        """Translate a supplied stream signal update and feed it to the sink."""
+        at = self._clock() if observed_at is None else observed_at
+        observations = tuple(self._translate(data, at))
+        sink = self._sink
+        if sink is not None:
+            for observation in observations:
+                sink.publish(observation)
+        return observations
+
+    def _translate(
+        self, data: Mapping[str, Any], observed_at: float
+    ) -> Iterator[Observation]:
+        locked = _coerce_stream_bool(_leaf(data, "Locked"))
+        if locked is None or isinstance(locked, bool):
+            yield Observation(FieldPath.LOCKED, locked, observed_at)
+
+        charge_port = _coerce_stream_bool(_leaf(data, "ChargePortDoorOpen"))
+        if charge_port is None or isinstance(charge_port, bool):
+            yield Observation(FieldPath.CHARGE_PORT_DOOR_OPEN, charge_port, observed_at)
+
+        door_state = _leaf(data, "DoorState")
+        if door_state is None:
+            yield Observation(FieldPath.DOOR_STATE_TRUNK_FRONT, None, observed_at)
+        elif isinstance(door_state, Mapping):
+            door_section: Mapping[str, Any] = door_state  # pyright: ignore[reportUnknownVariableType]
+            trunk_front = _coerce_stream_bool(_leaf(door_section, "TrunkFront"))
+            if trunk_front is None or isinstance(trunk_front, bool):
+                yield Observation(
+                    FieldPath.DOOR_STATE_TRUNK_FRONT, trunk_front, observed_at
+                )
