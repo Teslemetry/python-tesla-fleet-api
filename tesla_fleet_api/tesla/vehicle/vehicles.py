@@ -7,6 +7,7 @@ from tesla_fleet_api.const import DEFAULT_KEEPALIVE_INTERVAL, BluetoothConfirmat
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from tesla_fleet_api.util import import_ble_class
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
@@ -19,14 +20,9 @@ if TYPE_CHECKING:
 def _import_vehicle_bluetooth() -> type["VehicleBluetooth[Any]"]:
     """Import VehicleBluetooth on demand so the ``ble`` extra stays optional
     for callers who never create a bluetooth vehicle."""
-    try:
-        from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
-    except ImportError as err:
-        raise ImportError(
-            "Bluetooth support requires the 'ble' extra: "
-            "install with `pip install tesla-fleet-api[ble]`."
-        ) from err
-    return VehicleBluetooth
+    return import_ble_class(
+        "tesla_fleet_api.tesla.vehicle.bluetooth", "VehicleBluetooth"
+    )
 
 
 FleetParentT = TypeVar("FleetParentT", bound="TeslaFleetApi")

@@ -6,6 +6,7 @@ from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles, VehiclesBluetooth
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from tesla_fleet_api.util import import_ble_class
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.vehicle.bluetooth import (
@@ -25,7 +26,7 @@ def __getattr__(name: str) -> Any:
     # VehicleBluetooth requires bleak (the "ble" extra); import it lazily so
     # importing this package doesn't require bleak to be installed.
     if name == "VehicleBluetooth":
-        from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
-
-        return VehicleBluetooth
+        return import_ble_class(
+            "tesla_fleet_api.tesla.vehicle.bluetooth", "VehicleBluetooth"
+        )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

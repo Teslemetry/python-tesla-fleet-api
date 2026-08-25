@@ -98,7 +98,44 @@ class TestBluetoothIsOptional(TestCase):
             try:
                 tesla_fleet_api.TeslaBluetooth
             except ImportError as err:
-                assert "ble" in str(err) or "bleak" in str(err)
+                assert "tesla-fleet-api[ble]" in str(err)
+            else:
+                raise AssertionError("expected ImportError")
+            """
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_tesla_vehicle_bluetooth_attribute_without_bleak_raises_clear_error(self):
+        result = _run(
+            """
+            import tesla_fleet_api.tesla
+
+            try:
+                tesla_fleet_api.tesla.TeslaBluetooth
+            except ImportError as err:
+                assert "tesla-fleet-api[ble]" in str(err)
+            else:
+                raise AssertionError("expected ImportError")
+
+            try:
+                tesla_fleet_api.tesla.VehicleBluetooth
+            except ImportError as err:
+                assert "tesla-fleet-api[ble]" in str(err)
+            else:
+                raise AssertionError("expected ImportError")
+            """
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_vehicle_bluetooth_attribute_without_bleak_raises_clear_error(self):
+        result = _run(
+            """
+            import tesla_fleet_api.tesla.vehicle
+
+            try:
+                tesla_fleet_api.tesla.vehicle.VehicleBluetooth
+            except ImportError as err:
+                assert "tesla-fleet-api[ble]" in str(err)
             else:
                 raise AssertionError("expected ImportError")
             """

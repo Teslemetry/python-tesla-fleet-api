@@ -32,7 +32,7 @@ from tesla_fleet_api.teslemetry.teslemetry import (
     register_client,
 )
 from tesla_fleet_api.tessie.tessie import Tessie
-from tesla_fleet_api.util import firmware_at_least, firmware_compare
+from tesla_fleet_api.util import import_ble_class, firmware_at_least, firmware_compare
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth as TeslaBluetooth
@@ -70,7 +70,5 @@ def __getattr__(name: str) -> Any:
     # TeslaBluetooth requires bleak (the "ble" extra); import it lazily so
     # importing this package doesn't require bleak to be installed.
     if name == "TeslaBluetooth":
-        from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
-
-        return TeslaBluetooth
+        return import_ble_class("tesla_fleet_api.tesla.bluetooth", "TeslaBluetooth")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

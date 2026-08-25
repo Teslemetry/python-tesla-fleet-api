@@ -1,5 +1,26 @@
 """Shared utility helpers."""
 
+import importlib
+from typing import Any
+
+
+def import_ble_class(module_path: str, class_name: str) -> Any:
+    """Import a bleak-backed class on demand.
+
+    Raises a friendly ImportError naming the ``ble`` extra if bleak is not
+    installed, instead of letting a bare ``ModuleNotFoundError: No module
+    named 'bleak'`` escape to the caller. Not part of ``__all__``: this is an
+    internal cross-module helper, not a public API function.
+    """
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as err:
+        raise ImportError(
+            "Bluetooth support requires the 'ble' extra: "
+            "install with `pip install tesla-fleet-api[ble]`."
+        ) from err
+    return getattr(module, class_name)
+
 
 def _parse_firmware(version: str) -> tuple[int, ...] | None:
     """Parse a dotted numeric firmware string, or None if it doesn't parse."""
