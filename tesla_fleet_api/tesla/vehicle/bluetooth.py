@@ -24,6 +24,7 @@ from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
+    SigningDisabled,
     TeslaFleetError,
     WhitelistOperationStatus,
 )
@@ -1525,6 +1526,9 @@ class VehicleBluetooth(
 
         if poll_interval <= 0:
             raise ValueError("poll_interval must be greater than 0")
+
+        if self.private_key is None:
+            raise SigningDisabled()
 
         request = UnsignedMessage(
             WhitelistOperation=WhitelistOperation(
