@@ -266,15 +266,18 @@ class ObservationFunnel:
 # UNLOCKED is 0 and the enum has no proto3 presence, so every status broadcast
 # reports a lock state and the funnel deduplicates the repeats.
 #
-# INTERNAL_LOCKED and SELECTIVE_UNLOCKED are deliberately unmapped: reducing
-# either to one boolean is unvalidated against live frames, and emitting
-# nothing keeps the last confirmed value instead of guessing.
+# Only a locked state reads as locked; any unlocked state, however partial
+# or selective, reads as unlocked.
 _LOCK_STATES: Mapping[int, bool] = {
     VehicleLockState_E.VEHICLELOCKSTATE_LOCKED: True,
     VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED: False,
+    VehicleLockState_E.VEHICLELOCKSTATE_INTERNAL_LOCKED: True,
+    VehicleLockState_E.VEHICLELOCKSTATE_SELECTIVE_UNLOCKED: False,
 }
 
-# UNKNOWN and FAILED_UNLATCH are unmapped for the same reason.
+# UNKNOWN and FAILED_UNLATCH are unmapped: reducing either to one boolean is
+# unvalidated against live frames, and emitting nothing keeps the last
+# confirmed value instead of guessing.
 _CLOSURE_STATES: Mapping[int, bool] = {
     ClosureState_E.CLOSURESTATE_CLOSED: False,
     ClosureState_E.CLOSURESTATE_OPEN: True,

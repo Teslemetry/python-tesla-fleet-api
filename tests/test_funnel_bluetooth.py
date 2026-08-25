@@ -116,8 +116,7 @@ class TestBroadcastTranslation(TestCase):
             [(FieldPath.LOCKED, True), (FieldPath.LOCKED, False)],
         )
 
-    def test_unvalidated_lock_states_emit_no_observation(self) -> None:
-        """An unmapped enum keeps the last confirmed value instead of guessing."""
+    def test_partial_lock_states_map_to_booleans(self) -> None:
         vehicle = _make_vehicle()
         _, sink = _attached(vehicle)
 
@@ -126,7 +125,10 @@ class TestBroadcastTranslation(TestCase):
             _lock(VehicleLockState_E.VEHICLELOCKSTATE_SELECTIVE_UNLOCKED)
         )
 
-        self.assertEqual(sink.observations, [])
+        self.assertEqual(
+            [(o.path, o.value) for o in sink.observations],
+            [(FieldPath.LOCKED, True), (FieldPath.LOCKED, False)],
+        )
 
     def test_closure_states_map_to_booleans(self) -> None:
         vehicle = _make_vehicle()
