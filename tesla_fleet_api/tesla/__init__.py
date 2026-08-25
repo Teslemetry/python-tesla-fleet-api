@@ -1,7 +1,8 @@
 """Tesla Fleet API classes."""
 
+from typing import TYPE_CHECKING, Any
+
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
-from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites, EnergySite
@@ -13,9 +14,12 @@ from tesla_fleet_api.tesla.vehicle import (
     VehiclesBluetooth,
     VehicleFleet,
     VehicleSigned,
-    VehicleBluetooth,
     Vehicle,
 )
+
+if TYPE_CHECKING:
+    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
+    from tesla_fleet_api.tesla.vehicle import VehicleBluetooth
 
 __all__ = [
     "TeslaFleetApi",
@@ -36,3 +40,17 @@ __all__ = [
     "Router",
     "VehicleRouter",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    # TeslaBluetooth/VehicleBluetooth require bleak (the "ble" extra);
+    # import them lazily so importing this package doesn't require bleak.
+    if name == "TeslaBluetooth":
+        from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
+
+        return TeslaBluetooth
+    if name == "VehicleBluetooth":
+        from tesla_fleet_api.tesla.vehicle import VehicleBluetooth
+
+        return VehicleBluetooth
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

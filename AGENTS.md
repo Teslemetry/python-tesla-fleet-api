@@ -5,7 +5,7 @@ Python library (`tesla_fleet_api`) providing async interfaces for Tesla Fleet AP
 ## Development Commands
 
 ```bash
-uv sync                                 # install
+uv sync --extra ble                     # install (add --extra ble for Bluetooth work/tests)
 uv run pyright tesla_fleet_api          # type check (strict)
 uv run ruff check tesla_fleet_api       # lint
 uv run ruff format tesla_fleet_api
@@ -58,6 +58,8 @@ Commands (vehicle/commands.py) - protobuf signed-command implementation (ABC)
 `createBluetooth` docstring for its confirmation/keepalive/key arguments.
 Teslemetry/Tessie override `Vehicles` with `TeslemetryVehicle`/`TessieVehicle`,
 adding service-specific commands.
+
+**`bleak`/`bleak-retry-connector` are the optional `ble` extra** (`pip install tesla-fleet-api[ble]`); `cryptography`, `protobuf`, and `tesla-protocol` stay base dependencies because the cloud signed-command path (`vehicle/commands.py`, `vehicle/signed.py`) needs them too, not just Bluetooth. `Vehicles.Bluetooth`/`VehiclesBluetooth.Bluetooth` and the top-level `TeslaBluetooth`/`VehicleBluetooth` re-exports resolve `tesla.vehicle.bluetooth` lazily (a property or module `__getattr__`, not a top-level import) so importing the cloud surface never requires `bleak` to be installed; `DEFAULT_KEEPALIVE_INTERVAL` lives in `const.py` (not `vehicle/bluetooth.py`) so it can be a real default value on `Vehicles`' bleak-free code paths. `tests/test_ble_optional_extra.py` locks this in by poisoning `bleak`/`bleak_retry_connector` in `sys.modules` in a subprocess and asserting the cloud surface still imports and works.
 
 ### Submodule Pattern
 

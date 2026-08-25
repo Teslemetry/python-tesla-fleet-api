@@ -746,11 +746,15 @@ dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "aiolimiter" },
-    { name = "bleak" },
-    { name = "bleak-retry-connector" },
     { name = "cryptography" },
     { name = "protobuf" },
     { name = "tesla-protocol" },
+]
+
+[package.optional-dependencies]
+ble = [
+    { name = "bleak" },
+    { name = "bleak-retry-connector" },
 ]
 
 [package.dev-dependencies]
@@ -765,12 +769,13 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=24" },
     { name = "aiohttp", specifier = ">=3" },
     { name = "aiolimiter", specifier = ">=1" },
-    { name = "bleak", specifier = ">=0.22" },
-    { name = "bleak-retry-connector", specifier = ">=3.9" },
+    { name = "bleak", marker = "extra == 'ble'", specifier = ">=0.22" },
+    { name = "bleak-retry-connector", marker = "extra == 'ble'", specifier = ">=3.9" },
     { name = "cryptography", specifier = ">=43" },
     { name = "protobuf", specifier = ">=6.32.0" },
     { name = "tesla-protocol", specifier = ">=1.4.0" },
 ]
+provides-extras = ["ble"]
 
 [package.metadata.requires-dev]
 dev = [

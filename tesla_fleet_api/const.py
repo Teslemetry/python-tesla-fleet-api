@@ -13,6 +13,10 @@ Region = Literal["na", "eu", "cn"]
 # broadcast, "verify" additionally reads back state on an ack/broadcast timeout.
 BluetoothConfirmation = Literal["optimistic", "ack", "verify"]
 
+# An idle held BLE link to the vehicle drops at ~42s mean; a trivial GATT read
+# every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
+DEFAULT_KEEPALIVE_INTERVAL = 20.0
+
 SERVERS: dict[Region, str] = {
     "na": "https://fleet-api.prd.na.vn.cloud.tesla.com",
     "eu": "https://fleet-api.prd.eu.vn.cloud.tesla.com",
