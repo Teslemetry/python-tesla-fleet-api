@@ -426,15 +426,6 @@ class Session(Generic[CommandParentT]):
         )
 
 
-class KeyOmitted:
-    """Sentinel distinguishing an omitted ``private_key`` argument from an explicit ``None``."""
-
-
-# Distinct from ``None`` so a caller can explicitly pass ``private_key=None`` to
-# disable signing, rather than that meaning "use the parent's key".
-KEY_OMITTED = KeyOmitted()
-
-
 class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands for a specific vehicle with command signing."""
 
@@ -450,15 +441,18 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         self,
         parent: CommandParentT,
         vin: str,
-        private_key: ec.EllipticCurvePrivateKey | None | KeyOmitted = KEY_OMITTED,
+        private_key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         public_key: bytes | None = None,
     ):
-        """Initialize with a signing key, or ``private_key=None`` to disable signing.
+        """Initialize with a signing key, or ``private_key=False`` to disable signing.
 
-        Omitting ``private_key`` falls back to the parent's key (raising if it
-        has none, same as always). Passing ``private_key=None`` explicitly
-        disables signing for this vehicle - for a passive BLE listener that
-        only observes broadcasts and never sends a command.
+        ``None`` (the default, and an explicit ``None``) keeps the long-standing
+        behaviour: fall back to the parent's key, raising ``ValueError`` if it
+        has none. Passing ``private_key=False`` explicitly disables signing for
+        this vehicle - for a passive BLE listener that only observes broadcasts
+        and never sends a command. ``False`` is used rather than ``None`` so
+        that no caller who already passes ``private_key=None`` meaning "I
+        haven't got one" silently gets a vehicle that cannot sign.
         """
         super().__init__(parent, vin)
 
@@ -470,13 +464,17 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Domain.DOMAIN_INFOTAINMENT: Session(self, Domain.DOMAIN_INFOTAINMENT),
         }
 
-        if isinstance(private_key, KeyOmitted):
-            if parent.private_key:
-                self.private_key = parent.private_key
-            else:
-                raise ValueError("No private key.")
-        else:
+        # Identity checks, not truthiness: ``False`` and ``None`` are both
+        # falsy, and collapsing them would make an explicit ``None`` silently
+        # disable signing instead of falling back to the parent's key.
+        if private_key is False:
+            self.private_key = None
+        elif private_key is not None:
             self.private_key = private_key
+        elif parent.private_key is not None:
+            self.private_key = parent.private_key
+        else:
+            raise ValueError("No private key.")
 
         self._public_key = public_key or (
             self.private_key.public_key().public_bytes(

@@ -1,12 +1,17 @@
 """Tests for constructing a ``VehicleBluetooth`` with signing explicitly disabled.
 
-Omitting ``key``/``private_key`` keeps the existing behaviour of falling back
-to the parent's key and raising if it has none. Passing ``key=None``/
-``private_key=None`` explicitly is a distinct, additive path: it constructs
+``key``/``private_key`` keeps ``None`` as its long-standing meaning: whether
+omitted or passed explicitly, it falls back to the parent's key and raises if
+the parent has none. ``False`` is the distinct, additive opt-out: it constructs
 successfully with signing disabled, still receives broadcasts via the
 ``listen_*`` methods, and raises a clear ``SigningDisabled`` (not a generic
 attribute/type error from deep in the signing path) on any operation that
 actually needs to sign.
+
+``False`` rather than ``None`` is the opt-out precisely so that a caller who
+already writes ``private_key=None`` meaning "I haven't got one" keeps getting
+today's ``ValueError`` instead of silently ending up with a vehicle that
+cannot sign - see ``ExplicitNoneIsUnchangedTests``.
 """
 
 from __future__ import annotations
@@ -60,22 +65,46 @@ class OmittedKeyStillRaisesTests(IsolatedAsyncioTestCase):
         self.assertIs(vehicle.private_key, parent.private_key)
 
 
-class ExplicitNullKeyTests(IsolatedAsyncioTestCase):
-    async def test_explicit_null_key_constructs_even_with_no_parent_key(self) -> None:
-        """An explicit ``key=None`` disables signing rather than falling back."""
+class ExplicitNoneIsUnchangedTests(IsolatedAsyncioTestCase):
+    """An explicit ``key=None`` must behave exactly as it always has.
+
+    This is the regression the ``False`` opt-out exists to prevent: a caller
+    writing ``key=None`` to mean "I haven't got one" must keep getting the
+    ``ValueError`` that tells them so, not a silently unsignable vehicle.
+    """
+
+    async def test_explicit_none_with_no_parent_key_raises_value_error(self) -> None:
         parent = MagicMock()
         parent.private_key = None
 
-        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        with self.assertRaisesRegex(ValueError, "No private key."):
+            VehicleBluetooth(parent, VIN, key=None)
 
-        self.assertIsNone(vehicle.private_key)
-
-    async def test_explicit_null_key_overrides_an_available_parent_key(self) -> None:
-        """``key=None`` disables signing even when the parent does have a key."""
+    async def test_explicit_none_falls_back_to_parent_key(self) -> None:
         parent = MagicMock()
         parent.private_key = ec.generate_private_key(ec.SECP256R1())
 
         vehicle = VehicleBluetooth(parent, VIN, key=None)
+
+        self.assertIs(vehicle.private_key, parent.private_key)
+
+
+class ExplicitFalseKeyTests(IsolatedAsyncioTestCase):
+    async def test_explicit_false_key_constructs_even_with_no_parent_key(self) -> None:
+        """An explicit ``key=False`` disables signing rather than raising."""
+        parent = MagicMock()
+        parent.private_key = None
+
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
+
+        self.assertIsNone(vehicle.private_key)
+
+    async def test_explicit_false_key_overrides_an_available_parent_key(self) -> None:
+        """``key=False`` disables signing even when the parent does have a key."""
+        parent = MagicMock()
+        parent.private_key = ec.generate_private_key(ec.SECP256R1())
+
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
 
         self.assertIsNone(vehicle.private_key)
 
@@ -83,7 +112,7 @@ class ExplicitNullKeyTests(IsolatedAsyncioTestCase):
         """A key-less vehicle still fans out unsolicited status broadcasts."""
         parent = MagicMock()
         parent.private_key = None
-        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
 
         seen: list[Any] = []
         vehicle.listen_vehicle_lock_state(seen.append)
@@ -99,12 +128,12 @@ class ExplicitNullKeyTests(IsolatedAsyncioTestCase):
         self.assertEqual(seen, [VehicleLockState_E.VEHICLELOCKSTATE_LOCKED])
 
 
-class SignedOperationOnNullKeyTests(IsolatedAsyncioTestCase):
+class SignedOperationOnDisabledKeyTests(IsolatedAsyncioTestCase):
     async def test_signed_command_raises_signing_disabled(self) -> None:
         """A signed operation on a key-less vehicle fails clearly, not deep in the signing path."""
         parent = MagicMock()
         parent.private_key = None
-        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
         vehicle.connect_if_needed = AsyncMock()  # type: ignore[method-assign]
         vehicle._send = AsyncMock()  # type: ignore[method-assign]
 
@@ -114,7 +143,7 @@ class SignedOperationOnNullKeyTests(IsolatedAsyncioTestCase):
     async def test_handshake_raises_signing_disabled(self) -> None:
         parent = MagicMock()
         parent.private_key = None
-        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
 
         with self.assertRaises(SigningDisabled):
             await vehicle.handshakeVehicleSecurity()
@@ -130,7 +159,7 @@ class SignedOperationOnNullKeyTests(IsolatedAsyncioTestCase):
         """
         parent = MagicMock()
         parent.private_key = None
-        vehicle = VehicleBluetooth(parent, VIN, key=None)
+        vehicle = VehicleBluetooth(parent, VIN, key=False)
         vehicle.connect_if_needed = AsyncMock()  # type: ignore[method-assign]
         vehicle._send = AsyncMock()  # type: ignore[method-assign]
 

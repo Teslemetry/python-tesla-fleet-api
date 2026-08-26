@@ -577,18 +577,22 @@ message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 ### Passive listening without a private key
 
 A vehicle that only decodes broadcasts and never sends a command has no
-reason to hold a signing key. Pass `key=None` explicitly to `vehicles.create`
-(or `VehicleBluetooth` directly) to construct without one:
+reason to hold a signing key. Pass `key=False` to `vehicles.create` (or
+`VehicleBluetooth` directly) to construct without one:
 
 ```python
-vehicle = tesla_bluetooth.vehicles.create("<vin>", key=None)
+vehicle = tesla_bluetooth.vehicles.create("<vin>", key=False)
 ```
 
-Omitting `key` still falls back to the parent's private key as before -
-`key=None` must be passed explicitly to disable signing. Reads and listeners
-that don't need a signed session still work; any command that does raises
-`SigningDisabled` naming that signing was explicitly disabled for this
-vehicle.
+`key=None` - the default, and an explicit `None` - still falls back to the
+parent's private key exactly as before, raising `ValueError("No private
+key.")` if the parent has none. Only `False` disables signing, so a caller
+already passing `key=None` to mean "I haven't got one" keeps getting that
+error rather than silently ending up with a vehicle that cannot sign.
+
+Reads and listeners that don't need a signed session still work; any command
+that does raises `SigningDisabled` naming that signing was explicitly disabled
+for this vehicle.
 
 ### Connection-status events
 

@@ -7,7 +7,7 @@ import time
 import warnings
 from collections import deque
 from random import randbytes
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, TypeVar
 
 import bleak
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -30,9 +30,7 @@ from tesla_fleet_api.exceptions import (
 )
 from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners, Unsubscribe
 from tesla_fleet_api.tesla.vehicle.commands import (
-    KEY_OMITTED,
     Commands,
-    KeyOmitted,
     infotainment_command_name,
     vcsec_command_name,
 )
@@ -515,7 +513,7 @@ class VehicleBluetooth(
         self,
         parent: BluetoothParentT,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None | KeyOmitted = KEY_OMITTED,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -533,10 +531,10 @@ class VehicleBluetooth(
         ``optimistic`` wins over a ``True`` ``verify_commands`` if both are
         somehow passed, matching the old dominance order).
 
-        Passing ``key=None`` explicitly disables command signing, for a
+        Passing ``key=False`` explicitly disables command signing, for a
         passive listener that only observes broadcasts via the ``listen_*``
-        methods and never sends a command. Omitting ``key`` keeps the usual
-        fallback to the parent's key.
+        methods and never sends a command. ``key=None`` (the default, and an
+        explicit ``None``) keeps the usual fallback to the parent's key.
         """
         super().__init__(parent, vin, key)
         if isinstance(confirmation, bool):
