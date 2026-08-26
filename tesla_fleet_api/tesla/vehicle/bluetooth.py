@@ -7,7 +7,7 @@ import time
 import warnings
 from collections import deque
 from random import randbytes
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, TypeVar
 
 import bleak
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -24,6 +24,7 @@ from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
+    SigningDisabled,
     TeslaFleetError,
     WhitelistOperationStatus,
 )
@@ -512,7 +513,7 @@ class VehicleBluetooth(
         self,
         parent: BluetoothParentT,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None = None,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -529,6 +530,11 @@ class VehicleBluetooth(
         ``confirmation``, overriding any value passed there (a ``True``
         ``optimistic`` wins over a ``True`` ``verify_commands`` if both are
         somehow passed, matching the old dominance order).
+
+        Passing ``key=False`` explicitly disables command signing, for a
+        passive listener that only observes broadcasts via the ``listen_*``
+        methods and never sends a command. ``key=None`` (the default, and an
+        explicit ``None``) keeps the usual fallback to the parent's key.
         """
         super().__init__(parent, vin, key)
         if isinstance(confirmation, bool):
@@ -1518,6 +1524,9 @@ class VehicleBluetooth(
 
         if poll_interval <= 0:
             raise ValueError("poll_interval must be greater than 0")
+
+        if self.private_key is None:
+            raise SigningDisabled()
 
         request = UnsignedMessage(
             WhitelistOperation=WhitelistOperation(

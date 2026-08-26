@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
+
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.const import (
     BluetoothConfirmation,
@@ -673,6 +675,7 @@ class TeslemetryVehicles(Vehicles["Teslemetry"]):
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
     ) -> Any:
         """Not supported; parameters match the Fleet API Bluetooth factory."""
         raise NotImplementedError("Teslemetry cannot use local Bluetooth")

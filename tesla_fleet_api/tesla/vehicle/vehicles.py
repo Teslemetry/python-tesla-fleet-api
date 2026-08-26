@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -53,6 +53,7 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -67,10 +68,13 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         success. ``verify_commands``/``optimistic`` are deprecated aliases for
         ``confirmation="verify"``/``confirmation="optimistic"``. See
         ``VehicleBluetooth``'s docstring for the full ladder.
+        ``key=False`` explicitly disables signing, for a passive listener;
+        ``key=None`` (the default) keeps the usual parent-key fallback.
         """
         vehicle = self.Bluetooth(
             self._parent,
             vin,
+            key,
             confirmation=confirmation,
             keepalive_interval=keepalive_interval,
             optimistic=optimistic,
@@ -101,7 +105,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     def create(
         self,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None = None,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -123,6 +127,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         success. ``verify_commands``/``optimistic`` are deprecated aliases for
         ``confirmation="verify"``/``confirmation="optimistic"``. See
         ``VehicleBluetooth``'s docstring for the full ladder.
+        ``key=False`` explicitly disables signing, for a passive listener;
+        ``key=None`` (the default) keeps the usual parent-key fallback.
         """
         return self.createBluetooth(
             vin,
@@ -138,7 +144,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     def createBluetooth(
         self,
         vin: str,
-        key: ec.EllipticCurvePrivateKey | None = None,
+        key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         device: BLEDevice | None = None,
         confirmation: BluetoothConfirmation | bool = "ack",
         keepalive_interval: float | None = DEFAULT_KEEPALIVE_INTERVAL,
@@ -160,6 +166,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         success. ``verify_commands``/``optimistic`` are deprecated aliases for
         ``confirmation="verify"``/``confirmation="optimistic"``. See
         ``VehicleBluetooth``'s docstring for the full ladder.
+        ``key=False`` explicitly disables signing, for a passive listener;
+        ``key=None`` (the default) keeps the usual parent-key fallback.
         """
         vehicle = self.Bluetooth(
             self._parent,
