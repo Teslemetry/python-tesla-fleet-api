@@ -268,7 +268,7 @@ class ObservationFunnel:
 #
 # Only a locked state reads as locked; any unlocked state, however partial
 # or selective, reads as unlocked.
-_LOCK_STATES: Mapping[int, bool] = {
+LOCK_STATES: Mapping[int, bool] = {
     VehicleLockState_E.VEHICLELOCKSTATE_LOCKED: True,
     VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED: False,
     VehicleLockState_E.VEHICLELOCKSTATE_INTERNAL_LOCKED: True,
@@ -278,7 +278,7 @@ _LOCK_STATES: Mapping[int, bool] = {
 # UNKNOWN and FAILED_UNLATCH are unmapped: reducing either to one boolean is
 # unvalidated against live frames, and emitting nothing keeps the last
 # confirmed value instead of guessing.
-_CLOSURE_STATES: Mapping[int, bool] = {
+CLOSURE_STATES: Mapping[int, bool] = {
     ClosureState_E.CLOSURESTATE_CLOSED: False,
     ClosureState_E.CLOSURESTATE_OPEN: True,
     ClosureState_E.CLOSURESTATE_AJAR: True,
@@ -287,9 +287,9 @@ _CLOSURE_STATES: Mapping[int, bool] = {
 }
 
 _BROADCAST_MAPS: Mapping[FieldPath, Mapping[int, bool]] = {
-    FieldPath.LOCKED: _LOCK_STATES,
-    FieldPath.CHARGE_PORT_DOOR_OPEN: _CLOSURE_STATES,
-    FieldPath.DOOR_STATE_TRUNK_FRONT: _CLOSURE_STATES,
+    FieldPath.LOCKED: LOCK_STATES,
+    FieldPath.CHARGE_PORT_DOOR_OPEN: CLOSURE_STATES,
+    FieldPath.DOOR_STATE_TRUNK_FRONT: CLOSURE_STATES,
 }
 
 _BROADCAST_PATHS = frozenset(_BROADCAST_MAPS)

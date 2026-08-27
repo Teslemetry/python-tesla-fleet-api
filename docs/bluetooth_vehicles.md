@@ -574,6 +574,30 @@ the `unsubscribe()` closure returned at registration.
 Callback exceptions are logged and do not stop later listeners or normal
 message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 
+### Feeding broadcasts into a Teslemetry stream
+
+`BleBroadcastStreamGlue` wires the lock-state, charge-port, and front-trunk
+broadcast listeners above into any object with a
+[python-teslemetry-stream](https://github.com/Teslemetry/python-teslemetry-stream)-shaped
+`ingest(data, metadata=None)` method, translating each broadcast into the
+same stream-shaped payload a native SSE event produces:
+
+```python
+from tesla_fleet_api import BleBroadcastStreamGlue
+
+glue = BleBroadcastStreamGlue(vehicle, stream_vehicle)  # stream_vehicle: TeslemetryStreamVehicle
+...
+glue.stop()
+```
+
+It does not import `teslemetry_stream` - the sink only needs to satisfy the
+structural `ingest` contract, so this works with any object shaped like one,
+including a test double. `stop()` unsubscribes every listener and is safe to
+call more than once; register it with `entry.async_on_unload(glue.stop)` (or
+equivalent) in a consumer that needs cleanup. There is no source ranking
+between a BLE broadcast and a native stream event reaching the same sink -
+`ingest()`'s own dispatch already guarantees that.
+
 ### Passive listening without a private key
 
 A vehicle that only decodes broadcasts and never sends a command has no
