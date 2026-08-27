@@ -7,8 +7,8 @@ connection, GATT traffic, or event loop is involved.
 
 from __future__ import annotations
 
-import ast
-import inspect
+import sys
+import tomllib
 from pathlib import Path
 from typing import Any, Mapping
 from unittest import TestCase
@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from tesla_fleet_api.tesla.vehicle import stream_glue
 from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 from tesla_fleet_api.tesla.vehicle.stream_glue import BleBroadcastStreamGlue
 from tesla_protocol.command.universal_message_pb2 import (
@@ -236,15 +235,14 @@ class TestDuckTypedContract(TestCase):
     """Locks in the design's hard constraint: no import of teslemetry_stream."""
 
     def test_module_source_never_references_teslemetry_stream(self) -> None:
-        source = inspect.getsource(stream_glue)
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    self.assertNotIn("teslemetry_stream", alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                self.assertIsNotNone(node.module)
-                self.assertNotIn("teslemetry_stream", node.module or "")
+        self.assertNotIn("teslemetry_stream", sys.modules)
+        vehicle = _make_vehicle()
+        sink = MagicMock()
+        glue = BleBroadcastStreamGlue(vehicle, sink)
+        vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
+        glue.stop()
+
+        self.assertNotIn("teslemetry_stream", sys.modules)
 
     def test_a_plain_object_with_ingest_satisfies_the_sink(self) -> None:
         """No base class, no registration - purely structural."""
@@ -269,6 +267,26 @@ class TestDuckTypedContract(TestCase):
 
     def test_zero_net_new_dependency(self) -> None:
         pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
-        text = pyproject.read_text()
-        self.assertNotIn("teslemetry-stream", text)
-        self.assertNotIn("teslemetry_stream", text)
+        with pyproject.open("rb") as f:
+            data = tomllib.load(f)
+
+        def _names(specs: list[str]) -> set[str]:
+            return {
+                spec.split(";")[0].split(">=")[0].split("==")[0].strip()
+                for spec in specs
+            }
+
+        project = data["project"]
+        dependency_names = _names(project.get("dependencies", []))
+        for extra_deps in project.get("optional-dependencies", {}).values():
+            dependency_names |= _names(extra_deps)
+        for group_deps in data.get("dependency-groups", {}).values():
+            dependency_names |= _names(
+                dep for dep in group_deps if isinstance(dep, str)
+            )
+        source_names = set(data.get("tool", {}).get("uv", {}).get("sources", {}))
+
+        self.assertNotIn("teslemetry-stream", dependency_names)
+        self.assertNotIn("teslemetry_stream", dependency_names)
+        self.assertNotIn("teslemetry-stream", source_names)
+        self.assertNotIn("teslemetry_stream", source_names)
