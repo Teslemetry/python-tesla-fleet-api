@@ -480,7 +480,11 @@ class SessionInfoAuthenticationFault(TeslaFleetError):
     Raised when the reply's ``session_info_tag`` HMAC does not verify, is
     absent, the echoed ``request_uuid`` does not match the outstanding
     request it claims to answer, or its clock time regresses within the same
-    epoch. The session's prior state is left unmodified.
+    epoch. Also raised when the reply carries an empty ``publicKey`` (so no
+    shared key can be derived to verify a tag) with a status other than
+    ``SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST``, which raises
+    ``NotOnWhitelistFault`` instead. The session's prior state is left
+    unmodified.
     """
 
     message = "Session info reply failed authentication and was discarded."
