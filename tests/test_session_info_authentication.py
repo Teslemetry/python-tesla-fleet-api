@@ -338,6 +338,45 @@ class SessionInfoTagAuthenticationTests(IsolatedAsyncioTestCase):
             self.commands.validate_msg(reply, self.request_uuid)
         self.assertFalse(self.commands._sessions[self.domain].ready)
 
+    def test_empty_public_key_whitelist_rejection_raises_not_on_whitelist(self) -> None:
+        # Real-world VCSEC reply for an unpaired key: no session exists to
+        # derive a shared key from, so publicKey is empty. Must not attempt
+        # key derivation (which previously raised a raw ValueError) and must
+        # still surface as NotOnWhitelistFault, unauthenticated.
+        info = self._session_info(
+            publicKey=b"",
+            status=Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST,
+        )
+        signature_data = SignatureData(
+            session_info_tag=HMAC_Signature_Data(tag=b"\x00" * 32)
+        )
+        reply = RoutableMessage(
+            from_destination=Destination(domain=self.domain),
+            session_info=info.SerializeToString(),
+            request_uuid=self.request_uuid,
+            signature_data=signature_data,
+        )
+        with self.assertRaises(NotOnWhitelistFault):
+            self.commands.validate_msg(reply, self.request_uuid)
+        self.assertFalse(self.commands._sessions[self.domain].ready)
+
+    def test_empty_public_key_with_other_status_raises_typed_fault(self) -> None:
+        info = self._session_info(
+            publicKey=b"", status=Session_Info_Status.SESSION_INFO_STATUS_OK
+        )
+        signature_data = SignatureData(
+            session_info_tag=HMAC_Signature_Data(tag=b"\x00" * 32)
+        )
+        reply = RoutableMessage(
+            from_destination=Destination(domain=self.domain),
+            session_info=info.SerializeToString(),
+            request_uuid=self.request_uuid,
+            signature_data=signature_data,
+        )
+        with self.assertRaises(SessionInfoAuthenticationFault):
+            self.commands.validate_msg(reply, self.request_uuid)
+        self.assertFalse(self.commands._sessions[self.domain].ready)
+
 
 class CounterAndClockMonotonicityTests(IsolatedAsyncioTestCase):
     """Covers commands.py's Session.commit: clamp within an epoch, refuse a

@@ -544,7 +544,12 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         replayed against a newer request. Only once that tag checks out do we
         act on anything the message claims, including its own whitelist
         status, and even then ``Session.commit`` still refuses a clock time
-        that regresses within the same epoch.
+        that regresses within the same epoch. The one exception is an empty
+        public key: no shared key can be derived from it to verify a tag, so
+        a key-not-on-whitelist status - the only real-world reply that omits
+        the key, since no session exists yet for an unpaired key - is
+        accepted unauthenticated; any other status paired with an empty key
+        is malformed and rejected outright.
 
         VCSEC typically leaves the wire-level ``request_uuid`` field empty on
         real hardware (memory constraints) - its absence must never be
@@ -558,6 +563,22 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         session = self._sessions[msg.from_destination.domain]
         info = SessionInfo.FromString(msg.session_info)
+
+        # A key-not-on-whitelist reply carries no publicKey (no session exists
+        # for an unpaired key), so it cannot be HMAC-verified; accept that one
+        # status unauthenticated rather than deriving keys from an empty
+        # point. Any other status with an empty key is malformed, not this
+        # known case, so it still raises rather than being silently accepted.
+        if not info.publicKey:
+            if (
+                info.status
+                == Session_Info_Status.SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST
+            ):
+                raise NotOnWhitelistFault
+            raise SessionInfoAuthenticationFault(
+                "Session info reply has no public key."
+            )
+
         shared_key, hmac_key, session_info_key = session.keys_for(info.publicKey)
 
         tag = msg.signature_data.session_info_tag.tag
