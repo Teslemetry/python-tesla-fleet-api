@@ -8,11 +8,6 @@ stream-shaped payload. This module never imports ``teslemetry_stream`` - the
 sink contract below is a structural :class:`typing.Protocol`, matching the
 duck-typed ``EnergySite`` composition :class:`~tesla_fleet_api.router.EnergySiteRouter`
 already uses for aiopowerwall.
-
-Push-only: VCSEC emits these broadcasts regardless of whether anything is
-listening, so unlike :class:`~tesla_fleet_api.funnel.ObservationFunnel`'s
-publishers there is no ``request()``/``release()`` demand gating here - the
-three listeners are live for the lifetime of the glue object.
 """
 
 from __future__ import annotations
