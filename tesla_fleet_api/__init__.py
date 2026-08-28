@@ -24,6 +24,7 @@ from tesla_fleet_api.tariff import (
 from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
+from tesla_fleet_api.tesla.vehicle.stream_glue import BleBroadcastStreamGlue, StreamSink
 from tesla_fleet_api.teslemetry.teslemetry import (
     Teslemetry,
     TeslemetryClientRegistration,
@@ -34,12 +35,14 @@ from tesla_fleet_api.util import firmware_at_least, firmware_compare
 
 __all__ = [
     "BleBroadcastPublisher",
+    "BleBroadcastStreamGlue",
     "FieldPath",
     "Observation",
     "ObservationFunnel",
     "ObservationSink",
     "Publisher",
     "Region",
+    "StreamSink",
     "TariffPeriod",
     "TariffRate",
     "TariffResolution",
