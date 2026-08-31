@@ -129,9 +129,7 @@ class SohStateTests(MockedBleTransportTestCase):
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_vehicle_data_reply(
             VehicleData(
-                soh_state=SohState(
-                    soh_result=SohState.SohResult(soh_calibrated=True)
-                )
+                soh_state=SohState(soh_result=SohState.SohResult(soh_calibrated=True))
             )
         )
         result = await vehicle.soh_state()
