@@ -1,9 +1,10 @@
-"""Regression tests for the 7 new BLE vehicle-data sub-state readers.
+"""Regression tests for the 11 new BLE vehicle-data sub-state readers.
 
 Completes GetVehicleData coverage alongside the existing 12 readers
 (``test_ble_mocked_state_readers.py``): gui_settings, parked_accessory_state,
 legacy_vehicle_state, alert_state, light_show_state, suspension_state,
-child_presence_detection_state.
+child_presence_detection_state, vehicle_config, soh_state,
+vehicle_detail_state, display_state.
 """
 
 from tesla_fleet_api.const import BluetoothVehicleData
@@ -11,11 +12,15 @@ from tesla_protocol.command.car_server_pb2 import Action
 from tesla_protocol.command.vehicle_pb2 import (
     AlertState,
     ChildPresenceDetectionState,
+    DisplayState,
     GuiSettings,
     LightShowState,
     ParkedAccessoryState,
+    SohState,
     SuspensionState,
+    VehicleConfig,
     VehicleData,
+    VehicleDetailState,
     VehicleState,
 )
 
@@ -106,6 +111,54 @@ class ChildPresenceDetectionStateTests(MockedBleTransportTestCase):
         result = await vehicle.child_presence_detection_state()
         self.assertIsInstance(result, ChildPresenceDetectionState)
         self.assertTrue(result.cpd_hvac_active)
+
+
+class VehicleConfigTests(MockedBleTransportTestCase):
+    async def test_vehicle_config(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(vehicle_config=VehicleConfig(has_air_suspension=True))
+        )
+        result = await vehicle.vehicle_config()
+        self.assertIsInstance(result, VehicleConfig)
+        self.assertTrue(result.has_air_suspension)
+
+
+class SohStateTests(MockedBleTransportTestCase):
+    async def test_soh_state(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(
+                soh_state=SohState(soh_result=SohState.SohResult(soh_calibrated=True))
+            )
+        )
+        result = await vehicle.soh_state()
+        self.assertIsInstance(result, SohState)
+        self.assertTrue(result.soh_result.soh_calibrated)
+
+
+class VehicleDetailStateTests(MockedBleTransportTestCase):
+    async def test_vehicle_detail_state(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(
+                vehicle_detail_state=VehicleDetailState(car_version="2025.14.3")
+            )
+        )
+        result = await vehicle.vehicle_detail_state()
+        self.assertIsInstance(result, VehicleDetailState)
+        self.assertEqual(result.car_version, "2025.14.3")
+
+
+class DisplayStateTests(MockedBleTransportTestCase):
+    async def test_display_state(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(display_state=DisplayState(displayBrightnessAuto=True))
+        )
+        result = await vehicle.display_state()
+        self.assertIsInstance(result, DisplayState)
+        self.assertTrue(result.displayBrightnessAuto)
 
 
 class VehicleDataDispatchNewEndpointsTests(MockedBleTransportTestCase):

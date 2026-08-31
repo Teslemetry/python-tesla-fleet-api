@@ -54,7 +54,14 @@ KNOWN_UNWRAPPED_VEHICLE_ACTION_FIELDS = (
     ALTERNATE_PATH_VEHICLE_ACTION_FIELDS | STREAMING_SUBSCRIPTION_VEHICLE_ACTION_FIELDS
 )
 
-KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS: frozenset[str] = frozenset()
+# A second, newer GetVehicleData request field alongside the pre-existing
+# getVehicleState, both requesting an (as yet unverified live) legacy vehicle
+# state - already wrapped as legacy_vehicle_state() via getVehicleState.
+# Needs live confirmation of how it differs before wrapping a second method
+# for what may be the same reply data.
+KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS: frozenset[str] = frozenset(
+    {"getLegacyVehicleState"}
+)
 
 
 def _vehicle_action_fields():

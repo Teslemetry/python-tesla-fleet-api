@@ -44,6 +44,7 @@ from tesla_protocol.command.car_server_pb2 import (
     GetChildPresenceDetectionState,
     GetClimateState,
     GetClosuresState,
+    GetDisplayState,
     GetDriveState,
     GetGuiSettings,
     GetLightShowState,
@@ -53,10 +54,13 @@ from tesla_protocol.command.car_server_pb2 import (
     GetParentalControlsState,
     GetParkedAccessoryState,
     GetPreconditioningScheduleState,
+    GetSohState,
     GetSoftwareUpdateState,
     GetSuspensionState,
     GetTirePressureState,
+    GetVehicleConfig,
     GetVehicleData,
+    GetVehicleDetailState,
     GetVehicleState,
     VehicleAction,
 )
@@ -89,6 +93,7 @@ from tesla_protocol.command.vehicle_pb2 import (
     ChildPresenceDetectionState,
     ClimateState,
     ClosuresState,
+    DisplayState,
     DriveState,
     GuiSettings,
     LightShowState,
@@ -98,10 +103,13 @@ from tesla_protocol.command.vehicle_pb2 import (
     ParentalControlsState,
     ParkedAccessoryState,
     PreconditioningScheduleState,
+    SohState,
     SoftwareUpdateState,
     SuspensionState,
     TirePressureState,
+    VehicleConfig,
     VehicleData,
+    VehicleDetailState,
     VehicleState,
 )
 
@@ -1945,6 +1953,58 @@ class VehicleBluetooth(
                 )
             )
         ).legacy_vehicle_state
+
+    async def vehicle_config(self) -> VehicleConfig:
+        """Return the vehicle's configuration/options state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getVehicleConfig=GetVehicleConfig()
+                        )
+                    )
+                )
+            )
+        ).vehicle_config
+
+    async def soh_state(self) -> SohState:
+        """Return the current state-of-health data over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(getSohState=GetSohState())
+                    )
+                )
+            )
+        ).soh_state
+
+    async def vehicle_detail_state(self) -> VehicleDetailState:
+        """Return additional vehicle detail state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getVehicleDetailState=GetVehicleDetailState()
+                        )
+                    )
+                )
+            )
+        ).vehicle_detail_state
+
+    async def display_state(self) -> DisplayState:
+        """Return the current display state over BLE."""
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(getDisplayState=GetDisplayState())
+                    )
+                )
+            )
+        ).display_state
 
     async def alert_state(self) -> AlertState:
         """Return the current active vehicle alerts over BLE."""

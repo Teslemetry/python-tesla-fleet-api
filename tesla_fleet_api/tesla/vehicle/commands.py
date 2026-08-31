@@ -1444,7 +1444,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     navigationSuperchargerRequest=NavigationSuperchargerRequest(
-                        order=order
+                        remote_nav_trip_order=order  # pyright: ignore[reportArgumentType]
                     )
                 )
             )

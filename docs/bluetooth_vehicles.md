@@ -484,6 +484,10 @@ Available BLE state readers:
 - `gui_settings()`
 - `parked_accessory_state()`
 - `legacy_vehicle_state()` (CarServer's `GetVehicleState` - a different message from `vehicle_state()` above)
+- `vehicle_config()`
+- `soh_state()`
+- `vehicle_detail_state()`
+- `display_state()`
 - `alert_state()`
 - `light_show_state()`
 - `suspension_state()`

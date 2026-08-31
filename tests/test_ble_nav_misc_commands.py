@@ -90,7 +90,9 @@ class NavigationScRequestTests(MockedBleTransportTestCase):
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
-        self.assertEqual(vehicle_action.navigationSuperchargerRequest.order, 1)
+        self.assertEqual(
+            vehicle_action.navigationSuperchargerRequest.remote_nav_trip_order, 1
+        )
 
 
 class NavigationWaypointsRequestTests(MockedBleTransportTestCase):
