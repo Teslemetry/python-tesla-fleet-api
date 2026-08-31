@@ -109,7 +109,7 @@ Tesla protobuf bindings come from the published `tesla-protocol` PyPI package (`
 
 **Runtime-version pin (Home Assistant compatibility).** protobuf refuses to load gencode stamped *newer* than the installed runtime (`gencode X > runtime` → `VersionError`). Home Assistant core pins `protobuf==6.32.0`, so any `tesla-protocol` version this library depends on must stamp gencode **≤ 6.32.0** and declare a `protobuf` requirement compatible with `==6.32.0` — check both before bumping the floor. The `protobuf>=6.32.0` floor in `pyproject.toml` must stay in sync with whatever `tesla-protocol` actually requires.
 
-Keep the `tesla-protocol` floor at `>=0.5.0`; earlier releases have generated `.pyi` imports that are incompatible with this repository's strict pyright checks.
+Keep the `tesla-protocol` floor at `>=1.4.0`; earlier releases have generated `.pyi` imports that are incompatible with this repository's strict pyright checks, and `1.4.0` is also the first release declaring `protobuf>=6.32.0,<8`, the version needed for protobuf 7 compatibility per the Runtime-version pin note above.
 
 ## Code Style
 
