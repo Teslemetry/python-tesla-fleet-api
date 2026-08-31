@@ -740,7 +740,7 @@ wheels = [
 
 [[package]]
 name = "tesla-fleet-api"
-version = "1.12.0"
+version = "1.12.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -769,7 +769,7 @@ requires-dist = [
     { name = "bleak-retry-connector", specifier = ">=3.9" },
     { name = "cryptography", specifier = ">=43" },
     { name = "protobuf", specifier = ">=6.32.0" },
-    { name = "tesla-protocol", specifier = ">=0.5.0" },
+    { name = "tesla-protocol", specifier = ">=1.4.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -781,15 +781,15 @@ dev = [
 
 [[package]]
 name = "tesla-protocol"
-version = "0.5.0"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "googleapis-common-protos" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/14/e9/3e74e9262af87f7854290e4c3dae0205d02e8b2b73371398998522530ef0/tesla_protocol-0.5.0.tar.gz", hash = "sha256:44e69d5cc3df12f1f5168d139f876f2b922661fbdaf2e9ea1868edd68595e346", size = 150950, upload-time = "2026-07-22T12:11:56.541Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/3a/2960e20ebd883dec8818387044b6714f312560143940518f9c6aca739e54/tesla_protocol-1.4.0.tar.gz", hash = "sha256:1db7484072526668380d5be21d547a437964e2ae4b7fc7b35e2c5e3bfb905617", size = 217084, upload-time = "2026-08-31T08:51:18.42Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/05/9b8e98f53b13a33154ac5a72aa52555277c6653f0c1b41bce0d06e377e8c/tesla_protocol-0.5.0-py3-none-any.whl", hash = "sha256:a99dcbfe46ac65951ce7d82dbd207f20409494c093263383f96e8581fd6c2afe", size = 187102, upload-time = "2026-07-22T12:11:55.007Z" },
+    { url = "https://files.pythonhosted.org/packages/90/90/88f63e5a41fe4bfcef32f52c6ed0aef88bcdd33fde86c65f1657fac2371a/tesla_protocol-1.4.0-py3-none-any.whl", hash = "sha256:ba2d70405278d5f39cd7b2da8e9cadbf5dff1f02a5aa7a1e0753dbba4c8cf3e7", size = 263084, upload-time = "2026-08-31T08:51:17.156Z" },
 ]
 
 [[package]]

@@ -4,7 +4,7 @@ requires = ["setuptools>=77.0"]
 
 [project]
 name = "tesla_fleet_api"
-version = "1.12.0"
+version = "1.12.1"
 license = "Apache-2.0"
 description = "Tesla Fleet API library for Python"
 readme = "README.md"
@@ -22,7 +22,7 @@ dependencies = [
     "aiolimiter>=1",
     "cryptography>=43",
     "protobuf>=6.32.0",
-    "tesla-protocol>=0.5.0",
+    "tesla-protocol>=1.4.0",
     "bleak>=0.22",
     "bleak-retry-connector>=3.9",
 ]
