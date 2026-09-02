@@ -169,12 +169,12 @@ class TestClosureTranslation(TestCase):
         sink = _FakeSink()
         BleBroadcastStreamGlue(vehicle, sink)
 
-        for state, expected in (
-            (ClosureState_E.CLOSURESTATE_CLOSED, False),
-            (ClosureState_E.CLOSURESTATE_OPEN, True),
-            (ClosureState_E.CLOSURESTATE_AJAR, True),
-            (ClosureState_E.CLOSURESTATE_OPENING, True),
-            (ClosureState_E.CLOSURESTATE_CLOSING, True),
+        for state, expected, name in (
+            (ClosureState_E.CLOSURESTATE_CLOSED, False, "CLOSURESTATE_CLOSED"),
+            (ClosureState_E.CLOSURESTATE_OPEN, True, "CLOSURESTATE_OPEN"),
+            (ClosureState_E.CLOSURESTATE_AJAR, True, "CLOSURESTATE_AJAR"),
+            (ClosureState_E.CLOSURESTATE_OPENING, True, "CLOSURESTATE_OPENING"),
+            (ClosureState_E.CLOSURESTATE_CLOSING, True, "CLOSURESTATE_CLOSING"),
         ):
             sink.calls.clear()
             vehicle._on_message(_closures(chargePort=state))
@@ -185,7 +185,7 @@ class TestClosureTranslation(TestCase):
                         {"ChargePortDoorOpen": expected},
                         {
                             "source": "bluetooth",
-                            "raw": ClosureState_E.Name(state),
+                            "raw": name,
                         },
                     )
                 ],
@@ -340,10 +340,22 @@ class TestTonneauTranslation(TestCase):
         sink = _FakeSink()
         BleBroadcastStreamGlue(vehicle, sink)
 
-        for state, expected in (
-            (ClosureState_E.CLOSURESTATE_CLOSED, "TonneauPositionStateClosed"),
-            (ClosureState_E.CLOSURESTATE_OPEN, "TonneauPositionStateFullyOpen"),
-            (ClosureState_E.CLOSURESTATE_AJAR, "TonneauPositionStatePartiallyOpen"),
+        for state, expected, name in (
+            (
+                ClosureState_E.CLOSURESTATE_CLOSED,
+                "TonneauPositionStateClosed",
+                "CLOSURESTATE_CLOSED",
+            ),
+            (
+                ClosureState_E.CLOSURESTATE_OPEN,
+                "TonneauPositionStateFullyOpen",
+                "CLOSURESTATE_OPEN",
+            ),
+            (
+                ClosureState_E.CLOSURESTATE_AJAR,
+                "TonneauPositionStatePartiallyOpen",
+                "CLOSURESTATE_AJAR",
+            ),
         ):
             sink.calls.clear()
             vehicle._on_message(_closures(tonneau=state))
@@ -352,7 +364,7 @@ class TestTonneauTranslation(TestCase):
                 [
                     (
                         {"TonneauPosition": expected},
-                        {"source": "bluetooth", "raw": ClosureState_E.Name(state)},
+                        {"source": "bluetooth", "raw": name},
                     )
                 ],
             )

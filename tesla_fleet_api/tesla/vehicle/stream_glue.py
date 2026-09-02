@@ -52,6 +52,13 @@ class StreamSink(Protocol):
 # strips the prefix via TeslemetryEnum.get() - GEAR_UNKNOWN is VCSEC's
 # always-present proto3 default (0), mirroring LOCK_STATES' treatment of
 # VEHICLELOCKSTATE_UNLOCKED.
+#
+# These values stay hardcoded rather than derived from Gear_E's own
+# descriptor names (GEAR_UNKNOWN/GEAR_PARK/GEAR_DRIVE/GEAR_REVERSE/
+# GEAR_NEUTRAL): there is no total stripping rule from those names to the
+# wire strings above - PARK/DRIVE/REVERSE/NEUTRAL each collapse to an
+# unrelated single letter while UNKNOWN spells out in full - so any
+# derivation would need a per-value special case anyway.
 GEAR_STATES: Mapping[int, str] = {
     Gear_E.GEAR_UNKNOWN: "ShiftStateUnknown",
     Gear_E.GEAR_PARK: "ShiftStateP",
@@ -64,6 +71,11 @@ GEAR_STATES: Mapping[int, str] = {
 # coarser than VCSEC's 7-value ClosureState_E. Only CLOSED/OPEN/AJAR translate
 # unambiguously; OPENING/CLOSING/UNKNOWN/FAILED_UNLATCH are left unmapped,
 # matching the CLOSURE_STATES UNKNOWN/FAILED_UNLATCH ruling in funnel.py.
+#
+# These values stay hardcoded rather than derived from ClosureState_E's own
+# descriptor names (CLOSURESTATE_CLOSED/CLOSURESTATE_OPEN/CLOSURESTATE_AJAR):
+# OPEN renames to "FullyOpen" and AJAR to "PartiallyOpen" on the wire, so no
+# total stripping rule maps the descriptor name to the wire string.
 TONNEAU_POSITION_STATES: Mapping[int, str] = {
     ClosureState_E.CLOSURESTATE_CLOSED: "TonneauPositionStateClosed",
     ClosureState_E.CLOSURESTATE_OPEN: "TonneauPositionStateFullyOpen",
