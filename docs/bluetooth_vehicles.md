@@ -580,11 +580,13 @@ message routing; `KeyboardInterrupt` and `SystemExit` still propagate.
 
 ### Feeding broadcasts into a Teslemetry stream
 
-`BleBroadcastStreamGlue` wires the lock-state, charge-port, and front-trunk
-broadcast listeners above into any object with a
+`BleBroadcastStreamGlue` wires every BLE-derivable field the current
+teslemetry-stream API can carry into any object with a
 [python-teslemetry-stream](https://github.com/Teslemetry/python-teslemetry-stream)-shaped
 `ingest(data, metadata=None)` method, translating each broadcast into the
-same stream-shaped payload a native SSE event produces:
+same stream-shaped payload a native SSE event produces: lock state, charge
+port, all 6 `DoorState` leaves (front/rear driver and passenger doors, front
+and rear trunk), gear, tonneau position, and tonneau open percent.
 
 ```python
 from tesla_fleet_api import BleBroadcastStreamGlue
@@ -601,6 +603,19 @@ call more than once; register it with `entry.async_on_unload(glue.stop)` (or
 equivalent) in a consumer that needs cleanup. There is no source ranking
 between a BLE broadcast and a native stream event reaching the same sink -
 `ingest()`'s own dispatch already guarantees that.
+
+Three BLE-derivable fields are not wired, each blocked on a teslemetry-stream
+addition rather than worked around:
+
+- **Vehicle sleep status** streams on the separate `state` topic
+  (`online`/`offline`/`asleep`), but `ingest()` unconditionally nests its
+  payload under the `data` key of a wire event - the shape a *signal* update
+  carries. Carrying it would need an `ingest()` addition (e.g. a `topic`
+  argument, or a separate `ingest_state()`) that can produce a `state`-shaped
+  event instead.
+- **User presence** and **UI desire** have no `Signal` entry or `listen_*`
+  method in teslemetry-stream 0.13.0, so no wire field name exists yet to
+  target - each needs a new `Signal` value and listener added there first.
 
 ### Passive listening without a private key
 
