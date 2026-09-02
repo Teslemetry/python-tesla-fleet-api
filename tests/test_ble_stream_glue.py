@@ -3,6 +3,13 @@
 Broadcasts are injected through ``vehicle._on_message``, the same routing path
 the vehicle uses in production, matching ``test_funnel_bluetooth.py``. No BLE
 connection, GATT traffic, or event loop is involved.
+
+Each mapping test cites the exact teslemetry-stream field name (a
+``Signal`` value, or a ``DoorState`` dict leaf) the ingested payload targets,
+verified against the installed ``teslemetry-stream`` 0.13.0 package's own
+``TeslemetryStreamVehicle`` listener implementations - this module never
+imports that package (see ``TestDuckTypedContract`` below), so the citation
+is what keeps the mapping honest.
 """
 
 from __future__ import annotations
@@ -26,7 +33,9 @@ from tesla_protocol.command.universal_message_pb2 import (
 from tesla_protocol.command.vcsec_pb2 import (
     ClosureState_E,
     ClosureStatuses,
+    DetailedClosureStatus,
     FromVCSECMessage,
+    Gear_E,
     VehicleLockState_E,
     VehicleStatus,
 )
@@ -65,6 +74,18 @@ def _closures(**kwargs: ClosureState_E) -> RoutableMessage:
     return _broadcast(VehicleStatus(closureStatuses=ClosureStatuses(**kwargs)))
 
 
+def _gear(state: Gear_E) -> RoutableMessage:
+    return _broadcast(VehicleStatus(gear=state))
+
+
+def _tonneau_percent(percent: int) -> RoutableMessage:
+    return _broadcast(
+        VehicleStatus(
+            detailedClosureStatus=DetailedClosureStatus(tonneauPercentOpen=percent)
+        )
+    )
+
+
 class _FakeSink:
     """A minimal stand-in satisfying the structural ``StreamSink`` contract."""
 
@@ -78,7 +99,28 @@ class _FakeSink:
         return data
 
 
+def _calls_for(sink: _FakeSink, key: str) -> list[tuple[Mapping[str, Any], Any]]:
+    """Calls whose top-level ``data`` carries ``key``.
+
+    ``Gear`` fires on every broadcast (a scalar field with no proto3
+    presence, like ``vehicleLockState``) and ``DoorState`` calls for
+    different doors share the same top-level key, so most mapping tests
+    isolate the field under test this way rather than asserting the exact
+    call list.
+    """
+    return [c for c in sink.calls if key in c[0]]
+
+
+def _door_state_calls(
+    sink: _FakeSink, leaf: str
+) -> list[tuple[Mapping[str, Any], Any]]:
+    """``DoorState`` calls whose single leaf is ``leaf`` (e.g. ``"TrunkFront"``)."""
+    return [c for c in sink.calls if "DoorState" in c[0] and leaf in c[0]["DoorState"]]
+
+
 class TestLockStateTranslation(TestCase):
+    """Targets ``Signal.LOCKED`` (``"Locked"``), consumed by ``listen_Locked``."""
+
     def test_locked_states_ingest_true_with_raw_metadata(self) -> None:
         vehicle = _make_vehicle()
         sink = _FakeSink()
@@ -94,7 +136,7 @@ class TestLockStateTranslation(TestCase):
             sink.calls.clear()
             vehicle._on_message(_lock(state))
             self.assertEqual(
-                sink.calls,
+                _calls_for(sink, "Locked"),
                 [({"Locked": True}, {"source": "bluetooth", "raw": name})],
             )
 
@@ -113,13 +155,16 @@ class TestLockStateTranslation(TestCase):
             sink.calls.clear()
             vehicle._on_message(_lock(state))
             self.assertEqual(
-                sink.calls,
+                _calls_for(sink, "Locked"),
                 [({"Locked": False}, {"source": "bluetooth", "raw": name})],
             )
 
 
 class TestClosureTranslation(TestCase):
+    """Targets ``Signal.CHARGE_PORT_DOOR_OPEN`` and the ``DoorState`` dict leaves."""
+
     def test_charge_port_closure_states_ingest_booleans(self) -> None:
+        """``Signal.CHARGE_PORT_DOOR_OPEN`` (``"ChargePortDoorOpen"``)."""
         vehicle = _make_vehicle()
         sink = _FakeSink()
         BleBroadcastStreamGlue(vehicle, sink)
@@ -133,11 +178,8 @@ class TestClosureTranslation(TestCase):
         ):
             sink.calls.clear()
             vehicle._on_message(_closures(chargePort=state))
-            # Every status broadcast also reports vehicleLockState (UNLOCKED
-            # is 0 with no proto3 presence), so a Locked call rides along.
-            charge_port_calls = [c for c in sink.calls if "ChargePortDoorOpen" in c[0]]
             self.assertEqual(
-                charge_port_calls,
+                _calls_for(sink, "ChargePortDoorOpen"),
                 [
                     (
                         {"ChargePortDoorOpen": expected},
@@ -150,25 +192,69 @@ class TestClosureTranslation(TestCase):
             )
 
     def test_front_trunk_closure_states_ingest_nested_door_state(self) -> None:
+        """``Signal.DOOR_STATE`` (``"DoorState"``), leaf ``"TrunkFront"``."""
         vehicle = _make_vehicle()
         sink = _FakeSink()
         BleBroadcastStreamGlue(vehicle, sink)
 
         vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_OPEN))
 
-        trunk_calls = [c for c in sink.calls if "DoorState" in c[0]]
         self.assertEqual(
-            trunk_calls,
+            _door_state_calls(sink, "TrunkFront"),
             [
                 (
                     {"DoorState": {"TrunkFront": True}},
-                    {
-                        "source": "bluetooth",
-                        "raw": "CLOSURESTATE_OPEN",
-                    },
+                    {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
                 )
             ],
         )
+
+    def test_rear_trunk_closure_states_ingest_nested_door_state(self) -> None:
+        """``Signal.DOOR_STATE`` (``"DoorState"``), leaf ``"TrunkRear"``."""
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        vehicle._on_message(_closures(rearTrunk=ClosureState_E.CLOSURESTATE_OPEN))
+
+        self.assertEqual(
+            _door_state_calls(sink, "TrunkRear"),
+            [
+                (
+                    {"DoorState": {"TrunkRear": True}},
+                    {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
+                )
+            ],
+        )
+
+    def test_the_four_side_doors_ingest_their_own_door_state_leaf(self) -> None:
+        """``Signal.DOOR_STATE`` (``"DoorState"``) leaves for the 4 side doors.
+
+        Field names match ``TeslemetryStreamVehicle.listen_FrontDriverDoor``
+        etc., which read ``DriverFront``/``PassengerFront``/``DriverRear``/
+        ``PassengerRear`` out of the same ``DoorState`` dict.
+        """
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        for kwarg, leaf in (
+            ("frontDriverDoor", "DriverFront"),
+            ("frontPassengerDoor", "PassengerFront"),
+            ("rearDriverDoor", "DriverRear"),
+            ("rearPassengerDoor", "PassengerRear"),
+        ):
+            sink.calls.clear()
+            vehicle._on_message(_closures(**{kwarg: ClosureState_E.CLOSURESTATE_OPEN}))
+            self.assertEqual(
+                _door_state_calls(sink, leaf),
+                [
+                    (
+                        {"DoorState": {leaf: True}},
+                        {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
+                    )
+                ],
+            )
 
     def test_ambiguous_closure_states_emit_no_ingest_call(self) -> None:
         vehicle = _make_vehicle()
@@ -179,12 +265,11 @@ class TestClosureTranslation(TestCase):
             ClosureState_E.CLOSURESTATE_UNKNOWN,
             ClosureState_E.CLOSURESTATE_FAILED_UNLATCH,
         ):
+            sink.calls.clear()
             vehicle._on_message(_closures(chargePort=state, frontTrunk=state))
 
-        closure_calls = [
-            c for c in sink.calls if "ChargePortDoorOpen" in c[0] or "DoorState" in c[0]
-        ]
-        self.assertEqual(closure_calls, [])
+            self.assertEqual(_calls_for(sink, "ChargePortDoorOpen"), [])
+            self.assertEqual(_door_state_calls(sink, "TrunkFront"), [])
 
     def test_a_broadcast_without_closures_emits_no_closure_call(self) -> None:
         """Closures have proto3 presence, so an absent submessage says nothing."""
@@ -194,9 +279,111 @@ class TestClosureTranslation(TestCase):
 
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
 
-        # Only the lock-state call, none for charge port or front trunk.
-        self.assertEqual(len(sink.calls), 1)
-        self.assertEqual(sink.calls[0][0], {"Locked": True})
+        # Locked and Gear are scalar fields with no proto3 presence, so both
+        # fire on every broadcast; nothing closure-shaped does.
+        self.assertEqual(
+            sink.calls,
+            [
+                (
+                    {"Locked": True},
+                    {"source": "bluetooth", "raw": "VEHICLELOCKSTATE_LOCKED"},
+                ),
+                (
+                    {"Gear": "ShiftStateUnknown"},
+                    {"source": "bluetooth", "raw": "GEAR_UNKNOWN"},
+                ),
+            ],
+        )
+
+
+class TestGearTranslation(TestCase):
+    """Targets ``Signal.GEAR`` (``"Gear"``), consumed by ``listen_Gear``.
+
+    The wire value is ``ShiftState``-prefixed
+    (``TeslemetryEnum(prefix="ShiftState", options=[...])``); the package's
+    own listener strips the prefix via ``ShiftState.get()`` before handing a
+    caller the bare ``"P"``/``"D"``/``"R"``/``"N"``/``"Unknown"``.
+    """
+
+    def test_mapped_gears_ingest_shift_state_prefixed_strings(self) -> None:
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        for state, expected, name in (
+            (Gear_E.GEAR_UNKNOWN, "ShiftStateUnknown", "GEAR_UNKNOWN"),
+            (Gear_E.GEAR_PARK, "ShiftStateP", "GEAR_PARK"),
+            (Gear_E.GEAR_DRIVE, "ShiftStateD", "GEAR_DRIVE"),
+            (Gear_E.GEAR_REVERSE, "ShiftStateR", "GEAR_REVERSE"),
+            (Gear_E.GEAR_NEUTRAL, "ShiftStateN", "GEAR_NEUTRAL"),
+        ):
+            sink.calls.clear()
+            vehicle._on_message(_gear(state))
+            self.assertEqual(
+                _calls_for(sink, "Gear"),
+                [({"Gear": expected}, {"source": "bluetooth", "raw": name})],
+            )
+
+
+class TestTonneauTranslation(TestCase):
+    """Targets ``Signal.TONNEAU_POSITION`` and ``Signal.TONNEAU_OPEN_PERCENT``."""
+
+    def test_mapped_tonneau_closures_ingest_tonneau_position_strings(self) -> None:
+        """``Signal.TONNEAU_POSITION`` (``"TonneauPosition"``).
+
+        Its wire value is ``TonneauPositionState``-prefixed and only
+        3-valued (``Closed``/``PartiallyOpen``/``FullyOpen``), coarser than
+        VCSEC's ``ClosureState_E`` - only CLOSED/OPEN/AJAR translate
+        unambiguously.
+        """
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        for state, expected in (
+            (ClosureState_E.CLOSURESTATE_CLOSED, "TonneauPositionStateClosed"),
+            (ClosureState_E.CLOSURESTATE_OPEN, "TonneauPositionStateFullyOpen"),
+            (ClosureState_E.CLOSURESTATE_AJAR, "TonneauPositionStatePartiallyOpen"),
+        ):
+            sink.calls.clear()
+            vehicle._on_message(_closures(tonneau=state))
+            self.assertEqual(
+                _calls_for(sink, "TonneauPosition"),
+                [
+                    (
+                        {"TonneauPosition": expected},
+                        {"source": "bluetooth", "raw": ClosureState_E.Name(state)},
+                    )
+                ],
+            )
+
+    def test_unmapped_tonneau_closures_emit_no_ingest_call(self) -> None:
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        for state in (
+            ClosureState_E.CLOSURESTATE_UNKNOWN,
+            ClosureState_E.CLOSURESTATE_FAILED_UNLATCH,
+            ClosureState_E.CLOSURESTATE_OPENING,
+            ClosureState_E.CLOSURESTATE_CLOSING,
+        ):
+            sink.calls.clear()
+            vehicle._on_message(_closures(tonneau=state))
+            self.assertEqual(_calls_for(sink, "TonneauPosition"), [])
+
+    def test_tonneau_percent_open_ingests_a_float(self) -> None:
+        """``Signal.TONNEAU_OPEN_PERCENT`` (``"TonneauOpenPercent"``)."""
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        vehicle._on_message(_tonneau_percent(42))
+
+        self.assertEqual(
+            _calls_for(sink, "TonneauOpenPercent"),
+            [({"TonneauOpenPercent": 42.0}, {"source": "bluetooth"})],
+        )
 
 
 class TestLifecycle(TestCase):
@@ -209,6 +396,8 @@ class TestLifecycle(TestCase):
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
         vehicle._on_message(_closures(chargePort=ClosureState_E.CLOSURESTATE_OPEN))
         vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_OPEN))
+        vehicle._on_message(_gear(Gear_E.GEAR_DRIVE))
+        vehicle._on_message(_tonneau_percent(10))
 
         self.assertEqual(sink.calls, [])
 
@@ -220,7 +409,7 @@ class TestLifecycle(TestCase):
         glue.stop()
         glue.stop()  # must not raise
 
-    def test_only_registers_the_three_broadcast_listeners(self) -> None:
+    def test_registering_does_not_touch_the_transport(self) -> None:
         """Registering (not stopping) must not touch the transport."""
         vehicle = _make_vehicle()
         sink = _FakeSink()
@@ -262,7 +451,9 @@ class TestDuckTypedContract(TestCase):
         glue = BleBroadcastStreamGlue(vehicle, sink)
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
 
-        self.assertEqual(len(sink.calls), 1)
+        # Locked and Gear both fire (two scalar fields with no proto3
+        # presence), rather than just the one field this broadcast targets.
+        self.assertEqual(len(sink.calls), 2)
         glue.stop()
 
     def test_zero_net_new_dependency(self) -> None:
