@@ -5,156 +5,466 @@ Python library (`tesla_fleet_api`) providing async interfaces for Tesla Fleet AP
 ## Development Commands
 
 ```bash
-# Install dependencies
-uv sync
-
-# Type checking (strict mode)
-uv run pyright tesla_fleet_api
-
-# Linting
-uv run ruff check tesla_fleet_api
+uv sync                                 # install
+uv run pyright tesla_fleet_api          # type check (strict)
+uv run ruff check tesla_fleet_api       # lint
 uv run ruff format tesla_fleet_api
-
-# Tests
 uv run pytest tests
 ```
 
-Tests live in `tests/` and use `unittest.IsolatedAsyncioTestCase` (collected and
-run natively by pytest — `pytest-asyncio` is not required).
-
-BLE command tests over a mocked transport build on `tests/ble_mocked_transport.py`
-(`MockedBleTransportTestCase`): it patches `VehicleBluetooth._send` and
-pre-marks both signed-command sessions ready, so a test drives any inherited
-`Commands` method with no real BLE/GATT connection and asserts on the signed
-`RoutableMessage` built (`decrypt_sent_command`) and on canned replies
-(`vcsec_ok_reply`/`infotainment_action_ok_reply`/`infotainment_vehicle_data_reply`).
-See `tests/test_ble_mocked_commands.py` for worked examples.
+Tests use `unittest.IsolatedAsyncioTestCase`, collected natively by pytest (no
+`pytest-asyncio`). BLE command tests build on `MockedBleTransportTestCase`
+(`tests/ble_mocked_transport.py`), which patches `VehicleBluetooth._send` and
+pre-marks both signed-command sessions ready, so a test can drive any `Commands`
+method with no real BLE/GATT connection; see `tests/test_ble_mocked_commands.py`.
 
 ## API References
 
 - Tesla Fleet: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints
 - Tessie: https://developer.tessie.com/llms.txt
 - Teslemetry: http://api.teslemetry.com/openapi.yaml
+- Library docs: `docs/` (`bluetooth_vehicles.md`, `energy_local_control.md`, `teslemetry.md`, `tessie.md`, `fleet_api_*.md`)
 
 ## Architecture
 
 ### Class Hierarchy
 
-Three API client classes all inherit from `TeslaFleetApi`:
-
 ```
-Tesla (base - tesla/tesla.py)
-  └── TeslaFleetApi (tesla/fleet.py) - core HTTP client with _request(), access_token handling
-        ├── TeslaFleetOAuth (tesla/oauth.py) - adds OAuth flow (login URL, token refresh)
-        ├── Teslemetry (teslemetry/teslemetry.py) - fixed server, Teslemetry-specific endpoints
-        └── Tessie (tessie/tessie.py) - fixed server, Tessie-specific endpoints
+Tesla (tesla/tesla.py) - EC key management for signed commands
+  └── TeslaFleetApi (tesla/fleet.py) - core HTTP client, _request(), access_token
+        ├── TeslaFleetOAuth (tesla/oauth.py)
+        ├── Teslemetry (teslemetry/teslemetry.py)
+        └── Tessie (tessie/tessie.py)
 ```
-
-`Tesla` base holds EC key management for signed commands. `TeslaFleetApi` provides the `_request()` method used by all submodules.
 
 ### Vehicle Command Layers
 
-Vehicle commands have three implementations sharing the same method signatures, selected by how you create the vehicle:
+Three implementations share the same method signatures, selected by how you
+create the vehicle:
 
 ```
-Vehicle (vehicle/vehicle.py) - base with VIN and model detection
-  └── VehicleFleet (vehicle/fleet.py) - REST API commands (unsigned)
-        └── VehicleSigned (vehicle/signed.py) - signed command protocol via Fleet API
-Commands (vehicle/commands.py) - protobuf-based signed command implementation (ABC)
-  └── VehicleSigned - multiple inheritance: Commands + VehicleFleet
-  └── VehicleBluetooth (vehicle/bluetooth.py) - BLE transport for signed commands
+Vehicle (vehicle/vehicle.py) - VIN and model detection
+  └── VehicleFleet (vehicle/fleet.py) - REST commands (unsigned)
+        └── VehicleSigned (vehicle/signed.py) - Commands + VehicleFleet
+Commands (vehicle/commands.py) - protobuf signed-command implementation (ABC)
+  └── VehicleSigned          (signed commands over Fleet API)
+  └── VehicleBluetooth (vehicle/bluetooth.py) - BLE transport
 ```
-
-`VehicleSigned` uses multiple inheritance: `Commands` for signed command logic, `VehicleFleet` for data endpoints and fallback.
-
-`Router` (`router/base.py`) is an entity-agnostic composition wrapper (not part of the inheritance chain) that chains an ordered list of two-or-more backends sharing a common method surface and dispatches each method call down the chain with automatic per-command failover: it tries the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retries the same call on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails, `AttributeError` only if none has the method). Non-callable attributes resolve to the first backend that has them. Constructor: `Router(primary, secondary, *more_backends, health=None)`. The health check (`bool` | sync callable | async callable returning `bool`; omitted = attempt primary, fail over on exception with no probe) gates **only the primary**; the rest of the chain is reached purely through per-command failover — there is deliberately no per-backend health matrix. Double-execution caveat: a non-idempotent command that fails mid-flight can be re-run on the next backend, except for `BluetoothUnconfirmedCommand`, which propagates without replay.
-
-`ObservationFunnel` (`funnel.py`) is the **read** side, a separate mechanism from the command `Router` and not in its inheritance chain. It is a **funnel, not a selector**: every attached publisher feeds the same per-field listeners, so a field bound to one source survives that source dropping. There is deliberately no source health, availability, grace window, failback delay, priority, stickiness or per-field selection anywhere in it — **unavailability is a value a source reports** (a null/SNA reading), never something the funnel infers from a link dropping; inferring it would be the funnel asserting data it does not have. The only arbitration is `publish()` ignoring an observation older than the last one for that field and not re-dispatching an unchanged value; both are hard-coded, not configurable. It is **entirely synchronous and can never originate a request**: no `async def`/`await`, no polling loop, no request callable, no scheduling task — `tests/test_funnel.py::TestFunnelCannotOriginateWork` locks that in against the module's own AST, so keep the module synchronous rather than adding a fetch path. Polling belongs entirely to an external consumer, which may gate its own schedule on `listen_demand(paths, cb)` (a read-only observer over the activation counts) and feed results back through `VehicleDataResultPublisher.publish_result(dict)` — that publisher holds no client, session, or callable able to obtain one. Publishers push into the funnel (which is itself the `ObservationSink`) via `publish(Observation)`; `observed_at` values must come from one monotonic clock shared by every publisher on a funnel. `value(path)` returns the last observed value, its `None` meaning either never observed or reported unavailable. Fields are deliberately three (`Locked`, `ChargePortDoorOpen`, `DoorState.TrunkFront`); translations are positive allowlists, and an unmapped VCSEC enum or absent JSON leaf emits no observation rather than a guess, while an explicit JSON null emits an unavailable value. `BleBroadcastPublisher` reuses the existing `VehicleBluetooth` `listen_vehicle_lock_state`/`listen_charge_port`/`listen_front_trunk` seams and never connects, reads, or commands; because `VEHICLELOCKSTATE_UNLOCKED` is 0 with no proto3 presence, every VCSEC status broadcast reports a lock state and the funnel deduplicates the repeats. Any unlocked VCSEC lock state, including `INTERNAL_LOCKED`→locked and `SELECTIVE_UNLOCKED`→unlocked, maps to a boolean per the "any unlocked is unlocked" ruling; closure `UNKNOWN`/`FAILED_UNLATCH` remain unmapped pending live-frame validation. `TeslemetryStreamPublisher` is the intended primary source (Bluetooth is opportunistic) and follows the same caller-supplied-payload shape as `VehicleDataResultPublisher` rather than depending on the separate `teslemetry-stream` package: `publish_update(data)` takes one stream push's `data` mapping, keyed by signal name (`Locked`, `ChargePortDoorOpen`, `DoorState` with a nested `TrunkFront`) — the same string keys `teslemetry-stream`'s own `Signal` `StrEnum` values equal, so a caller's dict matches whether or not it's keyed with that enum. It coerces the `"true"`/`"false"` wire strings some vehicles stream in place of JSON booleans. The funnel has no source ranking between Bluetooth and stream publishers by design — see the `ObservationFunnel` description above.
-
-`VehicleRouter` and `EnergySiteRouter` (`router/vehicle.py`, `router/energysite.py`) are thin entity-specific `Router` subclasses. `VehicleRouter(bluetooth_primary, teslemetry_secondary)` pairs a `VehicleBluetooth` primary with a cloud (`TeslemetryVehicle`) secondary; `EnergySiteRouter(local_energysite, teslemetry_energysite)` pairs a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback. Both re-export from `router/__init__.py` (`tesla_fleet_api.router.Router` etc.) and from `tesla/__init__.py` (`tesla_fleet_api.tesla.Router`) for backward compatibility. They have no factory on the `Vehicles`/`EnergySites` collections. This repo owns the RSA keypair lifecycle and cloud registration (`Tesla.get_rsa_private_key`, `EnergySite.add_authorized_client`) that aiopowerwall's local signed transport depends on but does not implement itself; see `docs/energy_local_control.md` for the end-to-end pairing + `EnergySiteRouter` composition flow. The cloud-only `set_island_mode`/`go_off_grid`/`reconnect_grid` (`tesla/energysite.py`) can only send an unsigned `grpc_command`, which gateways can acknowledge without actuating the contactor — rather than ship that as a silent no-op, they unconditionally raise `SignedCommandRequired` (`exceptions.py`); only the signed local path via `add_authorized_client` + `EnergySiteRouter` actually actuates, and a success response from that transport still doesn't prove the contactor moved — verify state after the call.
 
 ### Vehicle Collections
 
-`Vehicles` (vehicle/vehicles.py) is a `dict[str, Vehicle]` with factory methods:
-- `createFleet(vin)` → `VehicleFleet`
-- `createSigned(vin)` → `VehicleSigned`
-- `createBluetooth(vin, confirmation="ack", keepalive_interval=..., raise_unconfirmed=False, *, verify_commands=None, optimistic=None, key=None)` → `VehicleBluetooth`
-
-Teslemetry/Tessie override `Vehicles` with their own vehicle classes (`TeslemetryVehicle`, `TessieVehicle`) extending `VehicleFleet` with service-specific commands (e.g., `closure()`, `seat_heater()` for Teslemetry; `wake()`, `lock()` for Tessie).
+`Vehicles` (`vehicle/vehicles.py`) is a `dict[str, Vehicle]` with
+`createFleet`/`createSigned`/`createBluetooth` factories; see the
+`createBluetooth` docstring for its confirmation/keepalive/key arguments.
+Teslemetry/Tessie override `Vehicles` with `TeslemetryVehicle`/`TessieVehicle`,
+adding service-specific commands.
 
 ### Submodule Pattern
 
-Each API client lazily attaches submodules in `__init__` via class attributes on `Tesla`:
-- `charging`, `energySites`, `user`, `partner`, `vehicles`
+`Tesla` lazily attaches `charging`, `energySites`, `user`, `partner`, `vehicles`
+in `__init__`; scope flags on `TeslaFleetApi.__init__` control which are built.
 
-Scope flags on `TeslaFleetApi.__init__` control which submodules are instantiated.
+### Router (command side)
+
+`Router` (`router/base.py`) is an entity-agnostic composition wrapper, not part
+of the inheritance chain: `Router(primary, secondary, *more, health=None)` chains
+backends sharing a method surface and dispatches each call down the chain with
+per-command failover — first backend that has the method, retried on the next on
+any exception, returning the first success (last error if all fail,
+`AttributeError` if none has the method). Non-callable attributes resolve to the
+first backend that has them.
+
+- The health check gates **only the primary**; the rest of the chain is reached
+  purely through per-command failover. There is deliberately no per-backend
+  health matrix.
+- Failover can double-execute a non-idempotent command that failed mid-flight.
+  `BluetoothUnconfirmedCommand` is the one exception: it propagates without replay.
+
+`VehicleRouter` and `EnergySiteRouter` (`router/vehicle.py`, `router/energysite.py`)
+are thin subclasses pairing a local/BLE primary with a Teslemetry cloud fallback.
+`EnergySiteRouter`'s local backend is duck-typed (e.g. aiopowerwall's
+`PowerwallEnergySite`) so no dependency is added. Both re-export from
+`router/__init__.py` and `tesla/__init__.py`. They have no factory on the
+`Vehicles`/`EnergySites` collections.
+
+This repo owns the RSA keypair lifecycle and cloud registration
+(`Tesla.get_rsa_private_key`, `EnergySite.add_authorized_client`) that
+aiopowerwall's local signed transport depends on but does not implement;
+`docs/energy_local_control.md` has the end-to-end pairing flow and the
+security/protocol constraints of gateway pairing (RSA for LAN TEDapi v1r,
+`PENDING_VERIFICATION_TIMEOUT` is terminal, presence-free key removal).
+
+**`set_island_mode`/`go_off_grid`/`reconnect_grid` (`tesla/energysite.py`)
+unconditionally raise `SignedCommandRequired`.** They can only send an unsigned
+`grpc_command`, which gateways acknowledge without actuating the contactor —
+shipping that as a silent no-op would be worse. Only the signed local path
+(`add_authorized_client` + `EnergySiteRouter`) actuates, and even its success
+response doesn't prove the contactor moved: verify state after the call.
+
+### ObservationFunnel (read side)
+
+`ObservationFunnel` (`funnel.py`) is separate from the command `Router`. It is a
+**funnel, not a selector**: every attached publisher feeds the same per-field
+listeners, so a field bound to one source survives that source dropping.
+
+- There is deliberately no source health, availability, grace window, failback
+  delay, priority, stickiness, per-field selection, or Bluetooth-vs-stream
+  ranking. **Unavailability is a value a source reports** (a null/SNA reading),
+  never something the funnel infers from a link dropping.
+- The only arbitration: `publish()` ignores an observation older than the last
+  one for that field, and does not re-dispatch an unchanged value. Both are
+  hard-coded, not configurable.
+- The module is **entirely synchronous and can never originate a request** — no
+  `async def`/`await`, no polling loop, no request callable, no scheduling task.
+  `tests/test_funnel.py::TestFunnelCannotOriginateWork` asserts this against the
+  module's own AST; keep the module synchronous rather than adding a fetch path.
+  Polling belongs to an external consumer, which may gate its schedule on
+  `listen_demand(paths, cb)` and feed results back via
+  `VehicleDataResultPublisher.publish_result(dict)`.
+- Publishers push via `publish(Observation)`; `observed_at` values must come from
+  one monotonic clock shared by every publisher on a funnel. `value(path)`
+  returns the last observed value; its `None` means never observed *or* reported
+  unavailable.
+- Fields are deliberately three (`Locked`, `ChargePortDoorOpen`,
+  `DoorState.TrunkFront`). Translations are positive allowlists: an unmapped
+  VCSEC enum or absent JSON leaf emits no observation rather than a guess, while
+  an explicit JSON null emits an unavailable value. Any unlocked VCSEC lock state
+  (including `SELECTIVE_UNLOCKED`) maps to unlocked; closure `UNKNOWN`/
+  `FAILED_UNLATCH` stay unmapped pending live-frame validation.
+- `BleBroadcastPublisher` reuses `VehicleBluetooth`'s `listen_*` seams and never
+  connects, reads, or commands. `VEHICLELOCKSTATE_UNLOCKED` is 0 with no proto3
+  presence, so every VCSEC status broadcast reports a lock state and the funnel
+  deduplicates the repeats.
+- `TeslemetryStreamPublisher` is the intended primary source (Bluetooth is
+  opportunistic) and takes a caller-supplied payload rather than depending on
+  `teslemetry-stream`: `publish_update(data)` takes one push's `data` mapping
+  keyed by signal name — the same strings that package's `Signal` `StrEnum`
+  equals — and coerces the `"true"`/`"false"` wire strings some vehicles stream.
 
 ### Shared Utilities
 
-`util.py` holds small, dependency-free helpers shared across the library, re-exported from the top-level package. `firmware_compare(a, b) -> int` compares dotted, numeric, week-based Tesla firmware version strings (e.g. `2025.14.3`) correctly — plain string comparison misorders them (`"2025.10" < "2025.9"`). It returns 1/-1/0, right-pads shorter versions with zeros before comparing, and treats unparseable strings (e.g. `"Unknown"`) as sorting behind any parseable version. `firmware_at_least(firmware, minimum) -> bool` is a thin wrapper (`firmware_compare(firmware, minimum) >= 0`) for the common "does this vehicle's firmware support feature X" gate. Deliberately implemented as native tuple comparison rather than taking on a general-purpose version-parsing dependency, matching this library's narrow dependency list.
+`util.py` holds dependency-free helpers re-exported from the top-level package.
+`firmware_compare`/`firmware_at_least` compare dotted week-based Tesla firmware
+strings (`2025.14.3`), which plain string comparison misorders
+(`"2025.10" < "2025.9"`); unparseable strings sort behind any parseable one.
+Deliberately native tuple comparison, not a version-parsing dependency.
 
 ### Release Process
 
-No release-please or version-bump automation. To ship: bump `version` in `pyproject.toml` and `__version__` in `tesla_fleet_api/__init__.py`, then run `uv lock` to regenerate `uv.lock` so its root package version matches, in a `Bump version to X.Y.Z` commit on `main`, then push a matching `vX.Y.Z` tag. CI (`ci.yml`) and the release gate (`release.yml`) run `uv sync --locked`, which fails the build if `uv.lock` doesn't match `pyproject.toml` — a version bump that skips `uv lock` is caught before merge/tag rather than shipping a stale lockfile. `.github/workflows/release.yml` triggers directly on that tag push: it reruns the full CI gate (ruff, pyright, pytest, `uv build` + `twine check`) on the exact tagged commit, then publishes via the PyPA OIDC trusted-publishing action (with PEP 740 attestations) using the `pypi` GitHub environment and cuts the GitHub Release. The `pypi` environment has no protection rules (no required reviewers) — publishing is gated only by CI passing on the tagged commit, not by a manual approval step. Merging the PR that lands the version bump is the effective publish approval. It is a plain top-level workflow, not a `workflow_call` reusable one — the PyPI trusted publisher for this project is configured as workflow `release.yml` + environment `pypi`, and a reusable-workflow caller's signing identity doesn't match that publisher/attestation identity. Sibling repos each carry their own local copy of this workflow rather than calling it cross-repo.
+No release automation. To ship: bump `version` in `pyproject.toml` and
+`__version__` in `tesla_fleet_api/__init__.py`, run `uv lock`, commit on `main`,
+push a matching `vX.Y.Z` tag. CI and the release gate run `uv sync --locked`, so
+a bump that skips `uv lock` fails before merge. `.github/workflows/release.yml`
+triggers on the tag: reruns the full gate, then publishes via PyPA OIDC trusted
+publishing (PEP 740 attestations) in the `pypi` environment and cuts the Release.
+That environment has **no required reviewers** — merging the version-bump PR is
+the effective publish approval. Keep `release.yml` a plain top-level workflow,
+never a reusable `workflow_call` one: the PyPI trusted publisher is configured as
+workflow `release.yml` + environment `pypi`, and a caller's signing identity
+would not match. Sibling repos each carry their own copy rather than calling it.
 
 ### Error Handling
 
-`exceptions.py` maps HTTP status codes and error keys to specific exception classes. `raise_for_status()` parses responses and raises the appropriate exception. Signed command faults have separate hierarchies: `TeslaFleetInformationFault`, `TeslaFleetMessageFault`, `SignedMessageInformationFault`, `WhitelistOperationStatus`.
+`exceptions.py` maps HTTP status codes and error keys to exception classes;
+`raise_for_status()` raises the right one. Signed-command faults have separate
+hierarchies (`TeslaFleetInformationFault`, `TeslaFleetMessageFault`,
+`SignedMessageInformationFault`, `WhitelistOperationStatus`).
 
-All exceptions inherit from `TeslaFleetError(BaseException)`, deliberately **not** `Exception` — a bare `except Exception` (e.g. in retry/backoff loops around BLE reads) silently fails to catch `BluetoothTimeout` and every other library error. Catch `TeslaFleetError` (or `BaseException`) explicitly. `VehicleBluetooth` wraps transport-layer failures (`connect`/`connect_if_needed`, notification setup) in `BluetoothTransportError`, a `TeslaFleetError` subclass chaining the original transport exception as its cause — so `except TeslaFleetError` alone catches BLE transport failures too, not just response-wait `BluetoothTimeout`/`BluetoothUnconfirmedCommand`. The GATT write in `_send` is *not* unconditionally wrapped into `BluetoothTransportError` — see the write-delivery-certainty entry below for the split. These catch sites deliberately catch **both** `bleak.exc.BleakError` and builtin `TimeoutError`: bleak-esphome converts an aioesphomeapi GATT/connect/notify timeout into a bare `TimeoutError` (not a `BleakError`), which would otherwise escape the wrap as a non-`TeslaFleetError`.
+**All exceptions inherit from `TeslaFleetError(BaseException)`, deliberately not
+`Exception`.** A bare `except Exception` (e.g. a retry loop around BLE reads)
+silently fails to catch `BluetoothTimeout` and every other library error — catch
+`TeslaFleetError` or `BaseException` explicitly. `VehicleBluetooth` wraps
+transport failures (`connect`/`connect_if_needed`, notification setup) in
+`BluetoothTransportError`, chaining the original cause. Those catch sites must
+catch **both** `bleak.exc.BleakError` and builtin `TimeoutError`: bleak-esphome
+converts an aioesphomeapi GATT/connect/notify timeout into a bare `TimeoutError`.
+The GATT write in `_send` is *not* unconditionally wrapped — see
+"Write-delivery certainty" below.
 
 ### Protobuf
 
-Tesla protobuf bindings come from the published `tesla-protocol` PyPI package (`Teslemetry/tesla-protocol`, generated Python package `tesla_protocol`), not from vendored `.proto`/`*_pb2` files in this repo. Import from `tesla_protocol.command.<module>_pb2` (e.g. `tesla_protocol.command.universal_message_pb2`); the package also ships `telemetry`, `energy_device`, `energy_command`, and `teslapower` groups this library doesn't currently use. To pick up new/changed message definitions, bump the `tesla-protocol` version floor in `pyproject.toml` — there is no local regeneration step.
+Bindings come from the published `tesla-protocol` PyPI package
+(`Teslemetry/tesla-protocol`); import from `tesla_protocol.command.<module>_pb2`.
+`tesla_fleet_api/tesla/vehicle/proto/` holds only backwards-compatible re-export
+shims, not generated code. To pick up new message definitions, bump the floor in
+`pyproject.toml` — there is no local regeneration step.
 
-**Runtime-version pin (Home Assistant compatibility).** protobuf refuses to load gencode stamped *newer* than the installed runtime (`gencode X > runtime` → `VersionError`). Home Assistant core pins `protobuf==6.32.0`, so any `tesla-protocol` version this library depends on must stamp gencode **≤ 6.32.0** and declare a `protobuf` requirement compatible with `==6.32.0` — check both before bumping the floor. The `protobuf>=6.32.0` floor in `pyproject.toml` must stay in sync with whatever `tesla-protocol` actually requires.
+**Runtime-version pin (Home Assistant compatibility).** protobuf refuses to load
+gencode stamped *newer* than the installed runtime. Home Assistant core pins
+`protobuf==6.32.0`, so any `tesla-protocol` version depended on must stamp
+gencode **≤ 6.32.0** and declare a `protobuf` requirement compatible with
+`==6.32.0` — check both before bumping. Keep `pyproject.toml`'s `protobuf` floor
+in sync with what `tesla-protocol` requires, and keep the `tesla-protocol` floor
+at `>=1.4.0` (earlier `.pyi` imports fail strict pyright; 1.4.0 is also the first
+release allowing protobuf 7).
 
-Keep the `tesla-protocol` floor at `>=1.4.0`; earlier releases have generated `.pyi` imports that are incompatible with this repository's strict pyright checks, and `1.4.0` is also the first release declaring `protobuf>=6.32.0,<8`, the version needed for protobuf 7 compatibility per the Runtime-version pin note above.
+Command coverage is locked by `tests/test_proto_coverage_lock.py`, which fails if
+any `VehicleAction`/`GetVehicleData` field has no wrapper (`commands.py`) or
+reader (`bluetooth.py`) and is not allowlisted with a reason — keep that test in
+sync with a `tesla-protocol` bump rather than special-casing new fields. Naming:
+`legacy_vehicle_state()` (`bluetooth.py`) reads CarServer's `GetVehicleState`
+sub-state; `vehicle_state()` is the VCSEC `VehicleStatus`, a different
+message/domain. `set_rate_tariff`/`add_managed_charging_site` take
+`tesla_protocol` message types directly rather than a parallel flattened API.
 
 ## Code Style
 
-- **Type checking**: pyright strict mode. Use `TYPE_CHECKING` guards for circular imports.
+- **Type checking**: pyright strict. Use `TYPE_CHECKING` guards for circular imports.
 - **Linting**: ruff.
-- **Async**: All API methods are `async`. Uses `aiohttp` for HTTP, `aiofiles` for file I/O, `bleak` for BLE.
-- **Enums**: Custom `StrEnum`/`IntEnum` in `const.py` (not stdlib). `Region` is a `Literal["na", "eu", "cn"]`, not an enum.
-- **Seat indexing gotcha**: two distinct seat enums with different conventions. `Seat` is **0-indexed** (`FRONT_LEFT=0`) and is for the manual seat heater/cooler paths (`remote_seat_heater_request`, `remote_seat_cooler_request`). `AutoSeat` is **1-indexed** (`FRONT_LEFT=1`, `FRONT_RIGHT=2`) and is the correct type for `remote_auto_seat_climate_request` on **both** backends — its values equal Tesla's REST wire values and the proto `AutoSeatPosition_*` enum. Don't mix them; passing a `Seat` to the auto-climate command is off-by-one.
-- **Naming**: camelCase for class instance attributes that mirror API structure (`energySites`, `createFleet`). Snake_case for method names that are API endpoints.
-- **BLE discovery gotcha**: a Tesla vehicle advertises no 128-bit service UUID pre-connect — only its VIN-derived local name (`^S[a-f0-9]{16}[CDRP]$`), and only in the scan response, not the `ADV_IND`. `SERVICE_UUID` (`tesla_fleet_api/tesla/vehicle/bluetooth.py`) exists only as a GATT service after connecting. Never pass `service_uuids=[SERVICE_UUID]` as a `BleakScanner` discovery-time filter — it hides the vehicle on a direct BlueZ adapter (an ESPHome proxy doesn't enforce that filter the same way, which can mask the bug in testing). Scan unfiltered with active scanning and match by name; keep `SERVICE_UUID` for post-connect GATT use only.
-- **`bleak` client/scanner must be resolved dynamically, not import-bound**: both BLE modules (`tesla/vehicle/bluetooth.py`, `tesla/bluetooth.py`) do `import bleak` and reference `bleak.BleakClient`/`bleak.BleakScanner` at call time, never `from bleak import BleakClient`. Home Assistant's habluetooth replaces those `bleak` module attributes at runtime with a multi-adapter/proxy-aware client; a name captured at module import would permanently ignore that replacement and connect on the pristine local backend instead of the HA-selected adapter/ESPHome proxy. Keep the type-only imports under `TYPE_CHECKING`. `connect()` logs a per-stage `stage=...` debug line (`establish_connection`/`start_notify`/`is_connected`/`keepalive`) on transport failure; tests patch the canonical `bleak.BleakScanner`/`bleak.BleakClient` (not a module-level name).
-- **BLE domain-routing gotcha**: `Domain` (`tesla_protocol.command.universal_message_pb2`) has more values (`DOMAIN_BROADCAST`, `DOMAIN_AUTHD`, ...) than `VehicleBluetooth._queues` has keys (only `DOMAIN_VEHICLE_SECURITY`/`DOMAIN_INFOTAINMENT`). `_on_message` (`tesla_fleet_api/tesla/vehicle/bluetooth.py`) must look up `_queues` with `.get()` and drop unrecognized domains rather than indexing directly — indexing raises `KeyError` inside the `ReassemblingBuffer` callback, aborting reassembly of any further already-buffered messages in that notification.
-- **BLE infotainment boot-delay gotcha**: `wake_up()` (VCSEC) returns as soon as the vehicle-security computer acks it, well before the infotainment computer is ready to complete a signed-command handshake. An INFO-domain read/command issued immediately after `wake_up()` can raise `BluetoothTimeout` on the handshake through no fault of the command itself; callers doing INFO work right after waking should retry-with-backoff rather than treat one timeout as failure.
-- **BLE `vehicle_data()` response-size cap**: the vehicle's signed-command implementation enforces its own response-size limit independent of the BLE transport's packet reassembly. A single-endpoint `vehicle_data()` call (or any dedicated per-substate reader like `charge_state()`) succeeds, but requesting as few as two `BluetoothVehicleData` endpoints together reliably raises `TeslaFleetMessageFaultResponseSizeExceedsMTU` (`exceptions.py`). This is why `vehicle_data()`'s `endpoints` arg has no all-endpoints default (unlike the cloud method) — prefer the per-substate readers, or a single-endpoint `vehicle_data()` call, over a multi-endpoint composite.
-- **BLE individual-door powered-close gotcha**: `open_*_door()` unlatches a door over VCSEC; on a Model 3 there is no reliable powered close. An ack (`{"result": True}`) from a close command only means the car accepted it, not that the door physically re-latched — a human has to push it shut. Never chain an automated snapshot→act→verify→restore cycle across an individual door-open command; treat the 8 door commands as ack-verified only, or require a human to confirm the physical re-close before trusting `closures_state()` again.
-- **`remote_heater_control_enabled` gate**: `climate_state().remote_heater_control_enabled` is a read-only vehicle-side setting (no command exists to flip it) that gates every "remote comfort" action (`remote_seat_heater_request`, `remote_auto_seat_climate_request`, `remote_steering_wheel_heater_request`, `remote_steering_wheel_heat_level_request`, `remote_auto_steering_wheel_heat_climate_request`). With it `false`, the vehicle ACKs `{"result": false, "reason": "cabin comfort remote settings not enabled"}` and leaves state untouched (not a library bug, not a partial mutation). Check this field before treating a comfort-command rejection as a regression.
-- **Protobuf oneof-by-string-kwargs bypasses pyright**: `remote_seat_heater_request`/`remote_seat_cooler_request` (`commands.py`) build their `HvacSeatHeaterAction`/`HvacSeatCoolerAction` via a `dict` of literal field-name strings expanded as `**kwargs` into the message constructor — a typo in one of those strings raises at call time, not at type-check time. Cross-check any new field-name string against `tesla_protocol.command.car_server_pb2` rather than trusting pyright to catch it.
-- **`scheduled_charging_mode` is tri-state and shared**: `set_scheduled_charging` and `set_scheduled_departure` (`commands.py`) both write the same `ChargeState.scheduled_charging_mode` (Off/StartAt/DepartBy). Disabling one when the other is active turns the whole feature Off rather than leaving the other's config intact; a caller toggling one must read `charge_state()` first and restore the exact prior mode (including the other command's fields) rather than assuming independence.
-- **`set_scheduled_departure`'s `preconditioning_enabled`/`off_peak_charging_enabled` args are dead**: `ScheduledDepartureAction` (`tesla_protocol.command.car_server_pb2`) has no fields for them, only `preconditioning_times`/`off_peak_charging_times` (weekday-recurrence only, no on/off). Passing `preconditioning_enabled=False` has no effect on vehicle state. Document, don't rely on these args to gate the feature.
-- **`charge_standard()` rejects `already_standard`**: calling it while `charge_state().charge_limit_soc` already equals `charge_limit_soc_std` gets `{"result": False, "reason": "already_standard"}` rather than a no-op success. Callers/tests exercising this command need the limit to actually differ from the std preset first (e.g. via `charge_max_range()` or `set_charge_limit()`).
-- **BLE media state-observability gotcha**: `MediaState.now_playing_artist/title` and all of `MediaDetailState` (`now_playing_album/station/source_string/elapsed/duration`) are only populated for certain sources (e.g. USB/Bluetooth), not Spotify. Don't assume `media_next_track`/`media_prev_track`/`media_next_fav`/`media_prev_fav` are state-observable via these readers; verify by ACK (`{"result": True}`) and pair with the inverse command when the fingerprint doesn't change. `audio_volume`/`media_playback_status` (for `adjust_volume`/`media_volume_up`/`media_volume_down`/`media_toggle_playback`) are reliable provers.
-- **BLE mutating-command timeout is inconclusive — never assume "the write didn't land"**: mutating VCSEC/RKE actions can raise `BluetoothTimeout` yet have physically executed, most likely because the vehicle doesn't reliably return an observable ack within the timeout. Treat `BluetoothUnconfirmedCommand` (a `BluetoothTimeout` subclass) from any mutating BLE command as **inconclusive, not failure**: snapshot state before acting, then verify the outcome with a follow-up state read whenever a mutation times out. Never blind-retry a non-idempotent command (toggles like `media_toggle_playback`, volume steps, schedule add/remove) on timeout alone — see the retry double-execution entry below. VCSEC actuations use the shorter `_actuation_timeout` when their terminal ack is lost.
-- **The BLE mutating-command confirmation ladder is one `confirmation` enum + one `raise_unconfirmed` bool**: `VehicleBluetooth.confirmation` (`"optimistic" | "ack" | "verify"`, default `"ack"`; threaded through `Vehicles`/`VehiclesBluetooth.create*`) picks how many of write → ack-or-broadcast wait → state-read confirmation run; `raise_unconfirmed` (default `False`) picks what happens when the ladder still can't tell. `"optimistic"` short-circuits `_sendVehicleSecurity`/`_sendInfotainment` (`bluetooth.py`) to `_send_optimistic()`, which signs and writes but never waits for any reply — a provably pre-submission write failure still raises `BluetoothTransportError` unconditionally, but a submitted-then-ambiguous write follows `raise_unconfirmed` like every other rung. `"verify"` adds a post-timeout state-read rung: on an unresolved ack/broadcast wait, `_resolve_timeout()` reads the mapped prover state (`_vcsec_verify_plan`/`_INFOTAINMENT_VERIFY_PLANS` in `bluetooth.py`; only clearly-derivable absolute commands are covered — lock/unlock, `set_charge_limit`, `set_charging_amps`, `adjust_volume` absolute, `set_temps`, `auto_conditioning_start/stop`) and returns success on a match, raises `BluetoothCommandFailed` on a proven mismatch, or returns `None` (still unresolved) if the read itself couldn't complete — `None` falls through to `raise_unconfirmed`. Commands with no plan (true toggles, relative steps, ack-only actions) always fall through regardless of `confirmation`. The legacy `optimistic`/`verify_commands` boolean surface is deprecated: both warn (`DeprecationWarning`) and map onto `confirmation` (a positional bool in the `confirmation` slot is treated as old `verify_commands`; `optimistic=True` wins if both are set), and remain as read-only properties (`confirmation == "optimistic"`/`"verify"`) for existing readers. See `docs/bluetooth_vehicles.md` for the user-facing table and defaults.
-- **Broadcast-as-confirmation races the ack wait for lock/unlock**: the vehicle keeps emitting unsolicited VCSEC status broadcasts on the same notification subscription even when it emits no addressed ack for a lock/unlock actuation. `_send`'s `confirm_broadcast` param (threaded through `Commands._command`/`_sendVehicleSecurity`, ignored by the Fleet-signed transport) arms a per-domain watcher in `_on_message` (`_broadcast_watchers`, `bluetooth.py`) that decodes broadcast frames via `_decode_vcsec_status` and races them against the addressed-reply wait in `_await_response_or_broadcast`; first to satisfy the plan's predicate wins, and only the addressed-reply path can raise a car-side rejection. A mismatching broadcast doesn't fail fast (it's appended to `mismatches`) since a later broadcast in the same window could still confirm success — but if the whole window elapses with a mismatch as the last word and nothing else confirming, `_await_response_or_broadcast` raises `BluetoothCommandFailed` instead of the ambiguous timeout. This reuses the same `_vcsec_verify_plan` predicate as the `"verify"` rung above, applied to a broadcast's decoded `VehicleStatus`; it currently covers only lock/unlock, the one VCSEC actuation with an observed status broadcast. See `tests/test_ble_broadcast_confirmation.py`.
-- **Persistent broadcast listeners (`tesla_fleet_api/tesla/vehicle/broadcast.py`)**: `VehicleBluetooth` fans the same VCSEC status broadcasts out to long-lived per-field listeners, dispatched from the same `_on_message`. Each modeled `VehicleStatus` leaf field gets a typed `listen_<field>` method (`listen_vehicle_lock_state`, `listen_vehicle_sleep_status`, `listen_user_presence`, `listen_gear`, `listen_ui_desire`, the 8 door/trunk/charge-port/tonneau closure listeners, `listen_tonneau_percent_open`); anything not decoded into `VehicleStatus` is covered by the untyped `listen_broadcast(domain, callback)`. Closure/tonneau-percent listeners gate on `HasField` since those are submessages with real proto3 presence tracking; the five scalar enum fields (`vehicleLockState`/`vehicleSleepStatus`/`userPresence`/`gear`/`uiDesire`) have none, so they fire on every status broadcast rather than only on change. Each `listen_*` returns an `unsubscribe()` closure; registries live for the `VehicleBluetooth` instance's lifetime and are unaffected by reconnects, matching `_queues`. Listener callback exceptions are logged and isolated from later listeners/message routing, except `KeyboardInterrupt`/`SystemExit`. See `docs/bluetooth_vehicles.md` and `tests/test_ble_broadcast_listeners.py`.
-- **Connection-status listener**: `VehicleBluetooth.listen_connection_status()` reports BLE session transitions, including unexpected transport loss; the authoritative contract is in `docs/bluetooth_vehicles.md#connection-status-events`, regression coverage in `tests/test_ble_connection_status.py`.
-- **`BleBroadcastStreamGlue` (`tesla_fleet_api/tesla/vehicle/stream_glue.py`) never imports `teslemetry_stream`**: it wires 11 of the 14 BLE-derivable broadcast listeners in `broadcast.py` (lock state, charge port, all 6 `DoorState` leaves, gear, tonneau position, tonneau open percent) to `sink.ingest(data, metadata)` calls against a local structural `StreamSink` `Protocol` ("has `ingest(data, metadata=None)`"), the same duck-typed-dependency pattern `EnergySiteRouter` uses for aiopowerwall — `python-teslemetry-stream`'s `TeslemetryStream(Vehicle).ingest()` satisfies it with no coupling either direction and no dependency added. It reuses `funnel.py`'s `LOCK_STATES`/`CLOSURE_STATES` decode maps for the boolean fields (module-level, not underscore-private, precisely so this cross-module import is legal under pyright strict) and adds its own `GEAR_STATES`/`TONNEAU_POSITION_STATES` maps for the two fields teslemetry-stream carries as `<Prefix><Option>`-shaped wire strings rather than booleans (e.g. `"ShiftStateP"`, `"TonneauPositionStateClosed"` — verified against that package's own `TeslemetryEnum`-based listeners, not guessed). `TONNEAU_POSITION_STATES` only maps CLOSED/OPEN/AJAR; OPENING/CLOSING joins UNKNOWN/FAILED_UNLATCH as unmapped since `TonneauPosition` has no in-transit state to translate to. Vehicle sleep status, user presence, and UI desire are the 3 fields left unwired: sleep status is blocked because `ingest()` unconditionally nests its payload under the `data` (signal-topic) key of a wire event and has no way to produce a `state`-topic-shaped event instead; user presence and UI desire have no `Signal` entry or `listen_*` method in teslemetry-stream 0.13.0 at all. It is push-only — no `request()`/`release()` demand gating, since VCSEC broadcasts regardless of listeners. `stop()` unsubscribes every listener and is idempotent. See `docs/bluetooth_vehicles.md#feeding-broadcasts-into-a-teslemetry-stream` and `tests/test_ble_stream_glue.py`.
-- **`BluetoothUnconfirmedCommand` vs `BluetoothCommandFailed` (`exceptions.py`), and how `Router` treats each**: `_sendVehicleSecurity`/`_sendInfotainment` (`bluetooth.py`) wrap a caught `BluetoothTimeout` into `BluetoothUnconfirmedCommand` when the ladder is genuinely unresolved — either the write succeeded but the ack/broadcast was lost, or the write entered backend I/O and failed with delivery unprovable, so the vehicle may have executed the command. With default `raise_unconfirmed=False` that unresolved outcome returns best-effort success; with `raise_unconfirmed=True` it reaches the caller. `BluetoothCommandFailed` is the other, distinct outcome: a state check (the `"verify"` rung's read, or a mismatching broadcast still standing at window-end) actively *proved* the command did not apply — it does **not** subclass `BluetoothTimeout`/`BluetoothUnconfirmedCommand`. `Router._dispatch` (`router/base.py`) special-cases only `BluetoothUnconfirmedCommand` to skip its normal per-command failover and re-raise immediately, since replaying an already-possibly-executed command risks double-execution; `BluetoothCommandFailed` carries no such risk and falls through `Router`'s ordinary error handling like any other error. A plain read (`_getVehicleSecurity`/`_getInfotainment`) still raises unadorned `BluetoothTimeout` on the same kind of wait timeout, since a read has no side effect to be unconfirmed about.
-- **Write-delivery certainty splits `BluetoothTransportError` from `BluetoothTimeout` at the GATT write in `_send`**: `write_gatt_char` failures are not uniformly `BluetoothTransportError`. `BleakCharacteristicNotFoundError` (bleak resolves `WRITE_UUID` synchronously, before any backend I/O) is the only case provably pre-submission, so it alone stays `BluetoothTransportError` and is safe for `Router` to retry. Every other `BleakError`/`TimeoutError` from that call happens inside backend I/O (D-Bus/CoreBluetooth/an ESPHome proxy) where delivery can't be proven either way, so `_send` instead races any already-armed broadcast watcher for the rest of the window and, failing that, raises plain `BluetoothTimeout` — which, because `BluetoothUnconfirmedCommand` subclasses `BluetoothTimeout`, lands in the same ladder as a lost post-write ack. `_send_optimistic` gets the equivalent treatment explicitly since it bypasses that ladder. A read is unaffected since it has no double-execution risk. Tests: `tests/test_ble_send_transport.py`, `tests/test_ble_broadcast_confirmation.py`, `tests/test_ble_write_timeout_router.py`.
-- **`wake_up()` is best-effort; confirm readiness with an INFO read**: `wake_up()` is a VCSEC actuation, so a terminal ack returns promptly when observed, but an unresolved wake remains only an inconclusive wake signal, not command failure (`BluetoothUnconfirmedCommand` when `raise_unconfirmed=True`, best-effort success by default). Confirm readiness by retrying a cheap INFO read instead (see the boot-delay gotcha above). Hold one connection across a whole batch of related commands rather than reconnecting between each.
-- **The signed-command retry in `Commands._command` can double-execute a mutating command**: on an `OPERATIONSTATUS_WAIT` reply or an `INCORRECT_EPOCH`/`INVALID_TOKEN` fault, `_command` (`commands.py`) re-signs and re-sends the identical command, bounded at 3 attempts then a clean `{"result": False, "reason": "Too many retries"}`. Combined with the mutating-timeout-is-inconclusive gotcha above (a command can execute despite a WAIT/fault reply), this retry is a latent double-apply window. Harmless for a naturally idempotent command (lock/unlock), a real correctness risk for toggles and step commands (`media_toggle_playback`, `media_volume_up`/`down`, schedule add/remove) — verify those by absolute state after the call, never by counting invocations or trusting the retry to be safe.
-- **`expects_data` splits BLE reply-waiting: VCSEC actuations return on the terminal ack**: a VCSEC read replies with a bare ACK **then** a data frame, but a VCSEC actuation (RKE/closure/wake via `_sendVehicleSecurity`) replies with a **single bare ACK only** — `_send` cannot tell the two apart at transport level, so the caller declares it via `expects_data`. `_sendVehicleSecurity` passes `expects_data=False`; everything else (VCSEC reads via `_getVehicleSecurity`, all infotainment via `_send/_getInfotainment`, `_handshake`, `pair`) keeps the default `expects_data=True`. With `expects_data=False`, `_send` returns immediately on the matching ACK instead of waiting out `_ack_followup_timeout`, and on a lost ack the public mutating-command wrapper reaches the unresolved `raise_unconfirmed` outcome after the shorter `_actuation_timeout` (2s) rather than `_default_timeout` (5s).
-- **`navigation_gps_request`'s `order` param is a raw int, not a callable enum**: the protobuf nested-enum wrapper (`EnumTypeWrapper`) is not a callable Python `IntEnum` class; pass `order=order` directly (matching the sibling `navigation_gps_destination_request`), which protobuf accepts as a bare int for an enum field at runtime.
-- **`ReassemblingBuffer` resets on a >1s inter-chunk gap, not just on decode failure**: `bluetooth.py`'s `ReassemblingBuffer.receive_data` discards any in-progress partial frame if the next chunk arrives more than `STALE_CHUNK_TIMEOUT` (1s) after the previous one, mirroring Tesla's official Go SDK (`teslamotors/vehicle-command`, `pkg/connector/ble/ble.go`'s `rxTimeout`). Without this, a chunk dropped mid-message leaves a stale partial in the buffer that gets prepended to the next message, corrupting it until a lucky decode failure resyncs.
-- **`pair()` confirms whitelisting two ways: one-shot reply OR verify-by-state poll**: the whitelist-op success is a single VCSEC frame, which is lost forever if the BLE link cycles while the user walks to the car to approve. `pair()` (`bluetooth.py`) keeps the reply as the fast path (waits one `poll_interval` for it) but, on a lost reply, polls `_pair_probe()` every `poll_interval` until an overall `timeout` (default 300s) elapses. The probe is a VCSEC `_handshake` with our own public key: it succeeds only once the key is whitelisted and faults `NotOnWhitelistFault` until then; `_pair_probe` maps any `TeslaFleetError` (incl. transport failures from a mid-wait reconnect) to "not yet", so polling survives reconnects. The whitelist op is written **exactly once** — never re-sent — because a re-send re-prompts the user. Deadline with neither path confirming raises a typed `BluetoothTimeout`.
-- **Idle BLE keepalive (`keepalive_interval`)**: an idle held BLE link to the vehicle drops quickly (link supervision timeout on the order of ~1s); a trivial passive GATT read on an idle cadence extends session lifetime substantially. `VehicleBluetooth.__init__`'s `keepalive_interval` (default `DEFAULT_KEEPALIVE_INTERVAL` = 20.0, `None`/`0` disables; threaded through `Vehicles`/`VehiclesBluetooth.create*`) starts one asyncio task per connection (`_keepalive_loop`, `bluetooth.py`) that reads `VERSION_UUID` only after `keepalive_interval` seconds of genuine GATT idleness. **Idle-triggered, not periodic**: `_last_activity` is bumped on every `_send` write and every `_on_notify` frame, so an active session never gets extra traffic. The read is **bounded** (`_keepalive_timeout`, 2s) and **best-effort** — every attempt carries a timeout and swallows all failures except `CancelledError`; a failed keepalive never raises into user code, never triggers reconnect, and never wakes the car. Task lifecycle is tied to the connection: started at the end of `connect()` (after `start_notify`), cancelled-and-awaited in `disconnect()` and restarted cleanly on reconnect (`_start_keepalive`/`_stop_keepalive`). **Sleep tradeoff**: these reads keep an *awake* car awake and defer vehicle sleep — consumers wanting the car to sleep should disable keepalive or disconnect when idle. Tests in `tests/test_ble_keepalive.py`.
-- **Cross-transport parity (cloud REST `VehicleFleet` vs BLE `Commands`)**: the same-named command on both paths should build a semantically equivalent instruction from identical args — a divergence there is a bug, but response *bodies* legitimately differ (REST JSON dict vs decoded protobuf) and are not. `tests/test_cross_transport_parity.py` locks the equivalence in with mocked-both-transports tests. Known **non-bug FORM differences** (do not "fix"): `set_scheduled_departure`'s `preconditioning_enabled`/`off_peak_charging_enabled` (no proto fields), `window_control` lat/lon (no proto fields), `navigation_request`'s `type`/`locale`/`timestamp_ms` (REST share-intent framing), `media_volume_up` (no Tesla REST endpoint — BLE-only; cloud raises volume via `adjust_volume`), and `clear_pin_to_drive_admin`'s `pin` param (no proto field on `VehicleControlResetPinToDriveAdminAction` — cloud still sends it in the REST body, BLE ignores it). Both transports default `navigation_gps_request`'s `order` to `0` (`REMOTE_NAV_TRIP_ORDER_UNKNOWN`) when the caller omits it. `navigation_sc_request`'s BLE wrapper still takes only `order` (REST also takes `id`) even though `NavigationSuperchargerRequest` gained an `id` field alongside the field rename `order` → `remote_nav_trip_order` in `tesla-protocol` 1.x — wiring `id` through is unimplemented, not a proto limitation.
-- **Per-command debug logging chokepoints and the `command=` name it derives**: `LOGGER.debug` lines of the form `command=<name> transport=<t> result=...` are emitted from exactly four places — `Commands._sendVehicleSecurity`/`_getVehicleSecurity`/`_sendInfotainment`/`_getInfotainment` (`commands.py`, covers both BLE and Fleet-signed) and `TeslaFleetApi._request` (`fleet.py`, covers Fleet/Teslemetry/Tessie REST). `transport` comes from a `_transport_name` `ClassVar` set per concrete class (`"bluetooth"`/`"fleet"`/`"teslemetry"`/`"tessie"`), mirroring the `_auth_method` pattern — add that ClassVar to any new `Commands`/`TeslaFleetApi` subclass. For BLE/Fleet-signed, `command` is **not** the Python method name; it's derived from the populated protobuf oneof field (`vcsec_command_name`/`infotainment_command_name` in `commands.py`), e.g. `door_lock()` logs as `RKE_ACTION_LOCK` and `set_charge_limit()` as `chargingSetLimitAction`. `VehicleBluetooth`'s `verify_commands` resolution logs a second, separate line (`verify_commands=resolved`/`unresolved`). `Router._dispatch` (`router/base.py`) logs `command=... backend=<ClassName> result=...` per backend tried. See `docs/bluetooth_vehicles.md`'s "Troubleshooting: Enable Debug Logging" section for the user-facing format; `tests/test_command_logging.py` locks in the exact line shapes.
-- **`_log_request_result` (`fleet.py`) must tolerate any JSON-legal REST body, not just dicts**: it runs after the HTTP request already succeeded, so it's a logging convenience only — a non-dict body (`null`, a list, a bare scalar) must never raise there. It guards with `isinstance(data, dict)` before calling `.get()`, logging `result=success` and returning for anything else. Regression tests in `tests/test_command_logging.py`.
-- **Typed accessor pattern for undocumented raw-dict responses**: `TeslemetryEnergySite.find_authorized_clients()` and `find_gateway_address()` (`teslemetry/energysite.py`) are frozen-dataclass typed wrappers over raw `dict[str, Any]`/`None`/`list` REST responses, so API-parsing logic (envelope unwrap, field lookup, shape validation, enum typing) lives in the library instead of each consumer reimplementing it. Any future typed accessor over an undocumented response shape should keep two rules: (1) field lookup must check key presence (`key in payload`), never `payload.get(key) or default` — a legal falsy value is not "missing"; (2) a `None` body and an unrecognized response shape are malformed data, not "empty" — raise `InvalidResponse` (`exceptions.py`) rather than collapsing to an empty/default result; only a genuinely well-formed-but-empty response should parse to an empty result without raising. `find_authorized_clients()`'s envelope unwrap accepts `{"response": {"authorized_clients": [...]}}` or `{"response": {"clients": [...]}}`, or a bare list. `find_gateway_address()` decodes `networking_status.ipv4_config.address` as either a raw big-endian uint32 (`struct.pack(">I", ...)`, not little-endian) or a dotted-quad string — the API has been observed serving both forms — considers only `eth`/`wifi` (never `gsm`), preferring whichever has `active_route` set and a decodable address; `0`/`0xFFFFFFFF` (and their string equivalents) are treated as undecodable. Tesla has not published an OpenAPI schema for these endpoints, so `const.py`'s enums are the schema of record; widen modeled fields only against a further live sample, not speculatively. Untyped escape-hatch methods (e.g. `list_authorized_clients()`) remain available alongside. Tests: `tests/test_teslemetry_authorized_clients.py`, `tests/test_teslemetry_gateway_address.py`.
-- **`_stream_sinks` peels subscription pushes off the command-reply queue before routing**: a `vehicleDataSubscription`'s pushes arrive addressed to us on the same domain queue (`_queues`) an ordinary command's reply uses, correlated by the subscribe request's own `request_uuid`. `_on_message` (`bluetooth.py`) checks `self._stream_sinks.get(msg.request_uuid)` before touching `_queues` — a match routes into that subscription's own bounded, drop-oldest `_StreamSink` instead, so `_send`'s pre-send drain can never discard a push and `_await_response` can never return one as an unrelated command's reply. `_register_stream_sink`/`_unregister_stream_sink` are the only entry points into the registry; there is no public subscription API yet. Tests: `tests/test_ble_stream_sink.py`.
-- **`VehicleAction`/`GetVehicleData` proto coverage is locked by test, not just by convention**: `tests/test_proto_coverage_lock.py` walks both descriptors and fails if any field has no wrapper (`commands.py`) or reader (`bluetooth.py`) and isn't on one of its two small, reasoned allowlists — keep that test in sync with any future `tesla-protocol` bump rather than special-casing new fields elsewhere. The only fields deliberately left unwrapped today are the 7-field push-style subscription/streaming family (`createStreamSession`/`streamMessage`/`vehicleDataSubscription`/`vehicleDataAck`/`vitalsSubscription`/`vitalsAck`/`cancelVehicleDataSubscription`, which need a public lifecycle/iterator API atop the private `_stream_sinks` routing above) and `getLegacyVehicleState` (ambiguous versus the pre-existing `getVehicleState`/`legacy_vehicle_state()` reader, pending live verification of how the two differ before wrapping a second method for what may be the same reply data). `getVehicleImageState` is wrapped as `vehicle_image_state()` (`commands.py`), which pages through chunked binary transfers. CarServer's `GetVehicleState` sub-state is exposed as `legacy_vehicle_state()` (`bluetooth.py`), matching the `VehicleData.legacy_vehicle_state` reply field name, to avoid confusion with `vehicle_state()` (VCSEC `VehicleStatus`, a different message/domain). `set_rate_tariff`/`add_managed_charging_site` (`commands.py`) take `tesla_protocol` message types directly for their deeply-nested arguments rather than a parallel flattened dataclass API.
-- **Energy-gateway authorized-client pairing has security- and protocol-specific constraints**: use RSA for LAN TEDapi v1r, treat `PENDING_VERIFICATION_TIMEOUT` as terminal, and account for presence-free key removal. The authoritative pairing, retry, encoding, and removal guidance is in `docs/energy_local_control.md`; enum values and API contracts live in `const.py` and the relevant method docstrings.
-- **`register_client()` (`teslemetry/teslemetry.py`) is Teslemetry-only OAuth Dynamic Client Registration (RFC 7591)**: a module-level function, not a `Teslemetry` instance method, since registration precedes having a `client_id` or access token — callers pass a bare `aiohttp.ClientSession`. It always registers a new client (no dedup/caching) and raises `TeslemetryRegistrationError` (`exceptions.py`) on transport failure, a non-2xx response, a non-JSON body, or a response missing a usable `client_id`; a non-dict-but-valid-JSON body (list/scalar) is treated as the same malformed-response error rather than raising an uncaught `AttributeError`. Fleet API and Tessie have no equivalent — don't add one speculatively. See `docs/teslemetry.md`'s "OAuth Dynamic Client Registration" section and `tests/test_teslemetry_register_client.py`.
-- **`False`, not `None`, is the "signing is disabled" value for `Commands.__init__`'s `private_key` (and `VehicleBluetooth.__init__`/`Vehicles.createBluetooth`/`VehiclesBluetooth.create`/`createBluetooth`'s `key`)**: `None` — the default and an explicit `None` — keeps its long-standing meaning of falling back to the parent's key, raising `ValueError("No private key.")` if it has none; `False` disables signing for a passive BLE listener that only observes broadcasts. `None` is deliberately *not* the opt-out: a caller already passing `private_key=None` to mean "I haven't got one" must keep getting that `ValueError`, not a silently unsignable vehicle. Because `False` and `None` are both falsy, every branch on this argument must test **identity** (`is False`/`is not None`) — a truthiness check (`if private_key:`) collapses the two states and reintroduces the bug. `self.private_key` is `EllipticCurvePrivateKey | None`, its `None` meaning signing-disabled — `_handshake` (reached by `_command`, i.e. every signed command, and by `_ensure_handshake`, used by signed reads) raises `SigningDisabled` (`exceptions.py`) up front rather than failing deep in the signing/crypto path. `pair()`'s fast path never calls `_handshake` (it builds and sends its own whitelist request directly), so it carries its own identical guard at the top instead — `_handshake` is not a single choke point every signed-session entry point routes through; each entry point that doesn't call it needs its own `self.private_key is None` check. Tests: `tests/test_ble_null_key.py`.
+- **Async**: all API methods are `async`; `aiohttp`, `aiofiles`, `bleak`.
+- **Enums**: custom `StrEnum`/`IntEnum` in `const.py` (not stdlib). `Region` is a
+  `Literal["na", "eu", "cn"]`, not an enum.
+- **Naming**: camelCase for instance attributes mirroring API structure
+  (`energySites`, `createFleet`); snake_case for endpoint method names.
+- **Seat indexing gotcha**: `Seat` is **0-indexed** (`FRONT_LEFT=0`) and is for
+  the manual seat heater/cooler paths (`remote_seat_heater_request`,
+  `remote_seat_cooler_request`). `AutoSeat` is **1-indexed** and is the correct
+  type for `remote_auto_seat_climate_request` on **both** backends — its values
+  equal Tesla's REST wire values and the proto `AutoSeatPosition_*` enum. Passing
+  a `Seat` to the auto-climate command is off-by-one.
+- **Protobuf oneof-by-string-kwargs bypasses pyright**:
+  `remote_seat_heater_request`/`remote_seat_cooler_request` (`commands.py`) build
+  their action message from a `dict` of literal field-name strings expanded as
+  `**kwargs`; a typo raises at call time, not at type-check time. Cross-check new
+  field-name strings against `tesla_protocol.command.car_server_pb2`.
+- **`navigation_gps_request`'s `order` is a raw int, not a callable enum**: the
+  protobuf `EnumTypeWrapper` is not an `IntEnum` class; pass `order=order`, which
+  protobuf accepts as a bare int for an enum field.
+- **Typed accessors over undocumented raw-dict responses** (e.g.
+  `TeslemetryEnergySite.find_authorized_clients`/`find_gateway_address`) keep
+  API-parsing logic in the library. Two rules for any new one: (1) field lookup
+  must check key presence (`key in payload`), never `payload.get(key) or default`
+  — a legal falsy value is not "missing"; (2) a `None` body or an unrecognized
+  shape is malformed data — raise `InvalidResponse`, never collapse it to an
+  empty result. Only a well-formed-but-empty response parses to empty. Tesla
+  publishes no schema for these endpoints, so `const.py`'s enums are the schema of
+  record: widen modeled fields only against a further live sample. Untyped
+  escape hatches (`list_authorized_clients()`) stay available alongside.
+- **`register_client()` (`teslemetry/teslemetry.py`) is Teslemetry-only** OAuth
+  Dynamic Client Registration (RFC 7591) — a module-level function, not a
+  `Teslemetry` method, since registration precedes having a `client_id` or token.
+  It always registers a new client (no dedup) and raises
+  `TeslemetryRegistrationError` on transport failure, non-2xx, non-JSON, non-dict,
+  or a body with no usable `client_id`. Fleet API and Tessie have no equivalent —
+  don't add one speculatively.
+
+## Cross-Transport Behaviour
+
+Command logging happens at exactly five chokepoints: `Commands`'
+`_sendVehicleSecurity`/`_getVehicleSecurity`/`_sendInfotainment`/`_getInfotainment`
+(BLE and Fleet-signed) and `TeslaFleetApi._request` (REST), all emitting
+`command=<name> transport=<t> result=...`. `transport` comes from a
+`_transport_name` `ClassVar` per concrete class — **add that ClassVar to any new
+`Commands`/`TeslaFleetApi` subclass.** For signed transports `command` is *not*
+the Python method name but the populated protobuf oneof field (`door_lock()` logs
+as `RKE_ACTION_LOCK`). `Router._dispatch` logs its own per-backend line. Exact
+line shapes are locked by `tests/test_command_logging.py`.
+
+`_log_request_result` (`fleet.py`) runs after a successful request and must never
+raise on any JSON-legal body — it guards with `isinstance(data, dict)` before
+`.get()`.
+
+**Cross-transport parity**: the same-named command on REST `VehicleFleet` and BLE
+`Commands` must build a semantically equivalent instruction from identical args;
+a divergence is a bug. Response *bodies* legitimately differ (REST JSON vs decoded
+protobuf). `tests/test_cross_transport_parity.py` locks this in and documents the
+known non-bug form differences — check it before "fixing" one.
+
+Vehicle-side behaviours that look like library bugs but are not:
+
+- **`remote_heater_control_enabled`** (`climate_state()`) is a read-only
+  vehicle-side setting with no command to flip it, and gates every remote comfort
+  action (seat heater/cooler, steering wheel heat, auto seat climate). With it
+  `false` the vehicle ACKs `{"result": false, "reason": "cabin comfort remote
+  settings not enabled"}` and changes nothing.
+- **`scheduled_charging_mode` is tri-state and shared**: `set_scheduled_charging`
+  and `set_scheduled_departure` both write it (Off/StartAt/DepartBy). Disabling
+  one while the other is active turns the whole feature Off. A caller toggling one
+  must read `charge_state()` first and restore the exact prior mode.
+- **`set_scheduled_departure`'s `preconditioning_enabled`/
+  `off_peak_charging_enabled` args are dead**: `ScheduledDepartureAction` has only
+  `preconditioning_times`/`off_peak_charging_times` (weekday recurrence, no on/off).
+- **`charge_standard()` rejects `already_standard`**: calling it when
+  `charge_limit_soc` already equals `charge_limit_soc_std` returns
+  `{"result": False, "reason": "already_standard"}`, not a no-op success.
+
+## BLE
+
+User-facing behaviour, examples and the confirmation-ladder table live in
+`docs/bluetooth_vehicles.md`. The invariants below are what code changes must not
+break.
+
+- **Discovery**: a Tesla advertises no 128-bit service UUID pre-connect — only its
+  VIN-derived local name (`^S[a-f0-9]{16}[CDRP]$`), and only in the scan response.
+  **Never pass `service_uuids=[SERVICE_UUID]` as a `BleakScanner` filter** — it
+  hides the vehicle on a direct BlueZ adapter (an ESPHome proxy doesn't enforce
+  the filter the same way, which masks the bug in testing). Scan unfiltered with
+  active scanning and match by name; `SERVICE_UUID` is for post-connect GATT only.
+- **`bleak` client/scanner must be resolved dynamically**: both BLE modules
+  (`tesla/vehicle/bluetooth.py`, `tesla/bluetooth.py`) `import bleak` and
+  reference `bleak.BleakClient`/`bleak.BleakScanner` at call time, never
+  `from bleak import BleakClient`. Home Assistant's habluetooth replaces those
+  module attributes at runtime with a proxy-aware client; a name captured at
+  import would permanently ignore that and use the local adapter. Keep type-only
+  imports under `TYPE_CHECKING`; tests patch the canonical `bleak.*` names.
+- **Domain routing**: `Domain` has more values than `_queues` has keys (only
+  `DOMAIN_VEHICLE_SECURITY`/`DOMAIN_INFOTAINMENT`). `_on_message` must look up
+  `_queues` with `.get()` and drop unrecognized domains — indexing raises
+  `KeyError` inside the `ReassemblingBuffer` callback, aborting reassembly of
+  every already-buffered message in that notification.
+- **`ReassemblingBuffer` resets on a >`STALE_CHUNK_TIMEOUT` (1s) inter-chunk gap**,
+  not only on decode failure, mirroring Tesla's Go SDK `rxTimeout`. Without it a
+  dropped chunk leaves a stale partial that corrupts the next message.
+- **`_stream_sinks` peels subscription pushes off the command-reply queue**: a
+  `vehicleDataSubscription`'s pushes arrive on the same domain queue a command
+  reply uses, correlated by the subscribe request's `request_uuid`. `_on_message`
+  checks `_stream_sinks` before touching `_queues`, so `_send`'s pre-send drain
+  can't discard a push and `_await_response` can't return one as an unrelated
+  reply. `_register_stream_sink`/`_unregister_stream_sink` are the only entry
+  points; there is no public subscription API yet.
+- **Mutating-command timeouts are inconclusive — never assume "the write didn't
+  land"**: a mutating VCSEC/RKE action can raise `BluetoothTimeout` yet have
+  physically executed. Snapshot state before acting and verify with a follow-up
+  read. Never blind-retry a non-idempotent command (toggles, volume steps,
+  schedule add/remove) on timeout alone.
+- **`Commands._command` can double-execute**: on `OPERATIONSTATUS_WAIT` or an
+  `INCORRECT_EPOCH`/`INVALID_TOKEN` fault it re-signs and re-sends the identical
+  command (3 attempts, then `{"result": False, "reason": "Too many retries"}`).
+  Harmless for idempotent commands, a real risk for toggles and step commands —
+  verify those by absolute state, never by counting invocations.
+- **`BluetoothUnconfirmedCommand` vs `BluetoothCommandFailed`**:
+  `_sendVehicleSecurity`/`_sendInfotainment` wrap a caught `BluetoothTimeout` into
+  `BluetoothUnconfirmedCommand` when the ladder is genuinely unresolved (the
+  vehicle may have executed). `BluetoothCommandFailed` is the distinct outcome
+  where a state check *proved* the command did not apply; it does **not** subclass
+  `BluetoothTimeout`. `Router` special-cases only the former (no replay). A plain
+  read (`_getVehicleSecurity`/`_getInfotainment`) raises unadorned
+  `BluetoothTimeout` — a read has no side effect to be unconfirmed about.
+- **Write-delivery certainty splits the two at the GATT write in `_send`**:
+  `BleakCharacteristicNotFoundError` is the only provably pre-submission failure
+  (bleak resolves `WRITE_UUID` before any backend I/O), so it alone stays
+  `BluetoothTransportError` and is safe for `Router` to retry. Every other
+  `BleakError`/`TimeoutError` from `write_gatt_char` happens inside backend I/O
+  where delivery is unprovable, so `_send` races any armed broadcast watcher for
+  the rest of the window and otherwise raises plain `BluetoothTimeout`.
+  `_send_optimistic` gets the same treatment explicitly since it bypasses the
+  ladder. Tests: `test_ble_send_transport.py`, `test_ble_write_timeout_router.py`.
+- **The confirmation ladder is one `confirmation` enum plus one
+  `raise_unconfirmed` bool**: `confirmation` (`"optimistic" | "ack" | "verify"`,
+  default `"ack"`) picks how many of write → ack-or-broadcast wait → state-read
+  run; `raise_unconfirmed` (default `False`) picks what happens when the ladder
+  still can't tell. `"optimistic"` signs and writes but never waits — a provably
+  pre-submission write failure still raises `BluetoothTransportError`, but a
+  submitted-then-ambiguous write follows `raise_unconfirmed` like every other
+  rung. `"verify"` adds a post-timeout state read (`_resolve_timeout` against
+  `_vcsec_verify_plan`/`_INFOTAINMENT_VERIFY_PLANS`, covering only clearly
+  derivable absolute commands) returning success on a match,
+  `BluetoothCommandFailed` on a proven mismatch, or `None` (falls through to
+  `raise_unconfirmed`) if the read itself failed. Commands with no plan (true
+  toggles, relative steps, ack-only actions) always fall through. The legacy
+  `optimistic`/`verify_commands` booleans are deprecated: both warn and map onto
+  `confirmation`, and survive as read-only properties.
+- **Broadcast-as-confirmation races the ack wait for lock/unlock**: the vehicle
+  keeps emitting unsolicited VCSEC status broadcasts even when it emits no
+  addressed ack. `_send`'s `confirm_broadcast` arms a per-domain watcher
+  (`_broadcast_watchers`) that decodes broadcast frames and races them against the
+  addressed reply; first to satisfy the plan's predicate wins, and only the
+  addressed path can raise a car-side rejection. A mismatching broadcast does not
+  fail fast (a later one could still confirm), but a mismatch standing at
+  window-end raises `BluetoothCommandFailed` rather than an ambiguous timeout.
+  Reuses the `"verify"` rung's predicate; currently only lock/unlock has an
+  observed status broadcast. Tests: `test_ble_broadcast_confirmation.py`.
+- **`expects_data` splits reply-waiting**: a VCSEC read replies with a bare ACK
+  **then** a data frame; a VCSEC actuation replies with a **single bare ACK only**.
+  `_send` cannot tell them apart, so the caller declares it — `_sendVehicleSecurity`
+  passes `expects_data=False` (returns on the matching ACK, and on a lost ack
+  reaches the unresolved outcome after the shorter `_actuation_timeout` rather than
+  `_default_timeout`); everything else keeps the default `True`.
+- **`pair()` confirms two ways and writes the whitelist op exactly once**: the
+  success frame is single-shot and lost forever if the link cycles while the user
+  walks to the car. `pair()` waits one `poll_interval` for the reply, then polls
+  `_pair_probe()` (a VCSEC `_handshake` with our own key, which faults
+  `NotOnWhitelistFault` until whitelisted; any `TeslaFleetError` means "not yet",
+  so polling survives reconnects) until `timeout`. **Never re-send the whitelist
+  op** — it re-prompts the user. Deadline with neither path confirming raises
+  `BluetoothTimeout`.
+- **Idle keepalive**: an idle held link to the vehicle drops at ~42s mean; a
+  trivial passive GATT read on an idle cadence extends the session ~10x, so
+  `keepalive_interval` (default `DEFAULT_KEEPALIVE_INTERVAL`, `None`/`0`
+  disables) starts one task per connection reading `VERSION_UUID` after that many
+  seconds of *genuine GATT idleness* — `_last_activity` is bumped by every `_send`
+  write and every notify, so an active session gets no extra traffic. The read is
+  bounded and best-effort: every attempt is timed out and swallows all failures
+  except `CancelledError`; it must never raise into user code, trigger reconnect,
+  or wake the car. Lifecycle is tied to the connection (started at the end of
+  `connect()`, cancelled-and-awaited in `disconnect()`). **Tradeoff**: these reads
+  keep an awake car awake and defer sleep — disable keepalive or disconnect when
+  the car should sleep.
+- **Broadcast listeners** (`tesla/vehicle/broadcast.py`): `VehicleBluetooth` fans
+  VCSEC status broadcasts out to long-lived per-field listeners from the same
+  `_on_message`. Each modeled `VehicleStatus` leaf has a typed `listen_<field>`;
+  anything not decoded is covered by `listen_broadcast(domain, callback)`.
+  Closure/tonneau-percent listeners gate on `HasField` (real proto3 presence); the
+  five scalar enum fields have none, so they fire on **every** status broadcast,
+  not only on change. Each returns an `unsubscribe()`; registries live for the
+  instance's lifetime and survive reconnects, like `_queues`. Callback exceptions
+  are logged and isolated from later listeners and message routing, except
+  `KeyboardInterrupt`/`SystemExit`.
+  `listen_connection_status()` reports session transitions including unexpected
+  transport loss; the contract is `docs/bluetooth_vehicles.md#connection-status-events`.
+- **`BleBroadcastStreamGlue` (`tesla/vehicle/stream_glue.py`) never imports
+  `teslemetry_stream`**: it wires BLE broadcast listeners to `sink.ingest(data,
+  metadata)` against a local structural `StreamSink` `Protocol`, the same
+  duck-typed pattern `EnergySiteRouter` uses — `TeslemetryStream`'s `ingest()`
+  satisfies it with no coupling or dependency either direction. It reuses
+  `funnel.py`'s `LOCK_STATES`/`CLOSURE_STATES` (module-level, not underscore-private,
+  precisely so this cross-module import is legal under strict pyright) and adds
+  `GEAR_STATES`/`TONNEAU_POSITION_STATES` for the two fields teslemetry-stream
+  carries as `<Prefix><Option>` wire strings (`"ShiftStateP"`), verified against
+  that package's listeners rather than guessed. Unmapped by design: tonneau
+  OPENING/CLOSING (no in-transit state to translate to), plus sleep status (the
+  `ingest()` payload is always nested under the signal-topic key, with no way to
+  produce a `state`-topic event), user presence and UI desire (no `Signal` entry
+  upstream). Push-only — no demand gating, since VCSEC broadcasts regardless of
+  listeners. `stop()` unsubscribes everything and is idempotent.
+- **`False`, not `None`, is the "signing disabled" value** for `Commands.__init__`'s
+  `private_key` (and the `key` argument of `VehicleBluetooth.__init__` and the
+  `create*` factories). `None` keeps its long-standing meaning of falling back to
+  the parent's key and raising `ValueError("No private key.")` if it has none; a
+  caller passing `None` to mean "I haven't got one" must keep getting that error,
+  not a silently unsignable vehicle. **Because `False` and `None` are both falsy,
+  every branch on this argument must test identity (`is False`/`is not None`)** —
+  a truthiness check collapses the two states. `self.private_key is None` means
+  signing-disabled and makes `_handshake` raise `SigningDisabled` up front.
+  `_handshake` is **not** a single choke point: `pair()`'s fast path builds and
+  sends its own whitelist request, so it carries its own identical guard — any new
+  signed-session entry point that skips `_handshake` needs one too.
+
+### Vehicle-side BLE behaviours (not library bugs)
+
+- **Infotainment boot delay**: `wake_up()` is VCSEC and returns as soon as the
+  vehicle-security computer acks, well before infotainment can complete a signed
+  handshake. An INFO read/command issued immediately after can raise
+  `BluetoothTimeout` through no fault of its own — retry with backoff. `wake_up()`
+  is best-effort: an unresolved wake is an inconclusive signal, not failure.
+  Confirm readiness with a cheap INFO read, and hold one connection across a batch
+  of related commands rather than reconnecting between each.
+- **`vehicle_data()` response-size cap**: the vehicle's signed-command
+  implementation enforces its own response-size limit independent of BLE
+  reassembly. One endpoint succeeds; as few as **two** `BluetoothVehicleData`
+  endpoints together reliably raise
+  `TeslaFleetMessageFaultResponseSizeExceedsMTU`. That is why the BLE
+  `vehicle_data()` has no all-endpoints default — prefer the per-substate readers.
+- **Individual doors have no reliable powered close** (Model 3): `open_*_door()`
+  unlatches over VCSEC, and an ack from a close command only means the car
+  accepted it, not that the door re-latched — a human must push it shut. Never
+  chain an automated snapshot→act→verify→restore cycle across an individual
+  door-open command.
+- **Media state observability**: `MediaState.now_playing_artist/title` and all of
+  `MediaDetailState` are only populated for some sources (USB/Bluetooth, not
+  Spotify), so `media_next_track`/`media_prev_track`/`media_next_fav`/
+  `media_prev_fav` are not reliably state-observable — verify by ACK and pair with
+  the inverse command. `audio_volume`/`media_playback_status` are reliable provers.
 
 ## Maintaining this file
 
