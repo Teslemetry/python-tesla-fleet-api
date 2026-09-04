@@ -111,7 +111,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
         secondary: SecondaryT,
         *more_backends: Any,
         health: HealthCheck | None = None,
-    ):
+    ) -> None:
         # The two-argument ``Router(primary, secondary, health=...)`` form is
         # preserved exactly; additional positional backends extend the chain.
         self._backends = (primary, secondary, *more_backends)

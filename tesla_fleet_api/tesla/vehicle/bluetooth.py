@@ -161,7 +161,7 @@ class ReassemblingBuffer:
     the next chunk doesn't arrive within ``STALE_CHUNK_TIMEOUT``.
     """
 
-    def __init__(self, callback: Callable[[RoutableMessage], None]):
+    def __init__(self, callback: Callable[[RoutableMessage], None]) -> None:
         """
         Initializes the buffer.
 
@@ -529,7 +529,7 @@ class VehicleBluetooth(
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-    ):
+    ) -> None:
         """Initialize a BLE-connected vehicle.
 
         ``verify_commands`` and ``optimistic`` are deprecated aliases for

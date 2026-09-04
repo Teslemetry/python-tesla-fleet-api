@@ -15,7 +15,7 @@ class TeslaFleetError(BaseException):
 
     def __init__(
         self, data: dict[str, Any] | str | None = None, status: int | None = None
-    ):
+    ) -> None:
         LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status

@@ -317,7 +317,7 @@ class Session(Generic[CommandParentT]):
 
     _response_counter_cache_size = 256
 
-    def __init__(self, parent: Commands[CommandParentT], domain: Domain):
+    def __init__(self, parent: Commands[CommandParentT], domain: Domain) -> None:
         self.parent: Commands[CommandParentT] = parent
         self.domain: Domain = domain
         self.counter: int = 0
@@ -443,7 +443,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         vin: str,
         private_key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
         public_key: bytes | None = None,
-    ):
+    ) -> None:
         """Initialize with a signing key, or ``private_key=False`` to disable signing.
 
         ``None`` (the default, and an explicit ``None``) keeps the long-standing

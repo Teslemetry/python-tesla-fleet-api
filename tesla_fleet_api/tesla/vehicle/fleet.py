@@ -29,7 +29,7 @@ FleetParentT = TypeVar("FleetParentT", bound="TeslaFleetApi")
 class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
 
-    def __init__(self, parent: FleetParentT, vin: str):
+    def __init__(self, parent: FleetParentT, vin: str) -> None:
         super().__init__(parent, vin)
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 

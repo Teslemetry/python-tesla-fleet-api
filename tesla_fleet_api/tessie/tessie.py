@@ -19,7 +19,7 @@ class Tessie(TeslaFleetApi):
         access_token: str,
         wait_for_completion: bool = True,
         max_attempts: int = 3,
-    ):
+    ) -> None:
         """Initialize the Tessie API."""
 
         self.session = session
