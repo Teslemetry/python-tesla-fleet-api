@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 class Charging:
     """Class describing the Tesla Fleet API charging endpoints."""
 
-    def __init__(self, parent: "TeslaFleetApi"):
+    def __init__(self, parent: "TeslaFleetApi") -> None:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
     async def history(

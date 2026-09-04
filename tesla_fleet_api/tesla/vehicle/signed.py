@@ -23,7 +23,7 @@ class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
     _auth_method = "hmac"
     _transport_name = "fleet"
 
-    def __init__(self, parent: SignedParentT, vin: str):
+    def __init__(self, parent: SignedParentT, vin: str) -> None:
         """Initialize the VehicleSigned class."""
         super().__init__(parent, vin)
         super(Commands, self).__init__(parent, vin)

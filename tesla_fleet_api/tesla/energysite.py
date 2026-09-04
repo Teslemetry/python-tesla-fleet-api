@@ -24,7 +24,7 @@ class EnergySite:
 
     energy_site_id: int
 
-    def __init__(self, parent: TeslaFleetApi, energy_site_id: int):
+    def __init__(self, parent: TeslaFleetApi, energy_site_id: int) -> None:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
 
@@ -424,7 +424,7 @@ class EnergySites(dict[int, EnergySite]):
     _parent: TeslaFleetApi
     Site = EnergySite
 
-    def __init__(self, parent: TeslaFleetApi):
+    def __init__(self, parent: TeslaFleetApi) -> None:
         self._parent = parent
 
     def create(self, energy_site_id: int) -> EnergySite:

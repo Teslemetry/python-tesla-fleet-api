@@ -29,7 +29,7 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
     Signed: type[VehicleSigned[FleetParentT]] = VehicleSigned
     Bluetooth: type[VehicleBluetooth[FleetParentT]] = VehicleBluetooth
 
-    def __init__(self, parent: FleetParentT):
+    def __init__(self, parent: FleetParentT) -> None:
         self._parent = parent
 
     def createFleet(self, vin: str) -> VehicleFleet[FleetParentT]:
@@ -99,7 +99,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     _parent: BluetoothClientT
     Bluetooth: type[VehicleBluetooth[BluetoothClientT]] = VehicleBluetooth
 
-    def __init__(self, parent: BluetoothClientT):
+    def __init__(self, parent: BluetoothClientT) -> None:
         self._parent = parent
 
     def create(

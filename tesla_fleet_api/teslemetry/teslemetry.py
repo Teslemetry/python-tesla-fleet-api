@@ -102,7 +102,7 @@ class Teslemetry(TeslaFleetApi):
         session: aiohttp.ClientSession,
         access_token: str | Callable[[], Awaitable[str | None]],
         server: str = "https://api.teslemetry.com",
-    ):
+    ) -> None:
         """Initialize the Teslemetry API."""
 
         self.session = session
