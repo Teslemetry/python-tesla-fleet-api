@@ -172,10 +172,14 @@ asyncio.run(main())
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
 `get_private_key(path)` loads an existing EC private key or creates a new
-unencrypted PEM key file. Newly created key files are created owner-readable
-and owner-writable only (`0600`) from the start, with no write-then-chmod
-window, and concurrent creators fall back to reading the file that won the
-create race.
+unencrypted PEM key file, and `get_rsa_private_key(path)` does the same for an
+RSA key. Newly created key files are created owner-readable and
+owner-writable only (`0600`) from the start, with no write-then-chmod window,
+and concurrent creators fall back to reading the file that won the create
+race. If an existing key file can't be read, isn't valid PEM, is
+password-encrypted, or is the wrong key type, both raise `PrivateKeyError`
+(a `TeslaFleetError`) with a `reason` of `"unreadable"`, `"malformed"`,
+`"encrypted"`, or `"wrong_type"`.
 
 `VehicleBluetooth` keeps a held BLE connection alive during idle periods by
 default with a passive GATT read about every 20 seconds. Pass
