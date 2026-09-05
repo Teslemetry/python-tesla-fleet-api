@@ -43,6 +43,16 @@ def merge_local_into_cloud(
     return merged
 
 
+def merge_live_status(cloud: dict[str, Any], local: dict[str, Any] | None) -> dict[str, Any]:
+    """Overlay a local Powerwall live_status onto the cloud document; see merge_local_into_cloud."""
+    return merge_local_into_cloud(cloud, local, LOCAL_LIVE_STATUS_KEYS)
+
+
+def merge_site_info(cloud: dict[str, Any], local: dict[str, Any] | None) -> dict[str, Any]:
+    """Overlay a local Powerwall site_info onto the cloud document; see merge_local_into_cloud."""
+    return merge_local_into_cloud(cloud, local, LOCAL_SITE_INFO_KEYS)
+
+
 class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
     """A :class:`Router` over energy-site instances.
 

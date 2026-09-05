@@ -9,7 +9,9 @@ import unittest
 from tesla_fleet_api.router import (
     LOCAL_LIVE_STATUS_KEYS,
     LOCAL_SITE_INFO_KEYS,
+    merge_live_status,
     merge_local_into_cloud,
+    merge_site_info,
 )
 
 
@@ -65,6 +67,37 @@ class TestMergeLocalIntoCloud(unittest.TestCase):
         result = merge_local_into_cloud(cloud, local, LOCAL_SITE_INFO_KEYS)
         self.assertEqual(result["backup_reserve_percent"], 30)
         self.assertEqual(result["default_real_mode"], "self_consumption")
+
+
+class TestMergeLiveStatus(unittest.TestCase):
+    def test_matches_generic_call_with_live_status_keys(self) -> None:
+        cloud = {"solar_power": 100, "grid_power": 50}
+        local = {"solar_power": 200, "some_unowned_field": "surprise"}
+        expected = merge_local_into_cloud(cloud, local, LOCAL_LIVE_STATUS_KEYS)
+        result = merge_live_status(cloud, local)
+        self.assertEqual(result, expected)
+        self.assertEqual(result["solar_power"], 200)
+        self.assertEqual(result["grid_power"], 50)
+        self.assertNotIn("some_unowned_field", result)
+
+    def test_local_none_passthrough(self) -> None:
+        cloud = {"solar_power": 100}
+        self.assertEqual(merge_live_status(cloud, None), cloud)
+
+
+class TestMergeSiteInfo(unittest.TestCase):
+    def test_matches_generic_call_with_site_info_keys(self) -> None:
+        cloud = {"backup_reserve_percent": 20, "default_real_mode": "self_consumption"}
+        local = {"backup_reserve_percent": 30}
+        expected = merge_local_into_cloud(cloud, local, LOCAL_SITE_INFO_KEYS)
+        result = merge_site_info(cloud, local)
+        self.assertEqual(result, expected)
+        self.assertEqual(result["backup_reserve_percent"], 30)
+        self.assertEqual(result["default_real_mode"], "self_consumption")
+
+    def test_local_none_passthrough(self) -> None:
+        cloud = {"backup_reserve_percent": 20}
+        self.assertEqual(merge_site_info(cloud, None), cloud)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ from tesla_fleet_api.router.energysite import (
     LOCAL_LIVE_STATUS_KEYS,
     LOCAL_SITE_INFO_KEYS,
     merge_local_into_cloud,
+    merge_live_status,
+    merge_site_info,
 )
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "LOCAL_LIVE_STATUS_KEYS",
     "LOCAL_SITE_INFO_KEYS",
     "merge_local_into_cloud",
+    "merge_live_status",
+    "merge_site_info",
 ]
