@@ -1,14 +1,8 @@
-import re
 from typing import Any
 
 import aiohttp
 
 from tesla_fleet_api.const import LOGGER
-
-_ENERGY_GATEWAY_RELAY_PATH_RE = re.compile(
-    r"/api/1/energy_sites/[^/]+/command/"
-    r"(add_authorized_client|authorized_clients|remove_authorized_client|networking_status)$"
-)
 
 
 class TeslaFleetError(BaseException):
@@ -395,21 +389,6 @@ class BadGateway(TeslaFleetError):
         "upstream server."
     )
     status = 502
-
-
-class EnergyGatewayUnreachable(BadGateway):
-    """The Powerwall energy gateway could not be reached via the gateway relay.
-
-    Teslemetry's gateway relay answers with a 502 (with or without a JSON
-    body) when a customer's Powerwall gateway has dropped off the network -
-    a retryable condition, not an ordinary API failure. Raised only for the
-    gateway-relay endpoints the local-control pairing/authorized-clients flow
-    uses (``add_authorized_client``, ``authorized_clients``,
-    ``remove_authorized_client``, ``networking_status``); a 502 from any
-    other endpoint raises the generic ``BadGateway`` instead.
-    """
-
-    message = "The Powerwall energy gateway could not be reached via the gateway relay."
 
 
 class ServiceUnavailable(TeslaFleetError):
@@ -1400,8 +1379,6 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     elif resp.status == 500:
         raise InternalServerError(data)
     elif resp.status == 502:
-        if _ENERGY_GATEWAY_RELAY_PATH_RE.search(resp.url.path):
-            raise EnergyGatewayUnreachable(data)
         raise BadGateway(data)
     elif resp.status == 503:
         raise ServiceUnavailable(data)

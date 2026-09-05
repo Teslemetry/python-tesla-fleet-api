@@ -1,9 +1,8 @@
-"""502 classification: gateway-relay endpoints vs. everything else.
+"""502 classification: always a TeslaFleetError, regardless of body shape.
 
-A 502 must always become a ``TeslaFleetError`` subclass, whether or not the
-response carries a JSON body - see ``tesla_fleet_api.exceptions.raise_for_status``.
-Only the Powerwall local-control gateway-relay endpoints get the specific
-``EnergyGatewayUnreachable``; every other 502 gets the generic ``BadGateway``.
+A 502 must always become a ``TeslaFleetError`` subclass instead of leaking a
+raw ``aiohttp.ClientResponseError`` - see
+``tesla_fleet_api.exceptions.raise_for_status``.
 """
 
 from contextlib import asynccontextmanager
@@ -13,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 from yarl import URL
 
 from tesla_fleet_api.const import Method
-from tesla_fleet_api.exceptions import BadGateway, EnergyGatewayUnreachable
+from tesla_fleet_api.exceptions import BadGateway
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
@@ -64,34 +63,30 @@ def _fake_response(
 
 
 class BadGatewayClassificationTests(IsolatedAsyncioTestCase):
-    async def test_gateway_relay_502_with_json_body_raises_energy_gateway_unreachable(
-        self,
-    ) -> None:
+    async def test_json_bodied_502_raises_bad_gateway(self) -> None:
         resp = _fake_response(
             path="/api/1/energy_sites/123/command/add_authorized_client",
             json_body={"error": "gateway unreachable"},
         )
         api = _make_api(response=resp)
-        with self.assertRaises(EnergyGatewayUnreachable):
+        with self.assertRaises(BadGateway):
             await api.request(
                 Method.POST, "api/1/energy_sites/123/command/add_authorized_client"
             )
 
-    async def test_gateway_relay_bodyless_502_raises_energy_gateway_unreachable(
-        self,
-    ) -> None:
+    async def test_bodyless_502_raises_bad_gateway(self) -> None:
         resp = _fake_response(
             path="/api/1/energy_sites/123/command/authorized_clients",
             content_type="text/plain",
             text_body="",
         )
         api = _make_api(response=resp)
-        with self.assertRaises(EnergyGatewayUnreachable):
+        with self.assertRaises(BadGateway):
             await api.request(
                 Method.GET, "api/1/energy_sites/123/command/authorized_clients"
             )
 
-    async def test_non_gateway_endpoint_502_raises_generic_bad_gateway(self) -> None:
+    async def test_non_gateway_endpoint_502_also_raises_bad_gateway(self) -> None:
         resp = _fake_response(
             path="/api/1/vehicles/123/vehicle_data",
             json_body={"error": "upstream error"},
@@ -99,8 +94,3 @@ class BadGatewayClassificationTests(IsolatedAsyncioTestCase):
         api = _make_api(response=resp)
         with self.assertRaises(BadGateway):
             await api.request(Method.GET, "api/1/vehicles/123/vehicle_data")
-        # And it must not be misclassified as gateway-unreachable.
-        try:
-            await api.request(Method.GET, "api/1/vehicles/123/vehicle_data")
-        except BadGateway as e:
-            self.assertNotIsInstance(e, EnergyGatewayUnreachable)
