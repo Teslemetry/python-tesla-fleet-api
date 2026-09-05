@@ -381,6 +381,16 @@ class InternalServerError(TeslaFleetError):
     status = 500
 
 
+class BadGateway(TeslaFleetError):
+    """The server, acting as a gateway, received an invalid response from an upstream server."""
+
+    message = (
+        "The server, acting as a gateway, received an invalid response from an "
+        "upstream server."
+    )
+    status = 502
+
+
 class ServiceUnavailable(TeslaFleetError):
     """Either an internal service or a vehicle did not respond (timeout)."""
 
@@ -1368,6 +1378,8 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise ClientClosedRequest(data)
     elif resp.status == 500:
         raise InternalServerError(data)
+    elif resp.status == 502:
+        raise BadGateway(data)
     elif resp.status == 503:
         raise ServiceUnavailable(data)
     elif resp.status == 504:
