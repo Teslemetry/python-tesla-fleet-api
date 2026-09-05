@@ -40,6 +40,19 @@ class TestMergeLocalIntoCloud(unittest.TestCase):
         result = merge_local_into_cloud(cloud, local, LOCAL_LIVE_STATUS_KEYS)
         self.assertEqual(result["grid_power"], 0)
 
+    def test_falsy_bool_local_value_is_overlaid(self) -> None:
+        cloud = {"island_status": "on_grid"}
+        local = {"island_status": False}
+        result = merge_local_into_cloud(cloud, local, LOCAL_LIVE_STATUS_KEYS)
+        self.assertEqual(result["island_status"], False)
+
+    def test_owned_key_present_with_none_keeps_cloud_value(self) -> None:
+        cloud = {"solar_power": 100, "grid_power": 50}
+        local = {"solar_power": None, "grid_power": 75}
+        result = merge_local_into_cloud(cloud, local, LOCAL_LIVE_STATUS_KEYS)
+        self.assertEqual(result["solar_power"], 100)
+        self.assertEqual(result["grid_power"], 75)
+
     def test_local_keys_outside_owned_set_are_ignored(self) -> None:
         cloud = {"solar_power": 100}
         local = {"solar_power": 200, "some_unowned_field": "surprise"}

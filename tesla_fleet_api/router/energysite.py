@@ -33,12 +33,17 @@ def merge_local_into_cloud(
     ownership test — a fixed owned-key set lets a caller overlay local
     readings without clobbering cloud values, and lets a local outage fall
     back to the cloud value instead of an unavailable one.
+
+    A key overlays only when it is owned, present in ``local``, and
+    ``local[key] is not None``; ``None`` means "not served this tick" and the
+    cloud value is kept, while any other falsy value (``0``, ``False``, ``""``)
+    still overlays.
     """
     merged = dict(cloud)
     if local is None:
         return merged
     for key in owned_keys:
-        if key in local:
+        if key in local and local[key] is not None:
             merged[key] = local[key]
     return merged
 
