@@ -1,5 +1,7 @@
 """Tesla Fleet API"""
 
+from typing import TYPE_CHECKING, Any
+
 __author__ = "hello@teslemetry.com"
 __version__ = "1.12.1"
 
@@ -21,7 +23,6 @@ from tesla_fleet_api.tariff import (
     get_tariff_periods,
     unwrap_tariff_v2,
 )
-from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 from tesla_fleet_api.tesla.vehicle.stream_glue import BleBroadcastStreamGlue, StreamSink
@@ -31,7 +32,10 @@ from tesla_fleet_api.teslemetry.teslemetry import (
     register_client,
 )
 from tesla_fleet_api.tessie.tessie import Tessie
-from tesla_fleet_api.util import firmware_at_least, firmware_compare
+from tesla_fleet_api.util import import_ble_class, firmware_at_least, firmware_compare
+
+if TYPE_CHECKING:
+    from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth as TeslaBluetooth
 
 __all__ = [
     "BleBroadcastPublisher",
@@ -47,7 +51,6 @@ __all__ = [
     "TariffRate",
     "TariffResolution",
     "TeslaFleetApi",
-    "TeslaBluetooth",
     "TeslaFleetOAuth",
     "Teslemetry",
     "TeslemetryClientRegistration",
@@ -61,3 +64,11 @@ __all__ = [
     "register_client",
     "unwrap_tariff_v2",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    # TeslaBluetooth requires bleak (the "ble" extra); import it lazily so
+    # importing this package doesn't require bleak to be installed.
+    if name == "TeslaBluetooth":
+        return import_ble_class("tesla_fleet_api.tesla.bluetooth", "TeslaBluetooth")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
