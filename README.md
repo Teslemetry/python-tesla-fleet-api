@@ -178,8 +178,9 @@ owner-writable only (`0600`) from the start, with no write-then-chmod window,
 and concurrent creators fall back to reading the file that won the create
 race. If an existing key file can't be read, isn't valid PEM, is
 password-encrypted, or is the wrong key type, both raise `PrivateKeyError`
-(a `TeslaFleetError`) with a `reason` of `"unreadable"`, `"malformed"`,
-`"encrypted"`, or `"wrong_type"`.
+(a `LibraryError`, not a `TeslaFleetError` - it's a local key-file failure,
+not an upstream Fleet API error) with a `reason` of `"unreadable"`,
+`"malformed"`, `"encrypted"`, or `"wrong_type"`.
 
 `VehicleBluetooth` keeps a held BLE connection alive during idle periods by
 default with a passive GATT read about every 20 seconds. Pass
