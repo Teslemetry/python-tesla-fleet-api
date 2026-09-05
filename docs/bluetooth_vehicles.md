@@ -39,11 +39,9 @@ async def main():
 asyncio.run(main())
 ```
 
-`get_private_key(path)` loads an existing EC private key or creates a new
-unencrypted PEM key file. Newly created key files are created owner-readable
-and owner-writable only (`0600`) from the start, with no write-then-chmod
-window, and concurrent creators fall back to reading the file that won the
-create race.
+See the [README](../README.md#bluetooth-for-vehicles) for
+`get_private_key(path)`'s create/load semantics and the `PrivateKeyError`
+raised for an unusable existing key file.
 
 ## Keeping the Connection Alive (`keepalive_interval`)
 
