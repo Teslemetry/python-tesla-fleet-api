@@ -266,6 +266,39 @@ and the `health` check).
 > status read (for example `live_status()`'s grid/island fields) before
 > trusting the response for anything actuation-critical.
 
+### Merge contract
+
+`EnergySiteRouter`'s per-command dispatch is **not** a merge - calling
+`router.live_status()` returns one whole source's response (local, or cloud on
+failover), not a blend of both. `PowerwallEnergySite.live_status()` reports all
+of the cloud response's keys but fills in `None` for the ones it cannot serve
+locally, so a consumer that wants "local readings where available, cloud
+otherwise" needs to merge the two responses itself, field by field.
+
+`tesla_fleet_api.router.energysite` provides that merge as a plain function,
+independent of `Router`:
+
+```python
+from tesla_fleet_api.router.energysite import (
+    LOCAL_LIVE_STATUS_KEYS,
+    LOCAL_SITE_INFO_KEYS,
+    merge_local_into_cloud,
+)
+
+cloud_status = await teslemetry_energysite.live_status()
+local_status = await local_energysite.live_status()
+merged = merge_local_into_cloud(cloud_status, local_status, LOCAL_LIVE_STATUS_KEYS)
+```
+
+- `LOCAL_LIVE_STATUS_KEYS` are the `live_status()` fields the local gateway can
+  actually serve; `LOCAL_SITE_INFO_KEYS` are the `site_info()` equivalent
+  (`backup_reserve_percent`, `default_real_mode`).
+- Only keys in the given set **and** present in `local` are overlaid onto a
+  copy of `cloud`; every other key keeps its cloud value.
+- If the local read failed entirely (`local is None`, e.g. the LAN call
+  raised), the result is just `cloud` - the same fallback-to-cloud behavior
+  `Router` gives non-merged commands.
+
 ## See also
 
 - [Fleet API for Energy Sites](fleet_api_energy_sites.md) - the cloud

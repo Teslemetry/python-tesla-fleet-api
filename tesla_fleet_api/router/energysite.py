@@ -1,6 +1,46 @@
 from __future__ import annotations
 
+from typing import Any
+
 from tesla_fleet_api.router.base import PrimaryT, Router, SecondaryT
+
+LOCAL_LIVE_STATUS_KEYS: frozenset[str] = frozenset(
+    {
+        "solar_power",
+        "energy_left",
+        "total_pack_energy",
+        "percentage_charged",
+        "battery_power",
+        "load_power",
+        "grid_power",
+        "generator_power",
+        "grid_status",
+        "island_status",
+    }
+)
+LOCAL_SITE_INFO_KEYS: frozenset[str] = frozenset(
+    {"backup_reserve_percent", "default_real_mode"}
+)
+
+
+def merge_local_into_cloud(
+    cloud: dict[str, Any], local: dict[str, Any] | None, owned_keys: frozenset[str]
+) -> dict[str, Any]:
+    """Overlay owned_keys present in local onto a copy of cloud; every other key keeps its cloud value.
+
+    ``PowerwallEnergySite.live_status()`` returns all cloud keys with ``None``
+    for the ones it cannot serve, so presence-in-response cannot be the
+    ownership test — a fixed owned-key set lets a caller overlay local
+    readings without clobbering cloud values, and lets a local outage fall
+    back to the cloud value instead of an unavailable one.
+    """
+    merged = dict(cloud)
+    if local is None:
+        return merged
+    for key in owned_keys:
+        if key in local:
+            merged[key] = local[key]
+    return merged
 
 
 class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
