@@ -13,6 +13,8 @@ from tesla_fleet_api.router import (
     LOCAL_LIVE_STATUS_KEYS,
     LOCAL_SITE_INFO_KEYS,
     merge_local_into_cloud,
+    merge_live_status,
+    merge_site_info,
 )
 from tesla_fleet_api.tesla.user import User
 from tesla_fleet_api.tesla.vehicle import (
@@ -45,4 +47,6 @@ __all__ = [
     "LOCAL_LIVE_STATUS_KEYS",
     "LOCAL_SITE_INFO_KEYS",
     "merge_local_into_cloud",
+    "merge_live_status",
+    "merge_site_info",
 ]

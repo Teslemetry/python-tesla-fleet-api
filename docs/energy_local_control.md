@@ -275,29 +275,29 @@ of the cloud response's keys but fills in `None` for the ones it cannot serve
 locally, so a consumer that wants "local readings where available, cloud
 otherwise" needs to merge the two responses itself, field by field.
 
-`tesla_fleet_api.router.energysite` provides that merge as a plain function,
-independent of `Router`:
+`tesla_fleet_api.router.energysite` provides that merge via two entry points,
+one per response shape:
 
 ```python
-from tesla_fleet_api.router.energysite import (
-    LOCAL_LIVE_STATUS_KEYS,
-    LOCAL_SITE_INFO_KEYS,
-    merge_local_into_cloud,
-)
+from tesla_fleet_api.router.energysite import merge_live_status, merge_site_info
 
 cloud_status = await teslemetry_energysite.live_status()
 local_status = await local_energysite.live_status()
-merged = merge_local_into_cloud(cloud_status, local_status, LOCAL_LIVE_STATUS_KEYS)
+merged = merge_live_status(cloud_status, local_status)
 ```
 
-- `LOCAL_LIVE_STATUS_KEYS` are the `live_status()` fields the local gateway can
-  actually serve; `LOCAL_SITE_INFO_KEYS` are the `site_info()` equivalent
+- `merge_live_status` overlays the `live_status()` fields the local gateway can
+  actually serve; `merge_site_info` does the same for `site_info()`
   (`backup_reserve_percent`, `default_real_mode`).
-- Only keys in the given set **and** present in `local` are overlaid onto a
+- Only keys the wrapper owns **and** present in `local` are overlaid onto a
   copy of `cloud`; every other key keeps its cloud value.
 - If the local read failed entirely (`local is None`, e.g. the LAN call
   raised), the result is just `cloud` - the same fallback-to-cloud behavior
   `Router` gives non-merged commands.
+
+Both wrappers call the underlying primitive, `merge_local_into_cloud(cloud,
+local, owned_keys)`, which is still public for a caller with its own key set
+(`LOCAL_LIVE_STATUS_KEYS`/`LOCAL_SITE_INFO_KEYS` are also exported).
 
 ## See also
 
