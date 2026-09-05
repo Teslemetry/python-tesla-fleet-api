@@ -397,10 +397,9 @@ an empty or `null` response even when it is not useful for proving local key
 readiness.
 
 `get_rsa_private_key(path)` loads an existing RSA private key for gateway
-client registration or creates a new unencrypted PEM key file. Newly created
-key files are created owner-readable and owner-writable only (`0600`) from the
-start, with no write-then-chmod window, and concurrent creators fall back to
-reading the file that won the create race.
+client registration or creates a new unencrypted PEM key file; see the
+[README](../README.md#bluetooth-for-vehicles) for its create/load semantics
+and the `PrivateKeyError` raised for an unusable existing key file.
 
 ### Available Commands
 
