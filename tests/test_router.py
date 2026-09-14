@@ -245,6 +245,134 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         self.assertIs(router.secondary, fallback)
 
 
+class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
+    """Behavioural tests for the optional ``on_error`` handler."""
+
+    async def test_handler_called_with_exception_backend_and_name_on_primary_failure(
+        self,
+    ):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+        calls = []
+
+        def on_error(exc, backend, name):
+            calls.append((exc, backend, name))
+            return True
+
+        router = VehicleRouter(primary, fallback, on_error=on_error)
+
+        result = await router.shared(1)
+
+        self.assertEqual(result, "fallback:1")
+        # Called once for the primary's failure, once for the fallback's success.
+        self.assertEqual(len(calls), 2)
+        exc, backend, name = calls[0]
+        self.assertIsInstance(exc, ConnectionError)
+        self.assertIs(backend, primary)
+        self.assertEqual(name, "shared")
+
+    async def test_handler_returning_true_continues_to_secondary(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+        router = VehicleRouter(
+            primary, fallback, on_error=lambda exc, backend, name: True
+        )
+
+        result = await router.shared(2)
+
+        self.assertEqual(result, "fallback:2")
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_handler_returning_false_reraises_and_skips_secondary(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+        router = VehicleRouter(
+            primary, fallback, on_error=lambda exc, backend, name: False
+        )
+
+        with self.assertRaises(ConnectionError):
+            await router.shared(3)
+
+        self.assertEqual(primary.shared_calls, 1)
+        self.assertEqual(fallback.shared_calls, 0)
+
+    async def test_async_handler_is_awaited(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+
+        async def on_error(exc, backend, name):
+            return False
+
+        router = VehicleRouter(primary, fallback, on_error=on_error)
+
+        with self.assertRaises(ConnectionError):
+            await router.shared(4)
+
+        self.assertEqual(fallback.shared_calls, 0)
+
+    async def test_no_handler_is_unchanged_behaviour(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+        router = VehicleRouter(primary, fallback)
+
+        result = await router.shared(5)
+
+        self.assertEqual(result, "fallback:5")
+
+    async def test_handler_called_with_none_exception_on_success(self):
+        primary = _FakePrimary()
+        fallback = _FakeFallback()
+        calls = []
+
+        def on_error(exc, backend, name):
+            calls.append((exc, backend, name))
+            return True
+
+        router = VehicleRouter(primary, fallback, on_error=on_error)
+
+        result = await router.shared(7)
+
+        self.assertEqual(result, "primary:7")
+        self.assertEqual(calls, [(None, primary, "shared")])
+
+    async def test_handler_called_with_none_exception_on_fallback_success(self):
+        primary = _FakePrimary(fail=True)
+        fallback = _FakeFallback()
+        calls = []
+
+        def on_error(exc, backend, name):
+            calls.append((exc, backend, name))
+            return True
+
+        router = VehicleRouter(primary, fallback, on_error=on_error)
+
+        result = await router.shared(8)
+
+        self.assertEqual(result, "fallback:8")
+        self.assertEqual(len(calls), 2)
+        self.assertIsInstance(calls[0][0], ConnectionError)
+        self.assertIs(calls[0][1], primary)
+        self.assertEqual(calls[1], (None, fallback, "shared"))
+
+    async def test_unconfirmed_command_bypasses_handler(self):
+        primary = _FakePrimary(exc=BluetoothUnconfirmedCommand())
+        fallback = _FakeFallback()
+        calls = []
+
+        def on_error(exc, backend, name):
+            calls.append((exc, backend, name))
+            return True
+
+        router = VehicleRouter(primary, fallback, on_error=on_error)
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await router.shared(6)
+
+        self.assertEqual(calls, [])
+        self.assertEqual(fallback.shared_calls, 0)
+
+
 class _FakeBackend:
     """A generic ordered backend for N-way routing tests.
 

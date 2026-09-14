@@ -67,16 +67,25 @@ in `__init__`; scope flags on `TeslaFleetApi.__init__` control which are built.
 ### Router (command side)
 
 `Router` (`router/base.py`) is an entity-agnostic composition wrapper, not part
-of the inheritance chain: `Router(primary, secondary, *more, health=None)` chains
-backends sharing a method surface and dispatches each call down the chain with
-per-command failover — first backend that has the method, retried on the next on
-any exception, returning the first success (last error if all fail,
-`AttributeError` if none has the method). Non-callable attributes resolve to the
-first backend that has them.
+of the inheritance chain: `Router(primary, secondary, *more, health=None,
+on_error=None)` chains backends sharing a method surface and dispatches each
+call down the chain with per-command failover — first backend that has the
+method, retried on the next on any exception, returning the first success
+(last error if all fail, `AttributeError` if none has the method).
+Non-callable attributes resolve to the first backend that has them.
 
 - The health check gates **only the primary**; the rest of the chain is reached
   purely through per-command failover. There is deliberately no per-backend
   health matrix.
+- `on_error(exception, backend, method_name)` (sync or async) is called after
+  every dispatched call, success (`exception=None`, return ignored — the only
+  success hook) and failure alike; on failure (every per-command failover
+  exception except `BluetoothUnconfirmedCommand`) returning `False` stops
+  failover and re-raises immediately instead of trying the next backend,
+  letting a caller (e.g. Home Assistant reacting to a BLE key rejection via
+  `exceptions.is_key_rejected`) veto a retry it already knows will fail and run
+  its own side effect at the point of failure. Never fires for plain attribute
+  access, only for a dispatched callable.
 - Failover can double-execute a non-idempotent command that failed mid-flight.
   `BluetoothUnconfirmedCommand` is the one exception: it propagates without replay.
 
@@ -169,6 +178,11 @@ would not match. Sibling repos each carry their own copy rather than calling it.
 `raise_for_status()` raises the right one. Signed-command faults have separate
 hierarchies (`TeslaFleetInformationFault`, `TeslaFleetMessageFault`,
 `SignedMessageInformationFault`, `WhitelistOperationStatus`).
+`exceptions.is_key_rejected(exc)` is the positive allowlist of faults across
+those hierarchies that specifically mean the vehicle didn't recognize/accept
+our signing key (verified against each fault's proto enum meaning, not its
+name) — e.g. excludes `TeslaFleetMessageFaultKeychainIsFull`, whose proto
+meaning is "no room for another key", not "this key was rejected".
 
 **All exceptions inherit from `TeslaFleetError(BaseException)`, deliberately not
 `Exception`.** A bare `except Exception` (e.g. a retry loop around BLE reads)
