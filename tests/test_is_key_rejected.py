@@ -10,6 +10,7 @@ from tesla_fleet_api.exceptions import (
     SignedMessageInformationFaultNotOnWhitelist,
     SignedMessageInformationFaultTimeExpired,
     TeslaFleetMessageFaultInactiveKey,
+    TeslaFleetMessageFaultInvalidKeyHandle,
     TeslaFleetMessageFaultKeychainIsFull,
     TeslaFleetMessageFaultUnknownKeyId,
     TimeExpiredFault,
@@ -33,6 +34,9 @@ class IsKeyRejectedTests(TestCase):
     def test_true_for_unknown_key_id_and_inactive_key(self):
         self.assertTrue(is_key_rejected(TeslaFleetMessageFaultUnknownKeyId()))
         self.assertTrue(is_key_rejected(TeslaFleetMessageFaultInactiveKey()))
+
+    def test_true_for_invalid_key_handle(self):
+        self.assertTrue(is_key_rejected(TeslaFleetMessageFaultInvalidKeyHandle()))
 
     def test_false_for_keychain_full(self):
         # A full keychain means no room to add another key, not that this

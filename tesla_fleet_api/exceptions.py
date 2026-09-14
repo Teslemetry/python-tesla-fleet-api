@@ -1303,6 +1303,7 @@ KEY_REJECTED_FAULTS: tuple[type[TeslaFleetError], ...] = (
     SignedMessageInformationFaultCouldNotRetrieveKey,
     TeslaFleetMessageFaultUnknownKeyId,
     TeslaFleetMessageFaultInactiveKey,
+    TeslaFleetMessageFaultInvalidKeyHandle,
 )
 
 
