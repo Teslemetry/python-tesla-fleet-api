@@ -243,9 +243,28 @@ async def main():
 asyncio.run(main())
 ```
 
-The constructor is `Router(primary, secondary, *more_backends, health=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
+The constructor is `Router(primary, secondary, *more_backends, health=None, on_error=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
 
 By default the router attempts the primary and fails over on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
+
+You can also pass `on_error` — a sync or async callable `(exception, backend, method_name) -> bool` — to hook into every dispatched call's outcome, success or failure. On a backend exception during failover (every one except `BluetoothUnconfirmedCommand`) returning `True` lets failover continue to the next backend as normal, while `False` stops it and re-raises that exception immediately, so a command already known to fail on the next backend never gets sent there. On a successful call it's called the same way with `exception=None` and its return value ignored — the only hook available to observe a dispatch succeeding, e.g. to clear a repair a prior failure raised. For example, treating a BLE key rejection as terminal instead of falling over to the cloud, and clearing the repair once a command succeeds again:
+
+```python
+from tesla_fleet_api.exceptions import is_key_rejected
+
+def on_error(exc, backend, method_name):
+    if exc is None:
+        clear_repair(backend)  # a dispatched call just succeeded
+        return True
+    if is_key_rejected(exc):
+        raise_repair(backend)  # your own repair/notification logic
+        return False  # don't send this command to the cloud too
+    return True
+
+vehicle = VehicleRouter(primary, secondary, on_error=on_error)
+```
+
+`tesla_fleet_api.exceptions.is_key_rejected(exc)` reports whether a fault means the vehicle didn't recognize our signing key as paired/authorized (e.g. `NotOnWhitelistFault`), as opposed to any other signed-command fault.
 
 `EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
 

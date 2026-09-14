@@ -1290,6 +1290,34 @@ WHITELIST_OPERATION_STATUS = [
 ]
 
 
+# Every fault a vehicle can return that means it did not recognize/accept our
+# signing key as authorized to issue commands, verified against each fault's
+# proto enum meaning (``MessageFault_E``/``SignedMessage_information_E`` in
+# tesla-protocol's vcsec/universal_message protos) rather than its name alone.
+# ``TeslaFleetMessageFaultKeychainIsFull`` is deliberately excluded: its proto
+# meaning is "no room to add another key", not "this key was rejected".
+KEY_REJECTED_FAULTS: tuple[type[TeslaFleetError], ...] = (
+    NotOnWhitelistFault,
+    CouldNotRetrieveKeyFault,
+    SignedMessageInformationFaultNotOnWhitelist,
+    SignedMessageInformationFaultCouldNotRetrieveKey,
+    TeslaFleetMessageFaultUnknownKeyId,
+    TeslaFleetMessageFaultInactiveKey,
+    TeslaFleetMessageFaultInvalidKeyHandle,
+)
+
+
+def is_key_rejected(exc: BaseException) -> bool:
+    """Whether ``exc`` means the vehicle rejected our signing key.
+
+    True for a fault meaning the vehicle does not recognize our key as
+    whitelisted/paired (or could not retrieve/validate it), false for every
+    other fault, including transport errors and faults about an unrelated
+    signed-command condition (e.g. a full keychain).
+    """
+    return isinstance(exc, KEY_REJECTED_FAULTS)
+
+
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
