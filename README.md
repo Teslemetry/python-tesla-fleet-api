@@ -20,6 +20,19 @@ You can install the library using pip:
 pip install tesla-fleet-api
 ```
 
+Bluetooth support (`TeslaBluetooth`, `VehicleBluetooth`, `createBluetooth()`) pulls in
+`bleak` and `bleak-retry-connector`, so it ships as the optional `ble` extra rather than
+a base dependency — cloud-only consumers (Fleet API, Teslemetry, Tessie) don't need to
+carry it. If you use Bluetooth, install with:
+
+```bash
+pip install tesla-fleet-api[ble]
+```
+
+Existing installs that already depend on `bleak`/`bleak-retry-connector` directly, or
+that pin `tesla-fleet-api` without extras, keep working: add the `[ble]` extra (or keep
+your own `bleak` pin) to continue resolving those packages going forward.
+
 ## Usage
 
 ### Authentication

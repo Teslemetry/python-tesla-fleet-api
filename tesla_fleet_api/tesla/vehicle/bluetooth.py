@@ -17,7 +17,12 @@ from bleak_retry_connector import establish_connection
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.message import DecodeError
 
-from tesla_fleet_api.const import BluetoothConfirmation, BluetoothVehicleData, LOGGER
+from tesla_fleet_api.const import (
+    DEFAULT_KEEPALIVE_INTERVAL,
+    BluetoothConfirmation,
+    BluetoothVehicleData,
+    LOGGER,
+)
 from tesla_fleet_api.exceptions import (
     WHITELIST_OPERATION_STATUS,
     BluetoothCommandFailed,
@@ -119,10 +124,6 @@ READ_UUID = "00000213-b2d1-43f0-9b88-960cebf8b91e"
 VERSION_UUID = "00000214-b2d1-43f0-9b88-960cebf8b91e"
 NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb"
 APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
-
-# An idle held BLE link to the vehicle drops at ~42s mean; a trivial GATT read
-# every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
-DEFAULT_KEEPALIVE_INTERVAL = 20.0
 
 # The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
 # transient failures without delaying Router fallback for its full default.

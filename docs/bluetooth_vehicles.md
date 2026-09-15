@@ -2,6 +2,8 @@
 
 This document provides detailed examples for using Bluetooth for vehicles.
 
+Bluetooth support requires the `ble` extra: `pip install tesla-fleet-api[ble]`.
+
 ## Initialize TeslaBluetooth
 
 The `TeslaBluetooth` class provides methods to interact with Tesla vehicles using Bluetooth. Here's a basic example to initialize the `TeslaBluetooth` class and discover nearby Tesla vehicles:

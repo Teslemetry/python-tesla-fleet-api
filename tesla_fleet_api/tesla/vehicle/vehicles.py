@@ -1,21 +1,29 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
-from bleak.backends.device import BLEDevice
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from tesla_fleet_api.const import BluetoothConfirmation
+from tesla_fleet_api.const import DEFAULT_KEEPALIVE_INTERVAL, BluetoothConfirmation
 from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
-from tesla_fleet_api.tesla.vehicle.bluetooth import (
-    DEFAULT_KEEPALIVE_INTERVAL,
-    VehicleBluetooth,
-)
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
+from tesla_fleet_api.util import import_ble_class
 
 if TYPE_CHECKING:
+    from bleak.backends.device import BLEDevice
+
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
     from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
+    from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+
+
+def _import_vehicle_bluetooth() -> type["VehicleBluetooth[Any]"]:
+    """Import VehicleBluetooth on demand so the ``ble`` extra stays optional
+    for callers who never create a bluetooth vehicle."""
+    return import_ble_class(
+        "tesla_fleet_api.tesla.vehicle.bluetooth", "VehicleBluetooth"
+    )
+
 
 FleetParentT = TypeVar("FleetParentT", bound="TeslaFleetApi")
 BluetoothClientT = TypeVar("BluetoothClientT", bound="TeslaBluetooth")
@@ -27,10 +35,15 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
     _parent: FleetParentT
     Fleet: type[VehicleFleet[FleetParentT]] = VehicleFleet
     Signed: type[VehicleSigned[FleetParentT]] = VehicleSigned
-    Bluetooth: type[VehicleBluetooth[FleetParentT]] = VehicleBluetooth
 
     def __init__(self, parent: FleetParentT) -> None:
         self._parent = parent
+
+    @property
+    def Bluetooth(self) -> type[VehicleBluetooth[FleetParentT]]:
+        """The bluetooth vehicle class, imported on demand so the ``ble``
+        extra stays optional for callers who never create one."""
+        return _import_vehicle_bluetooth()
 
     def createFleet(self, vin: str) -> VehicleFleet[FleetParentT]:
         """Creates a Fleet API vehicle."""
@@ -97,10 +110,15 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
     """Class containing and creating bluetooth vehicles."""
 
     _parent: BluetoothClientT
-    Bluetooth: type[VehicleBluetooth[BluetoothClientT]] = VehicleBluetooth
 
     def __init__(self, parent: BluetoothClientT) -> None:
         self._parent = parent
+
+    @property
+    def Bluetooth(self) -> type[VehicleBluetooth[BluetoothClientT]]:
+        """The bluetooth vehicle class, imported on demand so the ``ble``
+        extra stays optional for callers who never create one."""
+        return _import_vehicle_bluetooth()
 
     def create(
         self,

@@ -23,9 +23,10 @@ dependencies = [
     "cryptography>=43",
     "protobuf>=6.32.0",
     "tesla-protocol>=1.4.0",
-    "bleak>=0.22",
-    "bleak-retry-connector>=3.9",
 ]
+
+[project.optional-dependencies]
+ble = ["bleak>=0.22", "bleak-retry-connector>=3.9"]
 
 [project.urls]
 "Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
