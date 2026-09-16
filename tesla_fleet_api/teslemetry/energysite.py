@@ -5,6 +5,7 @@ import base64
 import re
 import socket
 import struct
+import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, overload, cast
@@ -207,8 +208,16 @@ def parse_authorized_clients(payload: Any) -> AuthorizedClients:
     return AuthorizedClients(clients=clients, raw=payload)
 
 
-# Deprecated alias, kept for one release.
-_parse_authorized_clients = parse_authorized_clients
+def _parse_authorized_clients(  # pyright: ignore[reportUnusedFunction]
+    payload: Any,
+) -> AuthorizedClients:
+    """Deprecated alias for :func:`parse_authorized_clients`, kept for one release."""
+    warnings.warn(
+        "_parse_authorized_clients is deprecated; use parse_authorized_clients instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return parse_authorized_clients(payload)
 
 
 _GATEWAY_INTERFACES = ("eth", "wifi")
