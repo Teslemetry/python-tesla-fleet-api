@@ -96,20 +96,6 @@ class PublicParserImportTests(IsolatedAsyncioTestCase):
 
 
 class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
-    async def test_raw_true_returns_unparsed_response(self) -> None:
-        payload = {
-            "response": {
-                "authorized_clients": [
-                    {"public_key": PUBLIC_KEY_B64, "state": 3},
-                ]
-            }
-        }
-        site = _make_site(payload)
-
-        result = await site.find_authorized_clients(raw=True)
-
-        self.assertEqual(result, payload)
-
     async def test_default_raw_false_behaviour_unchanged(self) -> None:
         payload = {
             "response": {

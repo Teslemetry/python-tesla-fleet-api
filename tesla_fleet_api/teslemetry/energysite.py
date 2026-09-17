@@ -8,7 +8,7 @@ import struct
 import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Literal, overload, cast
+from typing import Any, cast
 
 from tesla_fleet_api.const import (
     AuthorizationRole,
@@ -406,15 +406,7 @@ class TeslemetryEnergySite(EnergySite):
             f"api/1/energy_sites/{self.energy_site_id}/command/authorized_clients",
         )
 
-    @overload
-    async def find_authorized_clients(
-        self, raw: Literal[False] = False
-    ) -> AuthorizedClients: ...
-    @overload
-    async def find_authorized_clients(self, raw: Literal[True]) -> dict[str, Any]: ...
-    async def find_authorized_clients(
-        self, raw: bool = False
-    ) -> AuthorizedClients | dict[str, Any]:
+    async def find_authorized_clients(self) -> AuthorizedClients:
         """List authorized clients on the energy gateway, parsed into a typed result.
 
         Prefer this over :meth:`list_authorized_clients` for consumers that
@@ -426,14 +418,9 @@ class TeslemetryEnergySite(EnergySite):
         treating either as "no clients". See :class:`AuthorizedClients` for
         the exact parsing semantics.
 
-        ``raw=True`` returns the unparsed response exactly as
-        :meth:`list_authorized_clients` does, skipping the typed parse - for
-        callers that want the same call shape aligned with the local
-        gateway path while still opting out of typing.
+        For the unparsed response, use :meth:`list_authorized_clients`.
         """
         response = await self.list_authorized_clients()
-        if raw:
-            return response
         return parse_authorized_clients(response)
 
     async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
