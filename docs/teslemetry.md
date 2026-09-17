@@ -559,6 +559,12 @@ an unrecognized response shape raises
 never mistaken for "no authorized clients". The raw response is still
 available on `raw` for anything not modeled.
 
+The parsing itself lives in the module-level
+`tesla_fleet_api.teslemetry.energysite.parse_authorized_clients` function,
+which other callers (e.g. a local/LAN client using the same envelope shape)
+can reuse directly to get the same `AuthorizedClients` result. For the
+unparsed response, use `list_authorized_clients()`.
+
 `remove_authorized_client(public_key)` accepts raw DER bytes or an already
 base64-encoded key string. Removal requires no physical presence proof, so any
 paired key can revoke every other key, including the owner's.
