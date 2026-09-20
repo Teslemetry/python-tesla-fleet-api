@@ -204,13 +204,11 @@ shims, not generated code. To pick up new message definitions, bump the floor in
 `pyproject.toml` — there is no local regeneration step.
 
 **Runtime-version pin (Home Assistant compatibility).** protobuf refuses to load
-gencode stamped *newer* than the installed runtime. Home Assistant core pins
-`protobuf==6.32.0`, so any `tesla-protocol` version depended on must stamp
-gencode **≤ 6.32.0** and declare a `protobuf` requirement compatible with
-`==6.32.0` — check both before bumping. Keep `pyproject.toml`'s `protobuf` floor
-in sync with what `tesla-protocol` requires, and keep the `tesla-protocol` floor
-at `>=1.4.0` (earlier `.pyi` imports fail strict pyright; 1.4.0 is also the first
-release allowing protobuf 7).
+gencode stamped *newer* than the installed runtime. Check Home Assistant core's
+current `protobuf` pin (`homeassistant/package_constraints.txt`) before bumping
+`tesla-protocol` — any version depended on must stamp gencode at or below that
+pin and declare a `protobuf` requirement compatible with it. Keep
+`pyproject.toml`'s `protobuf` floor in sync with what `tesla-protocol` requires.
 
 Command coverage is locked by `tests/test_proto_coverage_lock.py`, which fails if
 any `VehicleAction`/`GetVehicleData` field has no wrapper (`commands.py`) or
