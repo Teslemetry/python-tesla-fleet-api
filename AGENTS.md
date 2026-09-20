@@ -216,8 +216,12 @@ reader (`bluetooth.py`) and is not allowlisted with a reason — keep that test 
 sync with a `tesla-protocol` bump rather than special-casing new fields. Naming:
 `legacy_vehicle_state()` (`bluetooth.py`) reads CarServer's `GetVehicleState`
 sub-state; `vehicle_state()` is the VCSEC `VehicleStatus`, a different
-message/domain. `set_rate_tariff`/`add_managed_charging_site` take
-`tesla_protocol` message types directly rather than a parallel flattened API.
+message/domain. `set_rate_tariff` takes `tesla_protocol` message types directly
+rather than a parallel flattened API. `add_managed_charging_site` takes a
+flattened `(public_key, din, lat, lon)` API; `public_key` must already be
+converted from DER to a raw EC point (the Fleet API route does that
+conversion server-side, this one does not), and `din` is the gateway's DIN
+the vehicle uses to match the registration to the site controller.
 
 ## Code Style
 
