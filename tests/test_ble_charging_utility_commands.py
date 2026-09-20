@@ -63,16 +63,21 @@ class GetRateTariffTests(MockedBleTransportTestCase):
 
 
 class AddManagedChargingSiteTests(MockedBleTransportTestCase):
-    async def test_sends_public_key_and_coordinates(self) -> None:
+    async def test_sends_public_key_din_and_coordinates(self) -> None:
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.add_managed_charging_site("pubkey-bytes", 37.3230, -122.0322)
+        await vehicle.add_managed_charging_site(
+            "pubkey-bytes", "1232100-00-E-1234567890AB", 37.3230, -122.0322
+        )
 
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         site = vehicle_action.addManagedChargingSiteRequest.site
         self.assertEqual(site.public_key, "pubkey-bytes")
         self.assertTrue(site.manager_type.HasField("site_controller"))
+        self.assertEqual(
+            site.manager_type.site_controller.din, "1232100-00-E-1234567890AB"
+        )
         # LatLong lat/lon are 32-bit floats, so compare at reduced precision.
         self.assertAlmostEqual(site.lat_lon.latitude, 37.3230, places=4)
         self.assertAlmostEqual(site.lat_lon.longitude, -122.0322, places=4)
