@@ -26,11 +26,13 @@ from asyncio import Lock, sleep
 from tesla_fleet_api.exceptions import (
     MESSAGE_FAULTS,
     SIGNED_MESSAGE_INFORMATION_FAULTS,
+    WHITELIST_OPERATION_STATUS,
     NotOnWhitelistFault,
     SessionInfoAuthenticationFault,
     SignedCommandResponseReplayed,
     SigningDisabled,
     TeslaFleetError,
+    WhitelistOperationStatus,
     # TeslaFleetMessageFaultInvalidSignature,
     TeslaFleetMessageFaultIncorrectEpoch,
     TeslaFleetMessageFaultInvalidTokenOrCounter,
@@ -788,6 +790,16 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     vcsec.commandStatus.operationStatus
                     == OperationStatus_E.OPERATIONSTATUS_OK
                 ):
+                    info = vcsec.commandStatus.whitelistOperationStatus.whitelistOperationInformation
+                    if info:
+                        if info < len(WHITELIST_OPERATION_STATUS):
+                            exception = WHITELIST_OPERATION_STATUS[info]
+                            if exception:
+                                raise exception
+                        else:
+                            raise WhitelistOperationStatus(
+                                f"Unknown whitelist operation failure: {info}"
+                            )
                     return {"response": {"result": True, "reason": ""}}
                 elif (
                     vcsec.commandStatus.operationStatus
