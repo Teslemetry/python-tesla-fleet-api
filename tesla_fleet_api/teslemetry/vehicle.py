@@ -19,7 +19,6 @@ from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.const import LOGGER
 from tesla_fleet_api.teslemetry.const import SnapshotTopic
-from tesla_fleet_api.teslemetry.vehicle_telemetry import TeslemetryVehicleTelemetry
 
 if TYPE_CHECKING:
     from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
@@ -670,6 +669,44 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
 
         return TeslemetryVehicleTelemetry(self, topics)
 
+class TeslemetryVehicleTelemetry():
+    """A cursor aware Vehicle Telemetry reader"""
+
+    _parent: TeslemetryVehicle
+    _topics: str | None
+    cursor: int = 0
+    snapshot: dict[str, Any]
+
+    def __init__(
+        self,
+        parent: TeslemetryVehicle,
+        topics: list[SnapshotTopic] | list[str] | str | None = None,
+    ) -> None:
+        self._parent = parent
+        self._topics = ";".join(topics) if isinstance(topics, list) else topics
+        self.snapshot = {}
+
+    async def update(self) -> dict[str, Any]:
+        """Get a fresh telemetry snapshot of changes."""
+        update = await self._parent.telemetry(self._topics, self.cursor)
+        if not update["response"]:
+            raise ValueError("No response from telemetry")
+        self.cursor = update["response"]["cursor"]
+        if update["response"].get("state"):
+            self.snapshot["state"] = update["response"]["state"]
+        if update["response"].get("data"):
+            self.snapshot.setdefault("data", {})
+            for field, data in update["response"]["data"].items():
+                self.snapshot["data"][field] = data
+        if update["response"].get("connectivity"):
+            self.snapshot["connectivity"] = update["response"]["connectivity"]
+        if update["response"].get("alerts"):
+            self.snapshot["alerts"] = update["response"]["alerts"]
+        if update["response"].get("errors"):
+            self.snapshot["errors"] = update["response"]["errors"]
+        if update["response"].get("vehicle_data"):
+            self.snapshot["vehicle_data"] = update["response"]["vehicle_data"]
+        return update["response"]
 
 
 class TeslemetryVehicles(Vehicles["Teslemetry"]):
