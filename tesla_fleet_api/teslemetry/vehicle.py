@@ -18,6 +18,8 @@ from tesla_fleet_api.const import (
 from tesla_fleet_api.tesla.vehicle.vehicles import Vehicles
 from tesla_fleet_api.tesla.vehicle.fleet import VehicleFleet
 from tesla_fleet_api.const import LOGGER
+from tesla_fleet_api.teslemetry.const import SnapshotTopic
+from tesla_fleet_api.teslemetry.vehicle_telemetry import TeslemetryVehicleTelemetry
 
 if TYPE_CHECKING:
     from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
@@ -644,6 +646,30 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             Method.POST,
             f"api/1/vehicles/{self.vin}/custom_command/set_rate_tariff",
         )
+
+    async def telemetry(
+        self,
+        topics: list[SnapshotTopic] | list[str] | str | None = None,
+        cursor: int | None = None,
+    ) -> dict[str, Any]:
+        """Gets a snapshot of cached vehicle telemetry"""
+
+        return await self._request(
+            Method.GET,
+            f"api/1/vehicles/{self.vin}/telemetry",
+            params={
+                "topics": ";".join(topics) if isinstance(topics, list) else topics,
+                "cursor": cursor
+            }
+        )
+
+    def create_telemetry_tracker(
+        self, topics: list[SnapshotTopic] | list[str] | str | None = None
+    ) -> TeslemetryVehicleTelemetry:
+        """Create a snapshot of cached vehicle telemetry tracker"""
+
+        return TeslemetryVehicleTelemetry(self, topics)
+
 
 
 class TeslemetryVehicles(Vehicles["Teslemetry"]):
