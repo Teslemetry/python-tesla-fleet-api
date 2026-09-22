@@ -10,3 +10,4 @@ auth.json
 opensource.py
 *.pem
 .DS_Store
+build
