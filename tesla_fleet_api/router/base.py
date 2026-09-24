@@ -29,7 +29,7 @@ HealthCheck = Union[bool, Callable[[], bool], Callable[[], Awaitable[bool]]]
 # ignored - this is the only way to observe a *successful* dispatch (e.g. to
 # clear a repair raised by an earlier failure), since Router has no other
 # success hook.
-ErrorHandler = Callable[
+ResultHandler = Callable[
     [Union[BaseException, None], Any, str], Union[bool, Awaitable[bool]]
 ]
 
@@ -100,7 +100,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
     are always reached purely through per-command failover — there is deliberately
     no per-backend health matrix.
 
-    An optional ``on_error`` handler is called ``(exception, backend, method_name)``
+    An optional ``on_result`` handler is called ``(exception, backend, method_name)``
     after every dispatched call, success or failure — it is the only hook into
     dispatch outcomes, so it doubles as the success notification. On failure
     (a backend raising during per-command failover; ``BluetoothUnconfirmedCommand``
@@ -130,7 +130,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
 
     _backends: tuple[Any, ...]
     _health: HealthCheck | None
-    _on_error: ErrorHandler | None
+    _on_result: ResultHandler | None
 
     def __init__(
         self,
@@ -138,13 +138,13 @@ class Router(Generic[PrimaryT, SecondaryT]):
         secondary: SecondaryT,
         *more_backends: Any,
         health: HealthCheck | None = None,
-        on_error: ErrorHandler | None = None,
+        on_result: ResultHandler | None = None,
     ) -> None:
         # The two-argument ``Router(primary, secondary, health=...)`` form is
         # preserved exactly; additional positional backends extend the chain.
         self._backends = (primary, secondary, *more_backends)
         self._health = health
-        self._on_error = on_error
+        self._on_result = on_result
 
     async def is_healthy(self) -> bool:
         """Resolve an explicit health check to a bool.
@@ -209,16 +209,16 @@ class Router(Generic[PrimaryT, SecondaryT]):
                         type(e).__name__,
                         e,
                     )
-                    if self._on_error is not None and not await _maybe_await(
-                        self._on_error(e, backend, name)
+                    if self._on_result is not None and not await _maybe_await(
+                        self._on_result(e, backend, name)
                     ):
                         raise
                     continue
                 LOGGER.debug(
                     "command=%s backend=%s result=success", name, type(backend).__name__
                 )
-                if self._on_error is not None:
-                    await _maybe_await(self._on_error(None, backend, name))
+                if self._on_result is not None:
+                    await _maybe_await(self._on_result(None, backend, name))
                 return result
             # The loop always runs at least once (``start`` only advances past
             # the primary when a later backend remains), so a failure here means
@@ -234,7 +234,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
         # __getattr__ is only reached when normal lookup fails. Guard the private
         # attributes so an access before __init__ completes raises rather than
         # recursing infinitely through this method.
-        if name in ("_backends", "_health", "_on_error"):
+        if name in ("_backends", "_health", "_on_result"):
             raise AttributeError(name)
 
         backends = self._backends
