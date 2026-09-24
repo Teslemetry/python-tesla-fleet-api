@@ -245,8 +245,8 @@ class VehicleRouterTests(IsolatedAsyncioTestCase):
         self.assertIs(router.secondary, fallback)
 
 
-class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
-    """Behavioural tests for the optional ``on_error`` handler."""
+class RouterResultHandlerTests(IsolatedAsyncioTestCase):
+    """Behavioural tests for the optional ``on_result`` handler."""
 
     async def test_handler_called_with_exception_backend_and_name_on_primary_failure(
         self,
@@ -255,11 +255,11 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         fallback = _FakeFallback()
         calls = []
 
-        def on_error(exc, backend, name):
+        def on_result(exc, backend, name):
             calls.append((exc, backend, name))
             return True
 
-        router = VehicleRouter(primary, fallback, on_error=on_error)
+        router = VehicleRouter(primary, fallback, on_result=on_result)
 
         result = await router.shared(1)
 
@@ -275,7 +275,7 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         primary = _FakePrimary(fail=True)
         fallback = _FakeFallback()
         router = VehicleRouter(
-            primary, fallback, on_error=lambda exc, backend, name: True
+            primary, fallback, on_result=lambda exc, backend, name: True
         )
 
         result = await router.shared(2)
@@ -288,7 +288,7 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         primary = _FakePrimary(fail=True)
         fallback = _FakeFallback()
         router = VehicleRouter(
-            primary, fallback, on_error=lambda exc, backend, name: False
+            primary, fallback, on_result=lambda exc, backend, name: False
         )
 
         with self.assertRaises(ConnectionError):
@@ -301,10 +301,10 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         primary = _FakePrimary(fail=True)
         fallback = _FakeFallback()
 
-        async def on_error(exc, backend, name):
+        async def on_result(exc, backend, name):
             return False
 
-        router = VehicleRouter(primary, fallback, on_error=on_error)
+        router = VehicleRouter(primary, fallback, on_result=on_result)
 
         with self.assertRaises(ConnectionError):
             await router.shared(4)
@@ -325,11 +325,11 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         fallback = _FakeFallback()
         calls = []
 
-        def on_error(exc, backend, name):
+        def on_result(exc, backend, name):
             calls.append((exc, backend, name))
             return True
 
-        router = VehicleRouter(primary, fallback, on_error=on_error)
+        router = VehicleRouter(primary, fallback, on_result=on_result)
 
         result = await router.shared(7)
 
@@ -341,11 +341,11 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         fallback = _FakeFallback()
         calls = []
 
-        def on_error(exc, backend, name):
+        def on_result(exc, backend, name):
             calls.append((exc, backend, name))
             return True
 
-        router = VehicleRouter(primary, fallback, on_error=on_error)
+        router = VehicleRouter(primary, fallback, on_result=on_result)
 
         result = await router.shared(8)
 
@@ -360,11 +360,11 @@ class RouterErrorHandlerTests(IsolatedAsyncioTestCase):
         fallback = _FakeFallback()
         calls = []
 
-        def on_error(exc, backend, name):
+        def on_result(exc, backend, name):
             calls.append((exc, backend, name))
             return True
 
-        router = VehicleRouter(primary, fallback, on_error=on_error)
+        router = VehicleRouter(primary, fallback, on_result=on_result)
 
         with self.assertRaises(BluetoothUnconfirmedCommand):
             await router.shared(6)

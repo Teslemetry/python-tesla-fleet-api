@@ -68,7 +68,7 @@ in `__init__`; scope flags on `TeslaFleetApi.__init__` control which are built.
 
 `Router` (`router/base.py`) is an entity-agnostic composition wrapper, not part
 of the inheritance chain: `Router(primary, secondary, *more, health=None,
-on_error=None)` chains backends sharing a method surface and dispatches each
+on_result=None)` chains backends sharing a method surface and dispatches each
 call down the chain with per-command failover — first backend that has the
 method, retried on the next on any exception, returning the first success
 (last error if all fail, `AttributeError` if none has the method).
@@ -77,7 +77,7 @@ Non-callable attributes resolve to the first backend that has them.
 - The health check gates **only the primary**; the rest of the chain is reached
   purely through per-command failover. There is deliberately no per-backend
   health matrix.
-- `on_error(exception, backend, method_name)` (sync or async) is called after
+- `on_result(exception, backend, method_name)` (sync or async) is called after
   every dispatched call, success (`exception=None`, return ignored — the only
   success hook) and failure alike; on failure (every per-command failover
   exception except `BluetoothUnconfirmedCommand`) returning `False` stops
