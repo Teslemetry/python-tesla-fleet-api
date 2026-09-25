@@ -849,6 +849,14 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     }
                 if response.HasField("vehicleData"):
                     return {"response": response.vehicleData}
+                # Any other populated response_msg oneof member (e.g.
+                # getManagedChargingSitesResponse) is returned as the decoded
+                # proto under its field name, alongside result/reason, so an
+                # empty payload is distinguishable from an undecoded one.
+                payload_field = response.WhichOneof("response_msg")
+                data: dict[str, Any] = {}
+                if payload_field is not None:
+                    data[payload_field] = getattr(response, payload_field)
                 if response.HasField("actionStatus"):
                     return {
                         "response": {
@@ -856,8 +864,11 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                             == OperationStatus_E.OPERATIONSTATUS_OK,
                             "reason": response.actionStatus.result_reason.plain_text
                             or "",
+                            **data,
                         }
                     }
+                if data:
+                    return {"response": {"result": True, "reason": "", **data}}
 
         return {"response": {"result": True, "reason": ""}}
 
