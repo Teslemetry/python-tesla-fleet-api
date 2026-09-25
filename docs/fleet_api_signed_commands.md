@@ -375,3 +375,48 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Fleet Telemetry Configuration (signed JWS)
+
+Vehicles on the vehicle command protocol take their telemetry configuration as a
+signed JWS (the `fleet_telemetry_config_jws` endpoint Tesla's `vehicle-command`
+proxy uses). `VehicleSigned.fleet_telemetry_config_create` takes the same `{"vins": [...], "config": {...}}` body, signs `config` as a
+`Tesla.SS256` JWS with the command key (the one registered as your application's
+public key), and posts it to `fleet_telemetry_config_jws`. Any `iss`/`aud` in
+`config` are overwritten, matching Tesla's `vehicle-command` proxy.
+
+```python
+import asyncio
+import time
+import aiohttp
+from tesla_fleet_api import TeslaFleetApi
+from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        api = TeslaFleetApi(
+            access_token="<access_token>",
+            session=session,
+            region="na",
+        )
+        await api.get_private_key("private_key.pem")
+        vehicle = VehicleSigned(api, "<vin>")
+        response = await vehicle.fleet_telemetry_config_create(
+            {
+                "vins": ["<vin>"],
+                "config": {
+                    "hostname": "telemetry.example.com",
+                    "port": 443,
+                    "ca": "<PEM CA chain>",
+                    "exp": int(time.time()) + 30 * 24 * 3600,
+                    "fields": {"BatteryLevel": {"interval_seconds": 300}},
+                },
+            }
+        )
+        print(response)
+
+asyncio.run(main())
+```
+
+To sign without sending, `tesla_fleet_api.tesla.jws.sign_fleet_telemetry_config(private_key, config)`
+returns the token for `VehicleFleet.fleet_telemetry_config_jws(vins, token)`.

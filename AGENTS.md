@@ -51,6 +51,13 @@ Commands (vehicle/commands.py) - protobuf signed-command implementation (ABC)
   └── VehicleBluetooth (vehicle/bluetooth.py) - BLE transport
 ```
 
+`tesla/jws.py` is Tesla.SS256 (Schnorr/P-256 compact JWS, same EC command key)
+for `fleet_telemetry_config_jws`; only `VehicleSigned` overrides
+`fleet_telemetry_config_create` with it (BLE has no REST path). Signing is
+deterministic, so `tests/test_jws.py` locks it by byte-equality with Go SDK
+vectors in `tests/fixtures/ss256_vectors.json` — regenerate them with
+`ss256_vectors_gen.go`, never hand-edit, and don't add low-`s` normalisation.
+
 ### Vehicle Collections
 
 `Vehicles` (`vehicle/vehicles.py`) is a `dict[str, Vehicle]` with
