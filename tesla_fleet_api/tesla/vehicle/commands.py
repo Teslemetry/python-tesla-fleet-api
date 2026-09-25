@@ -44,6 +44,7 @@ from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 from tesla_fleet_api.const import (
     LOGGER,
     AutoSeat,
+    Level,
     Trunk,
     ClimateKeeperMode,
     CabinOverheatProtectionTemp,
@@ -267,11 +268,13 @@ CopActivationTemps = (
     ClimateState.CopActivationTemp.CopActivationTempHigh,
 )
 
-StwHeatLevels = (
-    StwHeatLevel.StwHeatLevel_Off,
-    StwHeatLevel.StwHeatLevel_Low,
-    StwHeatLevel.StwHeatLevel_High,
-)
+# Keyed by the REST wire value (Level), which accepts only 0, 1 and 3: the
+# protocol has no medium steering wheel heat level.
+StwHeatLevels: dict[int, StwHeatLevel] = {
+    Level.OFF: StwHeatLevel.StwHeatLevel_Off,
+    Level.LOW: StwHeatLevel.StwHeatLevel_Low,
+    Level.HIGH: StwHeatLevel.StwHeatLevel_High,
+}
 
 
 def vcsec_command_name(command: UnsignedMessage) -> str:
@@ -1656,13 +1659,20 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         )
 
     async def remote_steering_wheel_heat_level_request(
-        self, level: int
+        self, level: Level | int
     ) -> dict[str, Any]:
         """Sets steering wheel heat level.
 
-        The vehicle can reject remote comfort commands when
-        ``climate_state().remote_heater_control_enabled`` is false.
+        Accepts ``Level.OFF``, ``Level.LOW`` or ``Level.HIGH`` (0, 1, 3), the
+        same values as the REST route; there is no medium level, so any other
+        value raises ``ValueError``. The vehicle can reject remote comfort
+        commands when ``climate_state().remote_heater_control_enabled`` is
+        false.
         """
+        if level not in StwHeatLevels:
+            raise ValueError(
+                f"Invalid steering wheel heat level {level!r}; expected 0, 1 or 3"
+            )
         return await self._sendInfotainment(
             Action(
                 vehicleAction=VehicleAction(
