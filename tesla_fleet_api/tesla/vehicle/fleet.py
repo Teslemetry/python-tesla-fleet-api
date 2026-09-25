@@ -769,6 +769,21 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
             Method.POST, "api/1/vehicles/fleet_telemetry_config", json=config
         )
 
+    async def fleet_telemetry_config_jws(
+        self, vins: List[str], token: str
+    ) -> dict[str, Any]:
+        """Configures fleet telemetry with a Tesla.SS256-signed JWS token.
+
+        Build ``token`` with ``tesla_fleet_api.tesla.jws.sign_fleet_telemetry_config``
+        using the partner's registered command key, or call
+        ``VehicleSigned.fleet_telemetry_config_create`` to sign and send in one step.
+        """
+        return await self._request(
+            Method.POST,
+            "api/1/vehicles/fleet_telemetry_config_jws",
+            json={"vins": vins, "token": token},
+        )
+
     async def fleet_telemetry_config_get(self) -> dict[str, Any]:
         """Configures fleet telemetry."""
         return await self._request(

@@ -2126,8 +2126,14 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     async def fleet_telemetry_config_create(
         self, config: dict[str, Any]
     ) -> dict[str, Any]:
-        """Configures fleet telemetry."""
-        raise NotImplementedError
+        """Configures fleet telemetry.
+
+        Fleet telemetry configuration is a Fleet API request, not a vehicle
+        command, so only ``VehicleSigned`` implements it (as a signed JWS).
+        """
+        raise NotImplementedError(
+            "fleet_telemetry_config_create requires the Fleet API (VehicleSigned)."
+        )
 
     # fleet_telemetry_config_get doesnt require signing
     # fleet_telemetry_config_delete doesnt require signing
