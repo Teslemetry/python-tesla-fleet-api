@@ -61,6 +61,7 @@ from tesla_protocol.command.car_server_pb2 import (
     GetVehicleConfig,
     GetVehicleData,
     GetVehicleDetailState,
+    GetLegacyVehicleState,
     GetVehicleState,
     VehicleAction,
 )
@@ -107,6 +108,7 @@ from tesla_protocol.command.vehicle_pb2 import (
     SoftwareUpdateState,
     SuspensionState,
     TirePressureState,
+    CurrentVehicleState,
     VehicleConfig,
     VehicleData,
     VehicleDetailState,
@@ -1729,7 +1731,7 @@ class VehicleBluetooth(
                         getParkedAccessoryState=GetParkedAccessoryState()
                         if BluetoothVehicleData.PARKED_ACCESSORY_STATE in endpoints
                         else None,
-                        getVehicleState=GetVehicleState()
+                        getLegacyVehicleState=GetLegacyVehicleState()
                         if BluetoothVehicleData.LEGACY_VEHICLE_STATE in endpoints
                         else None,
                         getAlertState=GetAlertState()
@@ -1943,6 +1945,30 @@ class VehicleBluetooth(
         not ``vehicle_state()``: that name is already taken by the VCSEC
         ``VehicleStatus`` reader below, a different message from a different
         domain.
+
+        Requests ``getLegacyVehicleState`` and reads the reply on VehicleData
+        tag 6, which only older firmware populates; newer firmware answers on
+        tag 18 - use ``current_vehicle_state()`` there.
+        """
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getLegacyVehicleState=GetLegacyVehicleState()
+                        )
+                    )
+                )
+            )
+        ).legacy_vehicle_state
+
+    async def current_vehicle_state(self) -> CurrentVehicleState:
+        """Return CarServer's current vehicle state over BLE.
+
+        Requests ``getVehicleState`` and reads the reply on VehicleData tag 18
+        (``VehicleData.vehicle_state``), the only tag current firmware (e.g.
+        2026.26.6) answers on. Older firmware answers on tag 6; use
+        ``legacy_vehicle_state()`` there.
         """
         return (
             await self._getInfotainment(
@@ -1952,7 +1978,7 @@ class VehicleBluetooth(
                     )
                 )
             )
-        ).legacy_vehicle_state
+        ).vehicle_state
 
     async def vehicle_config(self) -> VehicleConfig:
         """Return the vehicle's configuration/options state over BLE."""

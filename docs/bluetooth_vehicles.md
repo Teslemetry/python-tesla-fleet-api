@@ -481,7 +481,8 @@ Available BLE state readers:
 - `parental_controls_state()`
 - `gui_settings()`
 - `parked_accessory_state()`
-- `legacy_vehicle_state()` (CarServer's `GetVehicleState` - a different message from `vehicle_state()` above)
+- `legacy_vehicle_state()` (CarServer's `GetLegacyVehicleState`, reply on VehicleData tag 6 - older firmware only; a different message from `vehicle_state()` above)
+- `current_vehicle_state()` (CarServer's `GetVehicleState`, reply on VehicleData tag 18 - current firmware; use this on newer vehicles)
 - `vehicle_config()`
 - `soh_state()`
 - `vehicle_detail_state()`

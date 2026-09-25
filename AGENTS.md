@@ -214,8 +214,9 @@ Command coverage is locked by `tests/test_proto_coverage_lock.py`, which fails i
 any `VehicleAction`/`GetVehicleData` field has no wrapper (`commands.py`) or
 reader (`bluetooth.py`) and is not allowlisted with a reason — keep that test in
 sync with a `tesla-protocol` bump rather than special-casing new fields. Naming:
-`legacy_vehicle_state()` (`bluetooth.py`) reads CarServer's `GetVehicleState`
-sub-state; `vehicle_state()` is the VCSEC `VehicleStatus`, a different
+`legacy_vehicle_state()` (`bluetooth.py`) requests `getLegacyVehicleState` (reply
+on VehicleData tag 6, older firmware); `current_vehicle_state()` requests
+`getVehicleState` (reply on tag 18, current firmware); `vehicle_state()` is the VCSEC `VehicleStatus`, a different
 message/domain. `set_rate_tariff` takes `tesla_protocol` message types directly
 rather than a parallel flattened API. `add_managed_charging_site` takes a
 flattened `(public_key, din, lat, lon)` API; `public_key` must already be
