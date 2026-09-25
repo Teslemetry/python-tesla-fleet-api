@@ -740,7 +740,7 @@ wheels = [
 
 [[package]]
 name = "tesla-fleet-api"
-version = "1.15.0"
+version = "1.16.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
