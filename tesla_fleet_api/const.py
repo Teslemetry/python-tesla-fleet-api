@@ -366,7 +366,7 @@ class BluetoothVehicleData(StrEnum):
     PARENTAL_CONTROLS_STATE = "GetParentalControlsState"
     GUI_SETTINGS = "GetGuiSettings"
     PARKED_ACCESSORY_STATE = "GetParkedAccessoryState"
-    LEGACY_VEHICLE_STATE = "GetVehicleState"
+    LEGACY_VEHICLE_STATE = "GetLegacyVehicleState"
     ALERT_STATE = "GetAlertState"
     LIGHT_SHOW_STATE = "GetLightShowState"
     SUSPENSION_STATE = "GetSuspensionState"
