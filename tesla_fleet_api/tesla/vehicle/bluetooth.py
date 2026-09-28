@@ -497,6 +497,7 @@ class VehicleBluetooth(
     ble_name: str
     confirmation: BluetoothConfirmation
     raise_unconfirmed: bool
+    wake_if_asleep: bool
     keepalive_interval: float | None
     device: BLEDevice | None = None
     client: BleakClient | None = None
@@ -532,6 +533,7 @@ class VehicleBluetooth(
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
+        wake_if_asleep: bool = True,
     ) -> None:
         """Initialize a BLE-connected vehicle.
 
@@ -546,6 +548,10 @@ class VehicleBluetooth(
         passive listener that only observes broadcasts via the ``listen_*``
         methods and never sends a command. ``key=None`` (the default, and an
         explicit ``None``) keeps the usual fallback to the parent's key.
+
+        ``wake_if_asleep`` (default ``True``) wakes a sleeping vehicle over BLE
+        and resends an infotainment command that went unanswered because of
+        it, instead of raising ``BluetoothCommandFailed``.
         """
         super().__init__(parent, vin, key)
         if isinstance(confirmation, bool):
@@ -578,6 +584,7 @@ class VehicleBluetooth(
         self.confirmation = confirmation
         self.keepalive_interval = keepalive_interval
         self.raise_unconfirmed = raise_unconfirmed
+        self.wake_if_asleep = wake_if_asleep
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
@@ -1448,7 +1455,19 @@ class VehicleBluetooth(
         semantics as ``_sendVehicleSecurity`` - see there. ``mutating=False``
         (``ping()`` only) is exempt from all three: it always waits for its
         real reply.
+
+        When an unresolved command under ``raise_unconfirmed=False`` finds the
+        vehicle asleep, it cannot have run, so with ``wake_if_asleep`` the
+        vehicle is woken over BLE and the command sent once more; otherwise
+        (or if still asleep after that) ``BluetoothCommandFailed`` is raised.
         """
+        return await self._send_infotainment_ladder(
+            command, mutating=mutating, wake=self.wake_if_asleep
+        )
+
+    async def _send_infotainment_ladder(
+        self, command: Action, *, mutating: bool, wake: bool
+    ) -> dict[str, Any]:
         await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
         if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
@@ -1486,7 +1505,21 @@ class VehicleBluetooth(
             # so first ask VCSEC (which answers while asleep) whether the
             # infotainment computer could have run the command at all.
             if not self.raise_unconfirmed and await self._vehicle_asleep():
-                raise BluetoothCommandFailed(timeout.data, timeout.status) from timeout
+                if not wake:
+                    raise BluetoothCommandFailed(
+                        timeout.data, timeout.status
+                    ) from timeout
+                # Waking over BLE is free, unlike the cloud, and a sleeping car
+                # provably did not run the command, so resending cannot
+                # double-execute it. Only one wake per command, so a car that
+                # stays asleep still reaches the router's cloud fallback.
+                try:
+                    await self.wake_up()
+                except TeslaFleetError as err:
+                    raise BluetoothCommandFailed(timeout.data, timeout.status) from err
+                return await self._send_infotainment_ladder(
+                    command, mutating=mutating, wake=False
+                )
             return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
 
     async def _vehicle_asleep(self) -> bool:

@@ -54,6 +54,7 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         *,
         verify_commands: bool | None = None,
         key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
+        wake_if_asleep: bool = True,
     ) -> VehicleBluetooth[FleetParentT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -70,6 +71,8 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
         ``VehicleBluetooth``'s docstring for the full ladder.
         ``key=False`` explicitly disables signing, for a passive listener;
         ``key=None`` (the default) keeps the usual parent-key fallback.
+        ``wake_if_asleep=False`` stops a sleeping vehicle being woken over BLE
+        to run an infotainment command (it raises instead).
         """
         vehicle = self.Bluetooth(
             self._parent,
@@ -80,6 +83,7 @@ class Vehicles(dict[str, Vehicle[Any]], Generic[FleetParentT]):
             optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
             verify_commands=verify_commands,
+            wake_if_asleep=wake_if_asleep,
         )
         self[vin] = vehicle
         return vehicle
@@ -113,6 +117,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
+        wake_if_asleep: bool = True,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -129,6 +134,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         ``VehicleBluetooth``'s docstring for the full ladder.
         ``key=False`` explicitly disables signing, for a passive listener;
         ``key=None`` (the default) keeps the usual parent-key fallback.
+        ``wake_if_asleep=False`` stops a sleeping vehicle being woken over BLE
+        to run an infotainment command (it raises instead).
         """
         return self.createBluetooth(
             vin,
@@ -139,6 +146,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
             optimistic,
             raise_unconfirmed,
             verify_commands=verify_commands,
+            wake_if_asleep=wake_if_asleep,
         )
 
     def createBluetooth(
@@ -152,6 +160,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
+        wake_if_asleep: bool = True,
     ) -> VehicleBluetooth[BluetoothClientT]:
         """Creates a bluetooth vehicle that uses command protocol.
 
@@ -168,6 +177,8 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
         ``VehicleBluetooth``'s docstring for the full ladder.
         ``key=False`` explicitly disables signing, for a passive listener;
         ``key=None`` (the default) keeps the usual parent-key fallback.
+        ``wake_if_asleep=False`` stops a sleeping vehicle being woken over BLE
+        to run an infotainment command (it raises instead).
         """
         vehicle = self.Bluetooth(
             self._parent,
@@ -179,6 +190,7 @@ class VehiclesBluetooth(dict[str, Vehicle[Any]], Generic[BluetoothClientT]):
             optimistic=optimistic,
             raise_unconfirmed=raise_unconfirmed,
             verify_commands=verify_commands,
+            wake_if_asleep=wake_if_asleep,
         )
         self[vin] = vehicle
         return vehicle
