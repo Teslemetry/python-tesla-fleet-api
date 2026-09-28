@@ -209,7 +209,7 @@ class RemoteSeatCoolerRequestTests(MockedBleTransportTestCase):
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.remote_seat_cooler_request(0, 1)
+        await vehicle.remote_seat_cooler_request(1, 1)
 
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         cooler = vehicle_action.hvacSeatCoolerActions.hvacSeatCoolerAction[0]
@@ -221,6 +221,27 @@ class RemoteSeatCoolerRequestTests(MockedBleTransportTestCase):
             cooler.seat_cooler_level,
             HvacSeatCoolerActions.HvacSeatCoolerLevel_Low,
         )
+
+    async def test_position_2_is_front_right(self) -> None:
+        """REST ``seat_position`` is the proto enum value, so 2 is front right."""
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.remote_seat_cooler_request(2, 3)
+
+        vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        cooler = vehicle_action.hvacSeatCoolerActions.hvacSeatCoolerAction[0]
+        self.assertEqual(
+            cooler.seat_position,
+            HvacSeatCoolerActions.HvacSeatCoolerPosition_FrontRight,
+        )
+
+    async def test_unknown_position_raises_before_sending(self) -> None:
+        vehicle, send = self.make_vehicle()
+
+        with self.assertRaises(ValueError):
+            await vehicle.remote_seat_cooler_request(0, 1)
+        send.assert_not_awaited()
 
 
 class RemoteAutoSeatClimateRequestTests(MockedBleTransportTestCase):
