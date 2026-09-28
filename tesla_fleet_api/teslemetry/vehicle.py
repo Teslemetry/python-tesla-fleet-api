@@ -739,6 +739,7 @@ class TeslemetryVehicles(Vehicles["Teslemetry"]):
         *,
         verify_commands: bool | None = None,
         key: ec.EllipticCurvePrivateKey | Literal[False] | None = None,
+        wake_if_asleep: bool = True,
     ) -> Any:
         """Not supported; parameters match the Fleet API Bluetooth factory."""
         raise NotImplementedError("Teslemetry cannot use local Bluetooth")
