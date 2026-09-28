@@ -170,9 +170,10 @@ restore the prior mode and fields when preserving the other schedule matters.
 
 For signed commands, `set_scheduled_departure()` sends `enable`,
 `departure_time`, weekday/all-week recurrence choices, and
-`end_off_peak_time`. Its `preconditioning_enabled` and
-`off_peak_charging_enabled` arguments are accepted for API compatibility but do
-not map to fields in the vehicle's signed-command protobuf.
+`end_off_peak_time`. The signed-command protobuf has no on/off fields for
+preconditioning or off-peak charging, so each recurrence is sent only when its
+`*_enabled` or `*_weekdays_only` argument is true and left unset (off)
+otherwise.
 
 `charge_standard()` is not treated as a no-op by all vehicles: if the current
 charge limit already equals `charge_limit_soc_std`, the vehicle may reject the

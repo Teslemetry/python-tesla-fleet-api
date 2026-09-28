@@ -809,7 +809,7 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         name: str | None = None,
     ) -> dict[str, Any]:
         """Add a schedule for vehicle charging."""
-        if not start_time and not end_time:
+        if start_time is None and end_time is None:
             raise ValueError("Either start_time or end_time or both must be provided")
         json_payload = {
             "days_of_week": days_of_week,

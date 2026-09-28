@@ -241,9 +241,10 @@ the vehicle uses to match the registration to the site controller.
 - **Naming**: camelCase for instance attributes mirroring API structure
   (`energySites`, `createFleet`); snake_case for endpoint method names.
 - **Seat indexing gotcha**: `Seat` is **0-indexed** (`FRONT_LEFT=0`) and is for
-  the manual seat heater/cooler paths (`remote_seat_heater_request`,
-  `remote_seat_cooler_request`). `AutoSeat` is **1-indexed** and is the correct
-  type for `remote_auto_seat_climate_request` on **both** backends — its values
+  the manual seat heater path (`remote_seat_heater_request`).
+  `remote_seat_cooler_request` takes the proto `HvacSeatCoolerPosition_*` value
+  (1 front left, 2 front right), as Tesla's proxy does. `AutoSeat` is
+  **1-indexed** and is the correct type for `remote_auto_seat_climate_request` on **both** backends — its values
   equal Tesla's REST wire values and the proto `AutoSeatPosition_*` enum. Passing
   a `Seat` to the auto-climate command is off-by-one.
 - **Protobuf oneof-by-string-kwargs bypasses pyright**:
@@ -305,9 +306,11 @@ Vehicle-side behaviours that look like library bugs but are not:
   and `set_scheduled_departure` both write it (Off/StartAt/DepartBy). Disabling
   one while the other is active turns the whole feature Off. A caller toggling one
   must read `charge_state()` first and restore the exact prior mode.
-- **`set_scheduled_departure`'s `preconditioning_enabled`/
-  `off_peak_charging_enabled` args are dead**: `ScheduledDepartureAction` has only
-  `preconditioning_times`/`off_peak_charging_times` (weekday recurrence, no on/off).
+- **`set_scheduled_departure` has no on/off fields for preconditioning or
+  off-peak charging**: `ScheduledDepartureAction` has only
+  `preconditioning_times`/`off_peak_charging_times`; a present block turns the
+  feature on, so the signed path omits it when `*_enabled` and
+  `*_weekdays_only` are both false, matching Tesla's proxy.
 - **`charge_standard()` rejects `already_standard`**: calling it when
   `charge_limit_soc` already equals `charge_limit_soc_std` returns
   `{"result": False, "reason": "already_standard"}`, not a no-op success.
