@@ -232,7 +232,7 @@ last step does when nothing above it settled the question.
 | GATT write | every level, incl. `"optimistic"` | proceeds to the next rung (or returns, under `"optimistic"`) | pre-submission (e.g. characteristic not found): `BluetoothTransportError`, always raises. Submitted-then-failed/timed-out: ambiguous, races any armed broadcast watcher, then falls to the "genuinely unresolved" outcome below |
 | Addressed ack + broadcast race (lock/unlock only) | `"ack"`, `"verify"` | returns a confirmed result | a proven mismatch at window end raises `BluetoothCommandFailed`; a lost ack with nothing else confirming falls to the next rung |
 | State-read verification | `"verify"` only | returns a confirmed result | a proven mismatch raises `BluetoothCommandFailed`; an unreadable prover (e.g. asleep car) falls to the next rung |
-| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success. `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
+| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success, except an infotainment command raises `BluetoothCommandFailed` when a VCSEC status read shows the car asleep. `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
 
 The GATT write rung's ambiguous case is not hypothetical: field measurements
 of write-level transport errors found some had already executed on the

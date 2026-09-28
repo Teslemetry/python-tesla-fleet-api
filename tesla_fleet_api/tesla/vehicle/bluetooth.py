@@ -84,6 +84,7 @@ from tesla_protocol.command.vcsec_pb2 import (
     RKEAction_E,
     UnsignedMessage,
     VehicleLockState_E,
+    VehicleSleepStatus_E,
     VehicleStatus,
     WhitelistOperation,
 )
@@ -1481,7 +1482,23 @@ class VehicleBluetooth(
                     name,
                     self._transport_name,
                 )
+            # A best-effort success here would stop a router's cloud fallback,
+            # so first ask VCSEC (which answers while asleep) whether the
+            # infotainment computer could have run the command at all.
+            if not self.raise_unconfirmed and await self._vehicle_asleep():
+                raise BluetoothCommandFailed(timeout.data, timeout.status) from timeout
             return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
+
+    async def _vehicle_asleep(self) -> bool:
+        """Whether VCSEC reports the vehicle asleep; ``False`` if unreadable."""
+        try:
+            status = await self.vehicle_state()
+        except TeslaFleetError:
+            return False
+        return (
+            status.vehicleSleepStatus
+            == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
+        )
 
     async def _resolve_timeout(
         self, plan: VerifyPlan | None, timeout: BluetoothTimeout

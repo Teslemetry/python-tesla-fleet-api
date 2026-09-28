@@ -827,12 +827,32 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                     vcsec.commandStatus.operationStatus
                     == OperationStatus_E.OPERATIONSTATUS_ERROR
                 ):
-                    if resp.HasField("signedMessageStatus"):
-                        exception = SIGNED_MESSAGE_INFORMATION_FAULTS[
-                            vcsec.commandStatus.signedMessageStatus.signedMessageInformation
-                        ]
-                        if exception:
-                            raise exception
+                    # ERROR is a car-side refusal whatever the sub-message
+                    # carries, so it must never reach the success return
+                    # below; the inner status only picks the exception.
+                    status = vcsec.commandStatus
+                    if status.HasField("signedMessageStatus"):
+                        info = status.signedMessageStatus.signedMessageInformation
+                        if info < len(SIGNED_MESSAGE_INFORMATION_FAULTS):
+                            exception = SIGNED_MESSAGE_INFORMATION_FAULTS[info]
+                            if exception:
+                                raise exception
+                    elif status.HasField("whitelistOperationStatus"):
+                        info = status.whitelistOperationStatus.whitelistOperationInformation
+                        if info < len(WHITELIST_OPERATION_STATUS):
+                            exception = WHITELIST_OPERATION_STATUS[info]
+                            if exception:
+                                raise exception
+                        else:
+                            raise WhitelistOperationStatus(
+                                f"Unknown whitelist operation failure: {info}"
+                            )
+                    return {
+                        "response": {
+                            "result": False,
+                            "reason": OperationStatus_E.Name(status.operationStatus),
+                        }
+                    }
 
             elif resp.from_destination.domain == Domain.DOMAIN_INFOTAINMENT:
                 try:
