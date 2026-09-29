@@ -131,25 +131,33 @@ async def main():
     private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     try:
-        await vehicle.wake_up()
+        await vehicle.wake_up(wait=True)
     except BluetoothTimeout:
-        pass
+        print("Vehicle did not become ready in time")
     except TeslaFleetError as e:
         print(e)
-    print(f"Sent wake request to VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
 ```
 
-`wake_up()` is best-effort over BLE: with `raise_unconfirmed=True`, a
-`BluetoothUnconfirmedCommand` from the wake request can be a false negative
-even when the vehicle wakes successfully (and still matches
-`except BluetoothTimeout`). Confirm readiness by retrying a cheap INFO-domain
-read, such as `charge_state()`, with backoff. The
-infotainment computer can also take longer to become ready than the
-vehicle-security computer, so INFO-domain reads immediately after waking should
-retry `BluetoothTimeout` with backoff. Keep one BLE connection open across
-related commands when possible instead of reconnecting for each command.
+`wake_up(wait=True, timeout=30)` blocks until the vehicle can take commands,
+raising `BluetoothTimeout` if it cannot within `timeout` seconds. Readiness is
+proven by the infotainment computer completing a session handshake: the
+vehicle-security computer acks the wake and reports itself awake within about
+half a second, but infotainment only answers 4-16s later (measured on a Model
+3; longer after a long sleep). The wake is re-sent every few seconds until then
+- over BLE it is local, free and idempotent. Neither VCSEC's sleep status nor
+status broadcasts are used to decide readiness.
+
+Plain `wake_up()` only sends the wake request and returns on its ack, so an
+INFO-domain command sent straight after can still time out. With
+`raise_unconfirmed=True`, a `BluetoothUnconfirmedCommand` from it can be a
+false negative even when the vehicle wakes (and still matches
+`except BluetoothTimeout`).
+
+A vehicle woken and then left idle can fall back asleep within about 80
+seconds, so issue commands promptly after waking, and keep one BLE connection
+open across related commands instead of reconnecting for each command.
 
 `VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
 subclass, when the BLE connection, notification setup, or GATT characteristic
@@ -232,7 +240,7 @@ last step does when nothing above it settled the question.
 | GATT write | every level, incl. `"optimistic"` | proceeds to the next rung (or returns, under `"optimistic"`) | pre-submission (e.g. characteristic not found): `BluetoothTransportError`, always raises. Submitted-then-failed/timed-out: ambiguous, races any armed broadcast watcher, then falls to the "genuinely unresolved" outcome below |
 | Addressed ack + broadcast race (lock/unlock only) | `"ack"`, `"verify"` | returns a confirmed result | a proven mismatch at window end raises `BluetoothCommandFailed`; a lost ack with nothing else confirming falls to the next rung |
 | State-read verification | `"verify"` only | returns a confirmed result | a proven mismatch raises `BluetoothCommandFailed`; an unreadable prover (e.g. asleep car) falls to the next rung |
-| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success, except an infotainment command whose VCSEC status read shows the car asleep, which is woken over BLE and resent once (`wake_if_asleep=True`, the default) or raises `BluetoothCommandFailed` (`wake_if_asleep=False`, or still asleep after the wake). `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
+| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success, except an infotainment command whose VCSEC status read shows the car asleep, which is woken over BLE with `wake_up(wait=True)` and resent once infotainment is ready (`wake_if_asleep=True`, the default) or raises `BluetoothCommandFailed` (`wake_if_asleep=False`, or not ready before the wake times out). `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
 
 The GATT write rung's ambiguous case is not hypothetical: field measurements
 of write-level transport errors found some had already executed on the

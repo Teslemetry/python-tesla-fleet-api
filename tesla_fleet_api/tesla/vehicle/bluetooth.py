@@ -127,6 +127,10 @@ APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 # every 20s keeps it alive ~10x longer. See AGENTS.md for the measured evidence.
 DEFAULT_KEEPALIVE_INTERVAL = 20.0
 
+# Measured on a Model 3: infotainment first answers a handshake 4-16s after an RKE
+# wake of a sleeping car, while VCSEC reports awake after ~0.5s.
+DEFAULT_WAKE_TIMEOUT = 30.0
+
 # The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
 # transient failures without delaying Router fallback for its full default.
 DEFAULT_CONNECT_ATTEMPTS = 2
@@ -516,6 +520,18 @@ class VehicleBluetooth(
     _actuation_timeout: float = 2
     # Bounded so a keepalive read against a sleeping car can never hang the loop.
     _keepalive_timeout: float = 2
+    # A ready infotainment answers a handshake in 0.26-0.39s (measured); bound
+    # each readiness probe so a waking car is re-probed promptly.
+    _wake_probe_timeout: float = 1.0
+    # Re-send the idempotent RKE wake while infotainment hasn't answered: BLE
+    # is local and free, and after a long sleep a first wake was observed not
+    # to bring infotainment up until it was re-sent.
+    _wake_resend_interval: float = 3
+    # How long a command woken by ``wake_if_asleep`` waits for infotainment.
+    _wake_timeout: float = DEFAULT_WAKE_TIMEOUT
+    # How long an awake car's infotainment gets to finish booting (measured up
+    # to ~16s after a wake) before its handshake timeout is final.
+    _infotainment_boot_timeout: float = 20
     _keepalive_task: asyncio.Task[None] | None = None
     _last_activity: float = 0.0
     _connected: bool = False
@@ -1468,7 +1484,28 @@ class VehicleBluetooth(
     async def _send_infotainment_ladder(
         self, command: Action, *, mutating: bool, wake: bool
     ) -> dict[str, Any]:
-        await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
+        try:
+            await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
+        except BluetoothTimeout as timeout:
+            # Nothing was sent yet, so waking and retrying cannot double-execute.
+            sleep_status = await self._sleep_status()
+            if sleep_status == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP:
+                if not wake:
+                    raise
+                await self._wake_for_command(timeout)
+                wake = False
+            elif sleep_status == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_AWAKE:
+                # VCSEC reports awake seconds before infotainment finishes
+                # booting (e.g. just woken by something else), so keep retrying
+                # the handshake. This wakes nothing, so ignores wake_if_asleep.
+                try:
+                    await self._await_infotainment(
+                        self._infotainment_boot_timeout, wake=False
+                    )
+                except BluetoothTimeout:
+                    raise timeout from None
+            else:
+                raise
         if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
                 Domain.DOMAIN_INFOTAINMENT,
@@ -1513,25 +1550,37 @@ class VehicleBluetooth(
                 # provably did not run the command, so resending cannot
                 # double-execute it. Only one wake per command, so a car that
                 # stays asleep still reaches the router's cloud fallback.
-                try:
-                    await self.wake_up()
-                except TeslaFleetError as err:
-                    raise BluetoothCommandFailed(timeout.data, timeout.status) from err
+                await self._wake_for_command(timeout)
                 return await self._send_infotainment_ladder(
                     command, mutating=mutating, wake=False
                 )
             return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
 
+    async def _wake_for_command(self, timeout: BluetoothTimeout) -> None:
+        """Wake a sleeping car until infotainment is ready for a command.
+
+        Failing to wake means the command provably never ran, so it raises
+        ``BluetoothCommandFailed`` - safe for a router to fail over on.
+        """
+        try:
+            await self.wake_up(wait=True, timeout=self._wake_timeout)
+        except TeslaFleetError as err:
+            raise BluetoothCommandFailed(timeout.data, timeout.status) from err
+
     async def _vehicle_asleep(self) -> bool:
         """Whether VCSEC reports the vehicle asleep; ``False`` if unreadable."""
+        return (
+            await self._sleep_status()
+            == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
+        )
+
+    async def _sleep_status(self) -> int | None:
+        """VCSEC's reported sleep status, or ``None`` if unreadable."""
         try:
             status = await self.vehicle_state()
         except TeslaFleetError:
-            return False
-        return (
-            status.vehicleSleepStatus
-            == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
-        )
+            return None
+        return status.vehicleSleepStatus
 
     async def _resolve_timeout(
         self, plan: VerifyPlan | None, timeout: BluetoothTimeout
@@ -1692,20 +1741,73 @@ class VehicleBluetooth(
                 f"Unknown whitelist operation failure: {info}"
             )
 
-    async def wake_up(self):
-        """Wake up the vehicle security computer.
+    async def wake_up(
+        self, wait: bool = False, timeout: float = DEFAULT_WAKE_TIMEOUT
+    ) -> dict[str, Any]:
+        """Wake up the vehicle.
 
-        A ``BluetoothUnconfirmedCommand`` from this command can be a false
-        negative even when the vehicle wakes successfully, so callers should
-        treat wake as best-effort and confirm readiness with a retried
-        INFO-domain read. The infotainment computer may still need a short
-        delay before it can complete signed-command handshakes, so callers that
-        issue INFO-domain reads immediately after waking should retry
-        ``BluetoothTimeout`` with backoff.
+        Without ``wait`` this only sends the RKE wake to the vehicle security
+        computer, which acks well before the infotainment computer can answer:
+        an INFO command sent straight after can still time out. A
+        ``BluetoothUnconfirmedCommand`` from it can be a false negative even
+        when the vehicle wakes.
+
+        With ``wait=True`` this blocks until infotainment completes a session
+        handshake - the only proof it can take commands - re-sending the
+        (idempotent) wake while it has not, and raises ``BluetoothTimeout``
+        if it has not within ``timeout`` seconds. VCSEC's own sleep status is
+        not used: it reports awake seconds before infotainment is reachable.
         """
-        return await self._sendVehicleSecurity(
-            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+        if not wait:
+            return await self._sendVehicleSecurity(
+                UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+            )
+        await self._await_infotainment(timeout, wake=True)
+        return {"response": {"result": True, "reason": ""}}
+
+    async def _await_infotainment(self, timeout: float, *, wake: bool) -> None:
+        """Retry the infotainment handshake until it answers or ``timeout``.
+
+        With ``wake`` the idempotent RKE wake is (re-)sent every
+        ``_wake_resend_interval`` too. Raises ``BluetoothTimeout`` at the deadline.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        next_wake = loop.time()
+        while True:
+            if wake and loop.time() >= next_wake:
+                try:
+                    await self.wake_up()
+                except BluetoothTimeout:
+                    # An unconfirmed wake may still have landed; the handshake
+                    # probe below is what decides.
+                    pass
+                next_wake = loop.time() + self._wake_resend_interval
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise BluetoothTimeout()
+            try:
+                await self._probe_infotainment(min(self._wake_probe_timeout, remaining))
+                return
+            except BluetoothTimeout:
+                pass
+
+    async def _probe_infotainment(self, timeout: float) -> None:
+        """Handshake with infotainment, bounded by ``timeout``.
+
+        Always sends a fresh session-info request, even with a session already
+        cached: only a live reply proves infotainment is awake. Raises
+        ``BluetoothTimeout`` if it does not answer in time.
+        """
+        if self.private_key is None:
+            raise SigningDisabled()
+        await self._send(
+            self._session_info_request(Domain.DOMAIN_INFOTAINMENT),
+            "session_info",
+            timeout=timeout,
         )
+        if not self._sessions[Domain.DOMAIN_INFOTAINMENT].ready:
+            raise BluetoothTimeout()
 
     async def vehicle_data(self, endpoints: list[BluetoothVehicleData]) -> VehicleData:
         """Get vehicle data over the BLE infotainment channel.

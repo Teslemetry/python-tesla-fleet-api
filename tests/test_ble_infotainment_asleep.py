@@ -8,6 +8,7 @@ cloud.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 from tesla_fleet_api.exceptions import BluetoothCommandFailed, BluetoothTimeout
 from tesla_fleet_api.router import VehicleRouter
@@ -39,11 +40,15 @@ def sleep_status_reply(status: int) -> RoutableMessage:
 
 
 def sent_messages(vehicle: VehicleBluetooth[Any], send: Any) -> list[tuple[str, Any]]:
-    """Decode each message handed to ``_send`` as ("vcsec"|"info", proto)."""
+    """Decode each message handed to ``_send`` as ("vcsec"|"info"|"handshake", proto)."""
     out: list[tuple[str, Any]] = []
     for call in send.await_args_list:
-        plain = decrypt_sent_command(vehicle, call.args[0])
-        if call.args[0].to_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
+        msg = call.args[0]
+        if msg.HasField("session_info_request"):
+            out.append(("handshake", msg))
+            continue
+        plain = decrypt_sent_command(vehicle, msg)
+        if msg.to_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY:
             out.append(("vcsec", UnsignedMessage.FromString(plain)))
         else:
             out.append(("info", Action.FromString(plain)))
@@ -67,6 +72,7 @@ class WakeIfAsleepTests(MockedBleTransportTestCase):
             BluetoothTimeout(),
             sleep_status_reply(ASLEEP),
             vcsec_ok_reply(),
+            RoutableMessage(),
             infotainment_action_ok_reply(),
         ]
 
@@ -75,20 +81,27 @@ class WakeIfAsleepTests(MockedBleTransportTestCase):
         self.assertEqual(result["response"]["result"], True)
         sent = sent_messages(vehicle, send)
         self.assertEqual(
-            [domain for domain, _ in sent], ["info", "vcsec", "vcsec", "info"]
+            [domain for domain, _ in sent],
+            ["info", "vcsec", "vcsec", "handshake", "info"],
         )
         self.assertEqual(sent[2][1].RKEAction, RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
-        self.assertEqual(sent[3][1], sent[0][1])
+        self.assertEqual(sent[4][1], sent[0][1])
 
     async def test_still_asleep_after_wake_falls_back_to_cloud(self) -> None:
         vehicle, send = self.make_vehicle(raise_unconfirmed=False)
-        send.side_effect = [
-            BluetoothTimeout(),
-            sleep_status_reply(ASLEEP),
-            vcsec_ok_reply(),
-            BluetoothTimeout(),
-            sleep_status_reply(ASLEEP),
-        ]
+        setattr(vehicle, "_wake_timeout", 0.05)
+
+        async def car(msg: RoutableMessage, *args: Any, **kwargs: Any) -> Any:
+            if msg.HasField("session_info_request"):
+                raise BluetoothTimeout()
+            if msg.to_destination.domain == Domain.DOMAIN_INFOTAINMENT:
+                raise BluetoothTimeout()
+            plain = UnsignedMessage.FromString(decrypt_sent_command(vehicle, msg))
+            if plain.HasField("RKEAction"):
+                return vcsec_ok_reply()
+            return sleep_status_reply(ASLEEP)
+
+        send.side_effect = car
         cloud = _FakeCloudFallback(vehicle.vin)
 
         result = await VehicleRouter(vehicle, cloud).set_charge_limit(80)
@@ -147,3 +160,118 @@ class NotAsleepTests(MockedBleTransportTestCase):
         result = await vehicle.set_charge_limit(80)
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
+
+class _SessionlessTestCase(MockedBleTransportTestCase):
+    def make_sessionless(self) -> tuple[VehicleBluetooth[Any], Any]:
+        vehicle, send = self.make_vehicle(raise_unconfirmed=False)
+        self.info_session = getattr(vehicle, "_sessions")[Domain.DOMAIN_INFOTAINMENT]
+        self.info_session.epoch = None
+        return vehicle, send
+
+
+class HandshakeOnSleepingCarTests(_SessionlessTestCase):
+    """No INFO session yet (fresh process or reconnect): the handshake itself
+    is what times out on a sleeping car, before any command is sent."""
+
+    async def test_wakes_then_sends_once_infotainment_answers(self) -> None:
+        vehicle, send = self.make_sessionless()
+        handshakes = 0
+
+        async def car(msg: RoutableMessage, *args: Any, **kwargs: Any) -> Any:
+            nonlocal handshakes
+            if msg.HasField("session_info_request"):
+                handshakes += 1
+                if handshakes == 1:
+                    raise BluetoothTimeout()
+                self.info_session.epoch = b"\x00" * 16
+                return RoutableMessage()
+            if msg.to_destination.domain == Domain.DOMAIN_INFOTAINMENT:
+                return infotainment_action_ok_reply()
+            plain = UnsignedMessage.FromString(decrypt_sent_command(vehicle, msg))
+            if plain.HasField("RKEAction"):
+                return vcsec_ok_reply()
+            return sleep_status_reply(ASLEEP)
+
+        send.side_effect = car
+
+        result = await vehicle.set_charge_limit(80)
+
+        self.assertEqual(result["response"]["result"], True)
+        self.assertEqual(
+            [domain for domain, _ in sent_messages(vehicle, send)],
+            ["handshake", "vcsec", "vcsec", "handshake", "info"],
+        )
+
+    async def test_wake_disabled_does_not_wake(self) -> None:
+        vehicle, send = self.make_sessionless()
+        vehicle.wake_if_asleep = False
+        send.side_effect = [BluetoothTimeout(), sleep_status_reply(ASLEEP)]
+
+        with self.assertRaises(BluetoothTimeout):
+            await vehicle.set_charge_limit(80)
+        self.assertEqual(send.await_count, 2)
+
+    async def test_unreadable_sleep_status_raises(self) -> None:
+        vehicle, send = self.make_sessionless()
+        send.side_effect = BluetoothTimeout()
+
+        with self.assertRaises(BluetoothTimeout):
+            await vehicle.set_charge_limit(80)
+        self.assertEqual(send.await_count, 2)
+
+
+class AwakeButBootingTests(_SessionlessTestCase):
+    """VCSEC reports awake seconds before infotainment answers a handshake
+    (e.g. a car just woken by a phone key): retry the handshake, never wake."""
+
+    def script(self, vehicle: VehicleBluetooth[Any], ready_on: int | None) -> list[str]:
+        sent: list[str] = []
+
+        async def car(msg: RoutableMessage, *args: Any, **kwargs: Any) -> Any:
+            if msg.HasField("session_info_request"):
+                sent.append("handshake")
+                if sent.count("handshake") != ready_on:
+                    raise BluetoothTimeout()
+                self.info_session.epoch = b"\x00" * 16
+                return RoutableMessage()
+            if msg.to_destination.domain == Domain.DOMAIN_INFOTAINMENT:
+                sent.append("info")
+                return infotainment_action_ok_reply()
+            plain = UnsignedMessage.FromString(decrypt_sent_command(vehicle, msg))
+            sent.append("wake" if plain.HasField("RKEAction") else "status")
+            return sleep_status_reply(AWAKE)
+
+        setattr(vehicle, "_send", AsyncMock(side_effect=car))
+        return sent
+
+    async def test_retries_handshake_until_infotainment_answers(self) -> None:
+        vehicle, _ = self.make_sessionless()
+        sent = self.script(vehicle, ready_on=4)
+
+        result = await vehicle.set_charge_limit(80)
+
+        self.assertEqual(result["response"]["result"], True)
+        self.assertEqual(
+            sent, ["handshake", "status", "handshake", "handshake", "handshake", "info"]
+        )
+
+    async def test_retries_even_with_wake_disabled(self) -> None:
+        vehicle, _ = self.make_sessionless()
+        vehicle.wake_if_asleep = False
+        sent = self.script(vehicle, ready_on=2)
+
+        await vehicle.set_charge_limit(80)
+
+        self.assertNotIn("wake", sent)
+        self.assertEqual(sent[-1], "info")
+
+    async def test_never_answers_raises_timeout(self) -> None:
+        vehicle, _ = self.make_sessionless()
+        setattr(vehicle, "_infotainment_boot_timeout", 0.05)
+        sent = self.script(vehicle, ready_on=None)
+
+        with self.assertRaises(BluetoothTimeout):
+            await vehicle.set_charge_limit(80)
+        self.assertNotIn("wake", sent)
+        self.assertNotIn("info", sent)

@@ -99,13 +99,20 @@ async def main():
 
         try:
             vehicle = api.vehicles.createFleet("<vin>")
-            wake_up_response = await vehicle.wake_up()
+            wake_up_response = await vehicle.wake_up(wait=True)
             print(wake_up_response)
         except TeslaFleetError as e:
             print(e)
 
 asyncio.run(main())
 ```
+
+The wake request returns before the vehicle is awake. `wake_up(wait=True,
+timeout=60)` polls `vehicle()` every few seconds until its state is `"online"`
+and returns that response, raising `VehicleOffline` if it is not within
+`timeout` seconds. It polls the vehicle endpoint rather than repeating the
+rate-limited wake request. Plain `wake_up()` returns the wake response
+immediately.
 
 ## Lock/Unlock Vehicle
 
