@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from locale import getlocale
 from time import time
 from typing import TYPE_CHECKING, Any, Generic, List, TypeVar
@@ -16,9 +17,12 @@ from tesla_fleet_api.const import (
     VehicleDataEndpoint,
     WindowCommand,
 )
+from tesla_fleet_api.exceptions import VehicleOffline
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_", "-")
+# A cloud wake typically takes 10-30s to reach "online".
+DEFAULT_WAKE_TIMEOUT = 60.0
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
@@ -745,9 +749,32 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
             {"endpoints": endpoint_payload},
         )
 
-    async def wake_up(self) -> dict[str, Any]:
-        """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
-        return await self._request(Method.POST, f"api/1/vehicles/{self.vin}/wake_up")
+    # Polls the vehicle endpoint, not the wake endpoint, which is rate limited.
+    _wake_poll_interval: float = 3
+
+    async def wake_up(
+        self, wait: bool = False, timeout: float = DEFAULT_WAKE_TIMEOUT
+    ) -> dict[str, Any]:
+        """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption.
+
+        The wake request returns before the vehicle is awake. With ``wait=True``
+        this polls ``vehicle()`` until its state is ``"online"`` and returns that
+        response, raising ``VehicleOffline`` if it is not within ``timeout``
+        seconds.
+        """
+        response = await self._request(
+            Method.POST, f"api/1/vehicles/{self.vin}/wake_up"
+        )
+        if not wait:
+            return response
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while response.get("response", {}).get("state") != "online":
+            if loop.time() + self._wake_poll_interval > deadline:
+                raise VehicleOffline()
+            await asyncio.sleep(self._wake_poll_interval)
+            response = await self.vehicle()
+        return response
 
     async def warranty_details(self, vin: str | None) -> dict[str, Any]:
         """Returns warranty details."""

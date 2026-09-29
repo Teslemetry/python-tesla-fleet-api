@@ -1217,7 +1217,12 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             raise SigningDisabled()
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
-        msg = RoutableMessage(
+        await self._send(self._session_info_request(domain), "session_info")
+        return self._sessions[domain].ready
+
+    def _session_info_request(self, domain: Domain) -> RoutableMessage:
+        """Build the unsigned session-info request that opens a domain session."""
+        return RoutableMessage(
             to_destination=Destination(
                 domain=domain,
             ),
@@ -1225,9 +1230,6 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             session_info_request=SessionInfoRequest(public_key=self._public_key),
             uuid=randbytes(16),
         )
-
-        await self._send(msg, "session_info")
-        return self._sessions[domain].ready
 
     async def ping(self) -> dict[str, Any]:
         """Ping the vehicle."""

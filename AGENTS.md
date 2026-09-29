@@ -318,7 +318,8 @@ Vehicle-side behaviours that look like library bugs but are not:
 ## BLE
 
 User-facing behaviour, examples and the confirmation-ladder table live in
-`docs/bluetooth_vehicles.md`. The invariants below are what code changes must not
+`docs/bluetooth_vehicles.md`; measured live-vehicle timings behind these
+invariants live in `OBSERVATIONS.md` (record new experiment results there). The invariants below are what code changes must not
 break.
 
 - **Discovery**: a Tesla advertises no 128-bit service UUID pre-connect — only its
@@ -469,13 +470,16 @@ break.
 
 ### Vehicle-side BLE behaviours (not library bugs)
 
-- **Infotainment boot delay**: `wake_up()` is VCSEC and returns as soon as the
-  vehicle-security computer acks, well before infotainment can complete a signed
-  handshake. An INFO read/command issued immediately after can raise
-  `BluetoothTimeout` through no fault of its own — retry with backoff. `wake_up()`
-  is best-effort: an unresolved wake is an inconclusive signal, not failure.
-  Confirm readiness with a cheap INFO read, and hold one connection across a batch
-  of related commands rather than reconnecting between each.
+- **Infotainment boot delay**: plain `wake_up()` is VCSEC and returns on its ack
+  (~0.3s); VCSEC reports AWAKE ~0.5s after, but infotainment only answers a
+  handshake 4-16s later (measured). So readiness is **never** VCSEC status or a
+  broadcast: `wake_up(wait=True)` polls a fresh INFO handshake (short
+  per-probe timeout) and re-sends the idempotent wake every few seconds —
+  aggressive on purpose, BLE is free. The `wake_if_asleep` auto-wake uses it,
+  both when a command goes unanswered and when the INFO handshake itself times
+  out on a sleeping car (no session yet). A woken car left idle re-sleeps in
+  ~80s. `VehicleFleet.wake_up(wait=True)` instead polls `vehicle()` for
+  `"online"` (never re-POSTs the rate-limited wake).
 - **`vehicle_data()` response-size cap**: the vehicle's signed-command
   implementation enforces its own response-size limit independent of BLE
   reassembly. One endpoint succeeds; as few as **two** `BluetoothVehicleData`
