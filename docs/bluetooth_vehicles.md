@@ -538,6 +538,7 @@ similar in spirit to
 - `listen_user_presence(callback)` - `UserPresence_E`
 - `listen_gear(callback)` - `Gear_E`
 - `listen_ui_desire(callback)` - `UIDesire_E`
+- `listen_closure_statuses(callback)` - `ClosureStatuses` (every closure below, in one call)
 - `listen_front_driver_door(callback)` - `ClosureState_E`
 - `listen_front_passenger_door(callback)` - `ClosureState_E`
 - `listen_rear_driver_door(callback)` - `ClosureState_E`
@@ -594,7 +595,8 @@ teslemetry-stream API can carry into any object with a
 `ingest(data, metadata=None)` method, translating each broadcast into the
 same stream-shaped payload a native SSE event produces: lock state, charge
 port, all 6 `DoorState` leaves (front/rear driver and passenger doors, front
-and rear trunk), gear, tonneau position, and tonneau open percent.
+and rear trunk) together in one `DoorState` event per broadcast, gear, tonneau
+position, and tonneau open percent.
 
 ```python
 from tesla_fleet_api import BleBroadcastStreamGlue

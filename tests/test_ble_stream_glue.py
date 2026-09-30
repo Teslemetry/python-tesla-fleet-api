@@ -103,19 +103,48 @@ def _calls_for(sink: _FakeSink, key: str) -> list[tuple[Mapping[str, Any], Any]]
     """Calls whose top-level ``data`` carries ``key``.
 
     ``Locked`` fires on every broadcast (a scalar field with no proto3
-    presence) and ``DoorState`` calls for
-    different doors share the same top-level key, so most mapping tests
-    isolate the field under test this way rather than asserting the exact
-    call list.
+    presence), so most mapping tests isolate the field under test this way
+    rather than asserting the exact call list.
     """
     return [c for c in sink.calls if key in c[0]]
 
 
-def _door_state_calls(
-    sink: _FakeSink, leaf: str
-) -> list[tuple[Mapping[str, Any], Any]]:
-    """``DoorState`` calls whose single leaf is ``leaf`` (e.g. ``"TrunkFront"``)."""
-    return [c for c in sink.calls if "DoorState" in c[0] and leaf in c[0]["DoorState"]]
+# The six ``DoorState`` leaves, in the order teslemetry-stream's door
+# listeners name them, and the state each reads when every closure is shut.
+DOOR_STATE_KEYS = (
+    "DriverFront",
+    "PassengerFront",
+    "DriverRear",
+    "PassengerRear",
+    "TrunkFront",
+    "TrunkRear",
+)
+ALL_CLOSED = dict.fromkeys(DOOR_STATE_KEYS, False)
+ALL_CLOSED_RAW = dict.fromkeys(DOOR_STATE_KEYS, "CLOSURESTATE_CLOSED")
+
+
+class _DoorListenerSink(_FakeSink):
+    """Replays teslemetry-stream's door listeners over each ingested event.
+
+    Every ``TeslemetryStreamVehicle`` door listener (``listen_FrontDriverDoor``,
+    ``listen_TrunkFront``, ...) matches *any* event carrying ``DoorState`` and
+    hands its callback ``event["data"]["DoorState"].get(<its own key>)``, so a
+    key an event omits reaches the consumer as ``None`` - which Home Assistant
+    renders as unavailable/unknown. ``latest`` is what each listener's
+    consumer is left holding.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.latest: dict[str, bool | None] = {}
+
+    def ingest(
+        self, data: Mapping[str, Any], metadata: Mapping[str, Any] | None = None
+    ) -> Mapping[str, Any]:
+        if "DoorState" in data:
+            for key in DOOR_STATE_KEYS:
+                self.latest[key] = data["DoorState"].get(key)
+        return super().ingest(data, metadata)
 
 
 class TestLockStateTranslation(TestCase):
@@ -191,48 +220,58 @@ class TestClosureTranslation(TestCase):
                 ],
             )
 
-    def test_front_trunk_closure_states_ingest_nested_door_state(self) -> None:
-        """``Signal.DOOR_STATE`` (``"DoorState"``), leaf ``"TrunkFront"``."""
+    def test_one_broadcast_ingests_one_door_state_event_with_all_six_leaves(
+        self,
+    ) -> None:
+        """``Signal.DOOR_STATE`` (``"DoorState"``), the shape a native event has.
+
+        Every teslemetry-stream door listener fires on any ``DoorState``
+        event, so the six leaves must travel together: one event per leaf
+        hands each listener ``None`` for the other five.
+        """
         vehicle = _make_vehicle()
         sink = _FakeSink()
         BleBroadcastStreamGlue(vehicle, sink)
 
-        vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_OPEN))
+        vehicle._on_message(_closures(frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN))
 
         self.assertEqual(
-            _door_state_calls(sink, "TrunkFront"),
+            _calls_for(sink, "DoorState"),
             [
                 (
-                    {"DoorState": {"TrunkFront": True}},
-                    {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
+                    {"DoorState": {**ALL_CLOSED, "DriverFront": True}},
+                    {
+                        "source": "bluetooth",
+                        "raw": {**ALL_CLOSED_RAW, "DriverFront": "CLOSURESTATE_OPEN"},
+                    },
                 )
             ],
         )
 
-    def test_rear_trunk_closure_states_ingest_nested_door_state(self) -> None:
-        """``Signal.DOOR_STATE`` (``"DoorState"``), leaf ``"TrunkRear"``."""
+    def test_one_broadcast_leaves_every_door_listener_with_a_real_value(self) -> None:
+        """Regression: no door, frunk or trunk listener ends a broadcast on ``None``."""
         vehicle = _make_vehicle()
-        sink = _FakeSink()
+        sink = _DoorListenerSink()
         BleBroadcastStreamGlue(vehicle, sink)
 
-        vehicle._on_message(_closures(rearTrunk=ClosureState_E.CLOSURESTATE_OPEN))
-
-        self.assertEqual(
-            _door_state_calls(sink, "TrunkRear"),
-            [
-                (
-                    {"DoorState": {"TrunkRear": True}},
-                    {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
-                )
-            ],
+        vehicle._on_message(
+            _closures(
+                frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN,
+                rearTrunk=ClosureState_E.CLOSURESTATE_AJAR,
+            )
         )
 
-    def test_the_four_side_doors_ingest_their_own_door_state_leaf(self) -> None:
-        """``Signal.DOOR_STATE`` (``"DoorState"``) leaves for the 4 side doors.
+        self.assertEqual(
+            sink.latest, {**ALL_CLOSED, "DriverFront": True, "TrunkRear": True}
+        )
+
+    def test_each_closure_field_lands_on_its_own_door_state_leaf(self) -> None:
+        """``Signal.DOOR_STATE`` (``"DoorState"``) leaf names.
 
         Field names match ``TeslemetryStreamVehicle.listen_FrontDriverDoor``
         etc., which read ``DriverFront``/``PassengerFront``/``DriverRear``/
-        ``PassengerRear`` out of the same ``DoorState`` dict.
+        ``PassengerRear``/``TrunkFront``/``TrunkRear`` out of the same
+        ``DoorState`` dict.
         """
         vehicle = _make_vehicle()
         sink = _FakeSink()
@@ -243,18 +282,61 @@ class TestClosureTranslation(TestCase):
             ("frontPassengerDoor", "PassengerFront"),
             ("rearDriverDoor", "DriverRear"),
             ("rearPassengerDoor", "PassengerRear"),
+            ("frontTrunk", "TrunkFront"),
+            ("rearTrunk", "TrunkRear"),
         ):
             sink.calls.clear()
             vehicle._on_message(_closures(**{kwarg: ClosureState_E.CLOSURESTATE_OPEN}))
             self.assertEqual(
-                _door_state_calls(sink, leaf),
-                [
-                    (
-                        {"DoorState": {leaf: True}},
-                        {"source": "bluetooth", "raw": "CLOSURESTATE_OPEN"},
-                    )
-                ],
+                [data for data, _ in _calls_for(sink, "DoorState")],
+                [{"DoorState": {**ALL_CLOSED, leaf: True}}],
             )
+
+    def test_an_ambiguous_leaf_is_left_out_of_the_door_state_event(self) -> None:
+        """An unmapped closure state is omitted, never guessed."""
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        vehicle._on_message(_closures(frontTrunk=ClosureState_E.CLOSURESTATE_UNKNOWN))
+
+        expected = {key: False for key in DOOR_STATE_KEYS if key != "TrunkFront"}
+        self.assertEqual(
+            [data for data, _ in _calls_for(sink, "DoorState")],
+            [{"DoorState": expected}],
+        )
+
+    def test_an_unrecognized_enum_number_does_not_lose_the_other_leaves(self) -> None:
+        """proto3 keeps an enum number this build has no name for.
+
+        ``ClosureState_E.Name()`` raises on one, so the ``raw`` metadata
+        carries the bare number instead and the recognized leaves still land.
+        """
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        closures = ClosureStatuses(frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN)
+        closures.frontTrunk = 42  # type: ignore[assignment]
+        vehicle._on_message(_broadcast(VehicleStatus(closureStatuses=closures)))
+
+        expected = {key: False for key in DOOR_STATE_KEYS if key != "TrunkFront"}
+        self.assertEqual(
+            _calls_for(sink, "DoorState"),
+            [
+                (
+                    {"DoorState": {**expected, "DriverFront": True}},
+                    {
+                        "source": "bluetooth",
+                        "raw": {
+                            **ALL_CLOSED_RAW,
+                            "DriverFront": "CLOSURESTATE_OPEN",
+                            "TrunkFront": "42",
+                        },
+                    },
+                )
+            ],
+        )
 
     def test_ambiguous_closure_states_emit_no_ingest_call(self) -> None:
         vehicle = _make_vehicle()
@@ -266,10 +348,20 @@ class TestClosureTranslation(TestCase):
             ClosureState_E.CLOSURESTATE_FAILED_UNLATCH,
         ):
             sink.calls.clear()
-            vehicle._on_message(_closures(chargePort=state, frontTrunk=state))
+            vehicle._on_message(
+                _closures(
+                    chargePort=state,
+                    frontDriverDoor=state,
+                    frontPassengerDoor=state,
+                    rearDriverDoor=state,
+                    rearPassengerDoor=state,
+                    frontTrunk=state,
+                    rearTrunk=state,
+                )
+            )
 
             self.assertEqual(_calls_for(sink, "ChargePortDoorOpen"), [])
-            self.assertEqual(_door_state_calls(sink, "TrunkFront"), [])
+            self.assertEqual(_calls_for(sink, "DoorState"), [])
 
     def test_a_broadcast_without_closures_emits_no_closure_call(self) -> None:
         """Closures have proto3 presence, so an absent submessage says nothing."""
