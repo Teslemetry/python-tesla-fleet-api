@@ -102,8 +102,8 @@ class _FakeSink:
 def _calls_for(sink: _FakeSink, key: str) -> list[tuple[Mapping[str, Any], Any]]:
     """Calls whose top-level ``data`` carries ``key``.
 
-    ``Gear`` fires on every broadcast (a scalar field with no proto3
-    presence, like ``vehicleLockState``) and ``DoorState`` calls for
+    ``Locked`` fires on every broadcast (a scalar field with no proto3
+    presence) and ``DoorState`` calls for
     different doors share the same top-level key, so most mapping tests
     isolate the field under test this way rather than asserting the exact
     call list.
@@ -279,18 +279,15 @@ class TestClosureTranslation(TestCase):
 
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
 
-        # Locked and Gear are scalar fields with no proto3 presence, so both
-        # fire on every broadcast; nothing closure-shaped does.
+        # Locked is a scalar field with no proto3 presence, so it fires on
+        # every broadcast; the omitted gear decodes to GEAR_UNKNOWN and is
+        # skipped, and nothing closure-shaped fires.
         self.assertEqual(
             sink.calls,
             [
                 (
                     {"Locked": True},
                     {"source": "bluetooth", "raw": "VEHICLELOCKSTATE_LOCKED"},
-                ),
-                (
-                    {"Gear": "ShiftStateUnknown"},
-                    {"source": "bluetooth", "raw": "GEAR_UNKNOWN"},
                 ),
             ],
         )
@@ -311,7 +308,6 @@ class TestGearTranslation(TestCase):
         BleBroadcastStreamGlue(vehicle, sink)
 
         for state, expected, name in (
-            (Gear_E.GEAR_UNKNOWN, "ShiftStateUnknown", "GEAR_UNKNOWN"),
             (Gear_E.GEAR_PARK, "ShiftStateP", "GEAR_PARK"),
             (Gear_E.GEAR_DRIVE, "ShiftStateD", "GEAR_DRIVE"),
             (Gear_E.GEAR_REVERSE, "ShiftStateR", "GEAR_REVERSE"),
@@ -323,6 +319,17 @@ class TestGearTranslation(TestCase):
                 _calls_for(sink, "Gear"),
                 [({"Gear": expected}, {"source": "bluetooth", "raw": name})],
             )
+
+    def test_gear_unknown_is_skipped(self) -> None:
+        """GEAR_UNKNOWN is indistinguishable from an omitted gear, so no update."""
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        vehicle._on_message(_gear(Gear_E.GEAR_UNKNOWN))
+        vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
+
+        self.assertEqual(_calls_for(sink, "Gear"), [])
 
 
 class TestTonneauTranslation(TestCase):
@@ -463,9 +470,9 @@ class TestDuckTypedContract(TestCase):
         glue = BleBroadcastStreamGlue(vehicle, sink)
         vehicle._on_message(_lock(VehicleLockState_E.VEHICLELOCKSTATE_LOCKED))
 
-        # Locked and Gear both fire (two scalar fields with no proto3
-        # presence), rather than just the one field this broadcast targets.
-        self.assertEqual(len(sink.calls), 2)
+        # Only Locked fires: the omitted gear decodes to GEAR_UNKNOWN, which
+        # is skipped.
+        self.assertEqual(len(sink.calls), 1)
         glue.stop()
 
     def test_zero_net_new_dependency(self) -> None:
