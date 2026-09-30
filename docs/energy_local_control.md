@@ -202,7 +202,9 @@ about whether the key actually works.
 
 Any 502 response, including one from a gateway-relay command endpoint, raises
 `tesla_fleet_api.exceptions.BadGateway` regardless of whether the response
-carries a JSON body.
+carries a JSON body. Teslemetry's `energy_gateway_unreachable` error code
+raises the `EnergyGatewayUnreachable` subclass, so catch that to tell an
+unreachable gateway apart from any other 502.
 
 To revoke a key, call `remove_authorized_client(public_key)` with its DER bytes
 or the base64 string returned by `list_authorized_clients()`. Removal does not
