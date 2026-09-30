@@ -306,6 +306,38 @@ class TestClosureTranslation(TestCase):
             [{"DoorState": expected}],
         )
 
+    def test_an_unrecognized_enum_number_does_not_lose_the_other_leaves(self) -> None:
+        """proto3 keeps an enum number this build has no name for.
+
+        ``ClosureState_E.Name()`` raises on one, so the ``raw`` metadata
+        carries the bare number instead and the recognized leaves still land.
+        """
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        closures = ClosureStatuses(frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN)
+        closures.frontTrunk = 42  # type: ignore[assignment]
+        vehicle._on_message(_broadcast(VehicleStatus(closureStatuses=closures)))
+
+        expected = {key: False for key in DOOR_STATE_KEYS if key != "TrunkFront"}
+        self.assertEqual(
+            _calls_for(sink, "DoorState"),
+            [
+                (
+                    {"DoorState": {**expected, "DriverFront": True}},
+                    {
+                        "source": "bluetooth",
+                        "raw": {
+                            **ALL_CLOSED_RAW,
+                            "DriverFront": "CLOSURESTATE_OPEN",
+                            "TrunkFront": "42",
+                        },
+                    },
+                )
+            ],
+        )
+
     def test_ambiguous_closure_states_emit_no_ingest_call(self) -> None:
         vehicle = _make_vehicle()
         sink = _FakeSink()

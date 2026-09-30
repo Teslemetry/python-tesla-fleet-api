@@ -161,7 +161,14 @@ class BleBroadcastStreamGlue:
             {"DoorState": door_state},
             {
                 "source": "bluetooth",
-                "raw": {key: ClosureState_E.Name(state) for key, state in raw.items()},
+                # proto3 preserves an enum number this build has no name for,
+                # and Name() raises on one - report the bare number instead.
+                "raw": {
+                    key: ClosureState_E.Name(state)
+                    if state in ClosureState_E.values()
+                    else str(state)
+                    for key, state in raw.items()
+                },
             },
         )
 
