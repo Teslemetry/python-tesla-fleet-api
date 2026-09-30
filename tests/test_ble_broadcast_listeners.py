@@ -280,6 +280,28 @@ class ClosureListenerTests(IsolatedAsyncioTestCase):
         self.assertEqual(results["charge_port"], ClosureState_E.CLOSURESTATE_OPEN)
         self.assertEqual(results["tonneau"], ClosureState_E.CLOSURESTATE_UNKNOWN)
 
+    async def test_closure_statuses_listener_fires_once_with_the_whole_block(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        seen: list[ClosureStatuses] = []
+        vehicle.listen_closure_statuses(seen.append)
+
+        closures = ClosureStatuses(
+            frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN,
+            rearTrunk=ClosureState_E.CLOSURESTATE_AJAR,
+        )
+        vehicle._on_message(_status_broadcast(VehicleStatus(closureStatuses=closures)))
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        self.assertEqual(seen, [closures])
+
     async def test_closure_listener_does_not_fire_without_closure_statuses(
         self,
     ) -> None:
