@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 from yarl import URL
 
 from tesla_fleet_api.const import Method
-from tesla_fleet_api.exceptions import BadGateway
+from tesla_fleet_api.exceptions import BadGateway, EnergyGatewayUnreachable
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 
@@ -94,3 +94,25 @@ class BadGatewayClassificationTests(IsolatedAsyncioTestCase):
         api = _make_api(response=resp)
         with self.assertRaises(BadGateway):
             await api.request(Method.GET, "api/1/vehicles/123/vehicle_data")
+
+    async def test_energy_gateway_unreachable_raises_keyed_subclass(self) -> None:
+        resp = _fake_response(
+            path="/api/1/energy_sites/123/live_status",
+            json_body={"error": "energy_gateway_unreachable"},
+        )
+        api = _make_api(response=resp)
+        with self.assertRaises(EnergyGatewayUnreachable) as ctx:
+            await api.request(Method.GET, "api/1/energy_sites/123/live_status")
+        self.assertIsInstance(ctx.exception, BadGateway)
+
+    async def test_other_502_codes_raise_plain_bad_gateway(self) -> None:
+        for error in ("proxy_failed", "upstream_error"):
+            with self.subTest(error=error):
+                resp = _fake_response(
+                    path="/api/1/energy_sites/123/live_status",
+                    json_body={"error": error},
+                )
+                api = _make_api(response=resp)
+                with self.assertRaises(BadGateway) as ctx:
+                    await api.request(Method.GET, "api/1/energy_sites/123/live_status")
+                self.assertIs(type(ctx.exception), BadGateway)

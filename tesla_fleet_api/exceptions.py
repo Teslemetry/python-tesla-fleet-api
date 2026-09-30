@@ -391,6 +391,13 @@ class BadGateway(TeslaFleetError):
     status = 502
 
 
+class EnergyGatewayUnreachable(BadGateway):  # Teslemetry specific
+    """The energy gateway is unreachable."""
+
+    message = "The energy gateway is unreachable."
+    key = "energy_gateway_unreachable"
+
+
 class ServiceUnavailable(TeslaFleetError):
     """Either an internal service or a vehicle did not respond (timeout)."""
 
@@ -1407,6 +1414,8 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     elif resp.status == 500:
         raise InternalServerError(data)
     elif resp.status == 502:
+        if error == EnergyGatewayUnreachable.key:
+            raise EnergyGatewayUnreachable(data)
         raise BadGateway(data)
     elif resp.status == 503:
         raise ServiceUnavailable(data)
