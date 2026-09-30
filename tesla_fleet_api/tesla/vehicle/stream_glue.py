@@ -49,18 +49,19 @@ class StreamSink(Protocol):
 
 
 # teslemetry-stream's listen_Gear reads a ShiftState-prefixed wire string and
-# strips the prefix via TeslemetryEnum.get() - GEAR_UNKNOWN is VCSEC's
-# always-present proto3 default (0), mirroring LOCK_STATES' treatment of
-# VEHICLELOCKSTATE_UNLOCKED.
+# strips the prefix via TeslemetryEnum.get(). GEAR_UNKNOWN is deliberately
+# unmapped: it is the proto3 default (0) of a field with no presence, so a
+# broadcast that omits gear (every lock-only broadcast) decodes to it and
+# carries no information - emitting ShiftStateUnknown would overwrite a real
+# gear in consumers.
 #
 # These values stay hardcoded rather than derived from Gear_E's own
 # descriptor names (GEAR_UNKNOWN/GEAR_PARK/GEAR_DRIVE/GEAR_REVERSE/
 # GEAR_NEUTRAL): there is no total stripping rule from those names to the
-# wire strings above - PARK/DRIVE/REVERSE/NEUTRAL each collapse to an
-# unrelated single letter while UNKNOWN spells out in full - so any
-# derivation would need a per-value special case anyway.
+# wire strings below - PARK/DRIVE/REVERSE/NEUTRAL each collapse to an
+# unrelated single letter - so any derivation would need a per-value special
+# case anyway.
 GEAR_STATES: Mapping[int, str] = {
-    Gear_E.GEAR_UNKNOWN: "ShiftStateUnknown",
     Gear_E.GEAR_PARK: "ShiftStateP",
     Gear_E.GEAR_DRIVE: "ShiftStateD",
     Gear_E.GEAR_REVERSE: "ShiftStateR",
