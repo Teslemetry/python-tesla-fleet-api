@@ -74,21 +74,37 @@ disable keepalive or disconnect when you have no work for it.
 
 ## Connection Retry Budget
 
-`connect()` and `connect_if_needed()` make at most two connection attempts by
-default. This allows one retry for a waking vehicle or weak signal while
-limiting a failed connection to roughly 40 seconds before raising
-`BluetoothTransportError`. In particular, this lets a `VehicleRouter` move to
-its cloud fallback promptly when the vehicle is discoverable but all of its BLE
-connection slots are occupied.
+`connect()` and `connect_if_needed()` make up to four connection attempts of at
+most 10 seconds each by default, so a connection that times out on every attempt
+raises `BluetoothTransportError` after roughly 40 seconds (plus small backoffs).
+That keeps the worst case prompt enough for a `VehicleRouter` to move to its
+cloud fallback when the vehicle is discoverable but every BLE connection slot is
+occupied.
 
-Pass `max_attempts` explicitly when an environment needs a larger retry budget:
+Under Home Assistant, each attempt re-selects the best connection path (local
+adapter or ESPHome proxy), so several attempts let a failed adapter or proxy be
+followed by another path within one connect. Path selection itself belongs to
+Home Assistant's Bluetooth stack: it ranks paths by signal strength with only a
+small penalty for past failures, so attempts reach a much weaker path only
+after the stronger ones have accumulated many failures.
+
+Pass `max_attempts` and `attempt_timeout` explicitly when an environment needs a
+different budget:
 
 ```python
-await vehicle.connect(max_attempts=4)
+await vehicle.connect(max_attempts=6, attempt_timeout=15)
 ```
 
-The underlying connector's per-attempt timeout is fixed at about 20 seconds, so
-increasing this value increases the worst-case connection delay accordingly.
+The underlying connector's own per-attempt timeout is a fixed 20 seconds;
+`attempt_timeout` overrides it for every attempt.
+
+A failed session setup over an established link - notification setup, a
+handshake timeout or rejection, a failed pairing, or a failed
+`wake_up(wait=True)` - disconnects the link before raising, so a retry starts on
+a fresh connection rather than a half-open one. An infotainment handshake that
+times out while VCSEC reports the car asleep keeps the link, since that read
+proved the link healthy and a sleeping car's infotainment is expected to be
+silent.
 
 ## Pair Vehicle
 

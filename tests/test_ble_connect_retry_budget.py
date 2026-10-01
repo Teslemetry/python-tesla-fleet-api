@@ -1,14 +1,14 @@
 """Regression tests for the BLE connect retry budget.
 
-``bleak_retry_connector``'s own default (``MAX_CONNECT_ATTEMPTS`` = 4) pairs
-with its fixed ~20s per-attempt connect timeout, so a contended connection
-slot (every phone/watch slot held) burns ~81s of real GATT connect attempts
-before ``connect()`` finally raises ``BluetoothTransportError`` and a
-``Router`` can fail over to cloud - indistinguishable from a hang. These
-tests lock in that ``connect()``/``connect_if_needed()`` now default to a
-smaller attempt budget (``DEFAULT_CONNECT_ATTEMPTS``) instead of
-``bleak_retry_connector``'s own default, while still letting a caller pass a
-larger ``max_attempts`` explicitly for a scenario that genuinely needs it.
+Under Home Assistant every connect attempt re-picks the best connection path
+(local adapter or ESPHome proxy), so the attempt budget is how many paths one
+``connect()`` can reach. Two attempts were not enough: a failing local
+adapter plus one timed-out proxy ended the connect before a third path was
+ever tried. ``bleak_retry_connector``'s own per-attempt timeout is a fixed
+20s, so ``connect()`` bounds each attempt itself to keep the
+all-attempts-time-out worst case no longer than the old 2 x 20s budget. These
+tests lock in the budget, the per-attempt bound, and that a caller can still
+override both.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import tesla_fleet_api.tesla.vehicle.bluetooth as vehicle_bluetooth
 from tesla_fleet_api.exceptions import BluetoothTransportError
 from tesla_fleet_api.router import VehicleRouter
 from tesla_fleet_api.tesla.vehicle.bluetooth import (
+    DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
     DEFAULT_CONNECT_ATTEMPTS,
     VehicleBluetooth,
 )
@@ -48,20 +49,52 @@ def _make_connected_client() -> MagicMock:
     return client
 
 
-class ConnectRetryBudgetTests(IsolatedAsyncioTestCase):
-    """The default attempt budget must be cut, not left at the vendored 4."""
+class _RecordingClient:
+    """Stand-in for the live bleak.BleakClient that records connect timeouts."""
 
-    def test_default_is_smaller_than_bleak_retry_connectors_own_default(
+    timeouts: list[float] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def connect(self, **kwargs: Any) -> None:
+        self.timeouts.append(kwargs["timeout"])
+
+
+async def _attempt_timeouts_seen(do_connect: Any) -> list[float]:
+    """Run ``do_connect`` and drive one attempt the way the connector does."""
+    _RecordingClient.timeouts = []
+    establish = AsyncMock(return_value=_make_connected_client())
+    with (
+        patch("bleak.BleakClient", _RecordingClient),
+        patch.object(vehicle_bluetooth, "establish_connection", establish),
+    ):
+        await do_connect()
+        client = establish.call_args.args[0](MagicMock())
+        # bleak_retry_connector's fixed per-attempt timeout.
+        await client.connect(timeout=20.0, dangerous_use_bleak_cache=False)
+    return _RecordingClient.timeouts
+
+
+class ConnectRetryBudgetTests(IsolatedAsyncioTestCase):
+    """The default budget must reach several paths without a longer worst case."""
+
+    def test_default_budget_reaches_several_connection_paths(self) -> None:
+        # Adapter plus two proxies needs at least three attempts.
+        self.assertGreaterEqual(DEFAULT_CONNECT_ATTEMPTS, 3)
+
+    def test_worst_case_is_no_longer_than_the_old_two_by_twenty_budget(
         self,
     ) -> None:
-        from bleak_retry_connector import MAX_CONNECT_ATTEMPTS
+        from bleak_retry_connector import BLEAK_TIMEOUT
 
-        self.assertLess(DEFAULT_CONNECT_ATTEMPTS, MAX_CONNECT_ATTEMPTS)
-        # Still allows one retry - a bare single attempt would give a
-        # genuinely transient failure (car waking, weak RF) no second try.
-        self.assertGreaterEqual(DEFAULT_CONNECT_ATTEMPTS, 2)
+        self.assertLess(DEFAULT_CONNECT_ATTEMPT_TIMEOUT, BLEAK_TIMEOUT)
+        self.assertLessEqual(
+            DEFAULT_CONNECT_ATTEMPTS * DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
+            2 * BLEAK_TIMEOUT,
+        )
 
-    async def test_connect_passes_reduced_default_to_establish_connection(
+    async def test_connect_passes_default_budget_to_establish_connection(
         self,
     ) -> None:
         vehicle = _make_vehicle()
@@ -74,7 +107,7 @@ class ConnectRetryBudgetTests(IsolatedAsyncioTestCase):
             establish.call_args.kwargs["max_attempts"], DEFAULT_CONNECT_ATTEMPTS
         )
 
-    async def test_connect_if_needed_passes_reduced_default(self) -> None:
+    async def test_connect_if_needed_passes_default_budget(self) -> None:
         vehicle = _make_vehicle()
         establish = AsyncMock(return_value=_make_connected_client())
 
@@ -95,13 +128,25 @@ class ConnectRetryBudgetTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(establish.call_args.kwargs["max_attempts"], 5)
 
-    async def test_contended_slot_failure_surfaces_after_the_reduced_budget(
+    async def test_each_attempt_is_bounded_to_the_default_timeout(self) -> None:
+        """establish_connection calls connect(timeout=20); the client class
+        connect() hands it must replace that with the shorter bound."""
+        timeouts = await _attempt_timeouts_seen(_make_vehicle().connect)
+        self.assertEqual(timeouts, [DEFAULT_CONNECT_ATTEMPT_TIMEOUT])
+
+    async def test_caller_can_override_the_per_attempt_timeout(self) -> None:
+        timeouts = await _attempt_timeouts_seen(
+            lambda: _make_vehicle().connect_if_needed(attempt_timeout=25)
+        )
+        self.assertEqual(timeouts, [25])
+
+    async def test_contended_slot_failure_surfaces_after_the_budget(
         self,
     ) -> None:
         """A slot-exhausted vehicle (every attempt in the budget times out)
-        must still raise ``BluetoothTransportError`` - only the budget
-        handed to ``establish_connection`` shrinks, not the exception
-        contract a ``Router`` fails over on."""
+        must still raise ``BluetoothTransportError`` - the budget handed to
+        ``establish_connection`` changes how long that takes, not the
+        exception contract a ``Router`` fails over on."""
         vehicle = _make_vehicle()
         # bleak_retry_connector exhausts the whole budget internally and
         # raises a single BleakError once max_attempts is used up.
@@ -133,9 +178,9 @@ class _FakeCloudFallback:
 
 class ContendedSlotFailsOverFastTests(IsolatedAsyncioTestCase):
     """A contended-slot connect failure must still fail over to cloud - the
-    reduced budget only changes how long that takes, not whether it works."""
+    connect budget only changes how long that takes, not whether it works."""
 
-    async def test_router_fails_over_after_reduced_connect_budget(self) -> None:
+    async def test_router_fails_over_after_connect_budget(self) -> None:
         primary = _make_vehicle()
         establish = AsyncMock(
             side_effect=BleakError("device not found: out of connection slots")
@@ -149,6 +194,6 @@ class ContendedSlotFailsOverFastTests(IsolatedAsyncioTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         self.assertEqual(fallback.wake_up_calls, 1)
         # Only one establish_connection call for the whole failed primary
-        # attempt - the reduced max_attempts is what bounds its internal
+        # attempt - max_attempts is what bounds its internal
         # retry loop, not repeated calls from our code.
         establish.assert_awaited_once()

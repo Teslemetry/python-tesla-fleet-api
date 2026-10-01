@@ -131,9 +131,18 @@ DEFAULT_KEEPALIVE_INTERVAL = 20.0
 # wake of a sleeping car, while VCSEC reports awake after ~0.5s.
 DEFAULT_WAKE_TIMEOUT = 30.0
 
-# The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
-# transient failures without delaying Router fallback for its full default.
-DEFAULT_CONNECT_ATTEMPTS = 2
+# Under Home Assistant every connect attempt re-picks the best connection path
+# (local adapter or proxy), so the attempt count is how many paths a connect can
+# reach: 4 covers a typical adapter-plus-proxies setup. The connector's own
+# per-attempt timeout is a fixed 20s, so each attempt is bounded to 10s instead,
+# keeping the all-attempts-time-out worst case at ~40s (4 x 10s plus small
+# backoffs) - the same as the previous 2 x 20s budget.
+DEFAULT_CONNECT_ATTEMPTS = 4
+DEFAULT_CONNECT_ATTEMPT_TIMEOUT = 10.0
+
+# Bound on tearing down a link after a failed session setup; the failure is
+# what gets reported, so a stuck disconnect must not hold it back.
+LINK_TEARDOWN_TIMEOUT = 5.0
 
 if TYPE_CHECKING:
     # Resolved dynamically as ``bleak.BleakClient``/``bleak.BleakScanner`` at
@@ -145,6 +154,33 @@ if TYPE_CHECKING:
 
 BluetoothParentT = TypeVar("BluetoothParentT", bound="Tesla")
 _BroadcastWatcher = Callable[[RoutableMessage], None]
+
+
+_bounded_client_classes: dict[tuple[type[BleakClient], float], type[BleakClient]] = {}
+
+
+def _bounded_connect_client(timeout: float) -> type[BleakClient]:
+    """Return a subclass of the live ``bleak.BleakClient`` whose ``connect()``
+    always uses ``timeout``.
+
+    ``establish_connection`` calls ``connect(timeout=BLEAK_TIMEOUT)`` with a
+    fixed, unexposed 20s; every bleak backend (BlueZ, ESPHome proxy) honors a
+    ``timeout`` keyword, so overriding it here is the only way to shorten each
+    attempt. The base is resolved at call time, never at import, so
+    habluetooth's late-installed wrapper stays in the chain; classes are cached
+    per base so repeated connects don't mint new types.
+    """
+    base: type[BleakClient] = bleak.BleakClient
+    key = (base, timeout)
+    if (cls := _bounded_client_classes.get(key)) is None:
+
+        class _BoundedConnectClient(base):
+            async def connect(self, **kwargs: Any) -> None:
+                kwargs["timeout"] = timeout
+                await super().connect(**kwargs)
+
+        cls = _bounded_client_classes[key] = _BoundedConnectClient
+    return cls
 
 
 def prependLength(message: bytes) -> bytearray:
@@ -658,8 +694,22 @@ class VehicleBluetooth(
         """Return the currently assigned BLE device, if one has been discovered."""
         return self.device
 
-    async def connect(self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS) -> None:
-        """Connect to the Tesla BLE device."""
+    async def connect(
+        self,
+        max_attempts: int = DEFAULT_CONNECT_ATTEMPTS,
+        attempt_timeout: float = DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
+    ) -> None:
+        """Connect to the Tesla BLE device.
+
+        Makes up to ``max_attempts`` connection attempts of at most
+        ``attempt_timeout`` seconds each. Under Home Assistant each attempt
+        re-selects the best available connection path, so a failed adapter or
+        proxy is followed by the next one rather than ending the connect.
+
+        Any failure after a GATT link was established (notification setup, a
+        dropped link) tears that link down before raising, so the vehicle is
+        never left holding a half-open connection.
+        """
         if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
         # Resolve BleakClient dynamically: habluetooth replaces
@@ -668,7 +718,7 @@ class VehicleBluetooth(
         stage = "establish_connection"
         try:
             self.client = await establish_connection(
-                bleak.BleakClient,
+                _bounded_connect_client(attempt_timeout),
                 self.device,
                 self.vin,
                 disconnected_callback=self._on_ble_disconnected,
@@ -695,14 +745,45 @@ class VehicleBluetooth(
                 type(e).__name__,
                 e,
             )
-            client = self.client
-            self.client = None
-            if client:
-                try:
-                    await client.disconnect()
-                except (BleakError, TimeoutError):
-                    pass
+            await self._drop_link(f"connect failed at {stage}")
             raise BluetoothTransportError from e
+        except (Exception, TeslaFleetError):
+            await self._drop_link(f"connect failed at {stage}")
+            raise
+
+    async def _drop_link(self, reason: str) -> None:
+        """Tear down the current GATT link after a failed session setup.
+
+        Best effort and bounded: it never raises, so the caller's own failure
+        is what surfaces. The next send reconnects via ``connect_if_needed``.
+        """
+        await self._stop_keepalive()
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+        LOGGER.debug("BLE dropping link vin=%s: %s", self.vin, reason)
+        try:
+            async with asyncio.timeout(LINK_TEARDOWN_TIMEOUT):
+                await client.disconnect()
+        except Exception as e:
+            LOGGER.debug(
+                "BLE link teardown failed vin=%s %s: %s", self.vin, type(e).__name__, e
+            )
+        self._set_connected(False)
+
+    async def _drop_link_on_failure(self, reason: str, err: BaseException) -> None:
+        """Drop the link for a failed session setup unless ``err`` is exempt.
+
+        ``SigningDisabled`` is raised before anything touches the link (a
+        passive listener's held link must survive it), and cancellation or
+        interpreter exit is not a session failure.
+        """
+        if isinstance(err, SigningDisabled) or not isinstance(
+            err, (Exception, TeslaFleetError)
+        ):
+            return
+        await self._drop_link(f"{reason}: {type(err).__name__}")
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
@@ -745,13 +826,17 @@ class VehicleBluetooth(
         self._set_connected(False)
 
     async def connect_if_needed(
-        self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS
+        self,
+        max_attempts: int = DEFAULT_CONNECT_ATTEMPTS,
+        attempt_timeout: float = DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
     ) -> None:
         """Connect to the Tesla BLE device if not already connected."""
         async with self._connect_lock:
             if not self.client or not self.client.is_connected:
                 LOGGER.info(f"Reconnecting to {self.ble_name}")
-                await self.connect(max_attempts=max_attempts)
+                await self.connect(
+                    max_attempts=max_attempts, attempt_timeout=attempt_timeout
+                )
 
     async def _start_keepalive(self) -> None:
         """Start the idle keepalive task for this connection, if enabled."""
@@ -1338,6 +1423,35 @@ class VehicleBluetooth(
             confirm_broadcast=confirm_broadcast,
         )
 
+    async def handshakeVehicleSecurity(self) -> None:
+        """Perform a handshake with the vehicle security domain.
+
+        A failed handshake drops the BLE link before raising, so a retry starts
+        on a fresh connection instead of a half-open one.
+        """
+        try:
+            await super().handshakeVehicleSecurity()
+        except BaseException as err:
+            await self._drop_link_on_failure("vehicle security handshake failed", err)
+            raise
+
+    async def handshakeInfotainment(self) -> None:
+        """Perform a handshake with the infotainment domain.
+
+        A failed handshake drops the BLE link before raising, unless VCSEC
+        reports the car asleep - a sleeping car's infotainment is expected to
+        be silent, and that read proves the link itself is alive.
+        """
+        try:
+            await super().handshakeInfotainment()
+        except BluetoothTimeout:
+            if not await self._vehicle_asleep():
+                await self._drop_link("infotainment handshake failed")
+            raise
+        except BaseException as err:
+            await self._drop_link_on_failure("infotainment handshake failed", err)
+            raise
+
     async def _ensure_handshake(self, domain: Domain) -> None:
         if not self._sessions[domain].ready:
             await self._handshake(domain)
@@ -1430,7 +1544,11 @@ class VehicleBluetooth(
         unresolved resolves as a best-effort success instead of raising - see
         the class docstring.
         """
-        await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        try:
+            await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        except BaseException as err:
+            await self._drop_link_on_failure("vehicle security handshake failed", err)
+            raise
         if self.confirmation == "optimistic":
             return await self._send_optimistic(
                 Domain.DOMAIN_VEHICLE_SECURITY,
@@ -1490,6 +1608,8 @@ class VehicleBluetooth(
             # Nothing was sent yet, so waking and retrying cannot double-execute.
             sleep_status = await self._sleep_status()
             if sleep_status == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP:
+                # A sleeping car's silent infotainment is expected, and the
+                # VCSEC read just proved the link alive: keep it.
                 if not wake:
                     raise
                 await self._wake_for_command(timeout)
@@ -1503,9 +1623,14 @@ class VehicleBluetooth(
                         self._infotainment_boot_timeout, wake=False
                     )
                 except BluetoothTimeout:
+                    await self._drop_link("infotainment handshake failed")
                     raise timeout from None
             else:
+                await self._drop_link("infotainment handshake failed")
                 raise
+        except BaseException as err:
+            await self._drop_link_on_failure("infotainment handshake failed", err)
+            raise
         if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
                 Domain.DOMAIN_INFOTAINMENT,
@@ -1652,6 +1777,15 @@ class VehicleBluetooth(
             uuid=randbytes(16),
         )
 
+        try:
+            await self._pair(msg, timeout, poll_interval)
+        except BaseException as err:
+            await self._drop_link_on_failure("pairing failed", err)
+            raise
+
+    async def _pair(
+        self, msg: RoutableMessage, timeout: float, poll_interval: float
+    ) -> None:
         deadline = time.monotonic() + timeout
 
         # Fast path: write the op once and wait one interval for its one-shot
@@ -1762,7 +1896,11 @@ class VehicleBluetooth(
             return await self._sendVehicleSecurity(
                 UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
             )
-        await self._await_infotainment(timeout, wake=True)
+        try:
+            await self._await_infotainment(timeout, wake=True)
+        except BaseException as err:
+            await self._drop_link_on_failure("wake failed", err)
+            raise
         return {"response": {"result": True, "reason": ""}}
 
     async def _await_infotainment(self, timeout: float, *, wake: bool) -> None:
