@@ -416,6 +416,13 @@ break.
   so polling survives reconnects) until `timeout`. **Never re-send the whitelist
   op** — it re-prompts the user. Deadline with neither path confirming raises
   `BluetoothTimeout`.
+- **A session_info reply that fails authentication is re-requested, never
+  trusted**: `Commands._handshake` re-sends the unsigned session-info request up
+  to `_handshake_attempts` (3) times `_handshake_retry_interval` (1s) apart on
+  `SessionInfoAuthenticationFault`, matching vehicle-command's `tryStartSession`,
+  and raises after the last. VCSEC was observed sending a present-but-empty
+  `session_info_tag` on the first handshake right after a key-card-approved
+  whitelist add (fixture in `tests/test_session_info_authentication.py`).
 - **Idle keepalive**: an idle held link to the vehicle drops at ~42s mean; a
   trivial passive GATT read on an idle cadence extends the session ~10x, so
   `keepalive_interval` (default `DEFAULT_KEEPALIVE_INTERVAL`, `None`/`0`

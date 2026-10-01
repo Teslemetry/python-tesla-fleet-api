@@ -477,6 +477,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     _auth_method: ClassVar[Literal["hmac", "aes"]]
     # Transport identity for debug logging; set per concrete subclass.
     _transport_name: ClassVar[str]
+    _handshake_attempts: ClassVar[int] = 3
+    _handshake_retry_interval: ClassVar[float] = 1.0
 
     def __init__(
         self,
@@ -1217,7 +1219,21 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             raise SigningDisabled()
 
         LOGGER.debug(f"Handshake with domain {Domain.Name(domain)}")
-        await self._send(self._session_info_request(domain), "session_info")
+        # Like vehicle-command's tryStartSession: a session_info reply that
+        # fails authentication is discarded and the (unsigned, idempotent)
+        # request re-sent, instead of failing the handshake on one bad reply.
+        for attempt in range(self._handshake_attempts):
+            try:
+                await self._send(self._session_info_request(domain), "session_info")
+                break
+            except SessionInfoAuthenticationFault as e:
+                LOGGER.debug(
+                    f"Discarding unauthenticated session info from "
+                    f"{Domain.Name(domain)} ({e.data}), attempt {attempt + 1}"
+                )
+                if attempt + 1 >= self._handshake_attempts:
+                    raise
+                await sleep(self._handshake_retry_interval)
         return self._sessions[domain].ready
 
     def _session_info_request(self, domain: Domain) -> RoutableMessage:
