@@ -29,7 +29,7 @@ from tesla_fleet_api.exceptions import (
     SigningDisabled,
 )
 from tesla_fleet_api.tesla.vehicle.bluetooth import (
-    DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
+    DEFAULT_CONNECT_ATTEMPTS,
     VehicleBluetooth,
 )
 from tesla_protocol.command.vcsec_pb2 import VehicleSleepStatus_E
@@ -43,14 +43,14 @@ class _PathClient:
     the next scripted connection path, as habluetooth re-picks per attempt."""
 
     script: list[BaseException | None] = []
-    timeouts: list[float] = []
+    attempts: list[float] = []
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.is_connected = False
         self.disconnect = AsyncMock()
 
     async def connect(self, **kwargs: Any) -> None:
-        self.timeouts.append(kwargs["timeout"])
+        self.attempts.append(kwargs["timeout"])
         outcome = self.script.pop(0)
         if outcome is not None:
             raise outcome
@@ -72,7 +72,7 @@ class ConnectPathFailoverTests(IsolatedAsyncioTestCase):
     """Drive the real ``establish_connection`` loop through scripted paths."""
 
     def setUp(self) -> None:
-        _PathClient.timeouts = []
+        _PathClient.attempts = []
         for patcher in (
             patch("bleak.BleakClient", _PathClient),
             # No real backoff sleeps or BlueZ lookups in a unit test.
@@ -107,12 +107,7 @@ class ConnectPathFailoverTests(IsolatedAsyncioTestCase):
         self.assertIsNone(err)
         assert vehicle.client is not None
         self.assertTrue(vehicle.client.is_connected)
-        self.assertEqual(len(_PathClient.timeouts), 3)
-
-    async def test_every_attempt_uses_the_shorter_bound(self) -> None:
-        await self._connect([TimeoutError(), TimeoutError(), TimeoutError(), None])
-
-        self.assertEqual(_PathClient.timeouts, [DEFAULT_CONNECT_ATTEMPT_TIMEOUT] * 4)
+        self.assertEqual(len(_PathClient.attempts), 3)
 
     async def test_the_old_two_attempt_budget_gave_up_before_the_third_path(
         self,
@@ -123,16 +118,16 @@ class ConnectPathFailoverTests(IsolatedAsyncioTestCase):
         )
 
         self.assertIsNotNone(err)
-        self.assertEqual(len(_PathClient.timeouts), 2)
+        self.assertEqual(len(_PathClient.attempts), 2)
 
     async def test_all_attempts_timing_out_keeps_the_not_found_cause(self) -> None:
         """Callers map a timed-out connect to 'out of range'; the connector's
         ``BleakNotFoundError`` must still be the chained cause."""
-        _, err = await self._connect([TimeoutError()] * 4)
+        _, err = await self._connect([TimeoutError()] * DEFAULT_CONNECT_ATTEMPTS)
 
         assert err is not None
         self.assertIsInstance(err.__cause__, BleakNotFoundError)
-        self.assertEqual(len(_PathClient.timeouts), 4)
+        self.assertEqual(len(_PathClient.attempts), DEFAULT_CONNECT_ATTEMPTS)
 
     async def test_out_of_slots_keeps_its_own_cause(self) -> None:
         _, err = await self._connect(

@@ -74,29 +74,25 @@ disable keepalive or disconnect when you have no work for it.
 
 ## Connection Retry Budget
 
-`connect()` and `connect_if_needed()` make up to four connection attempts of at
-most 10 seconds each by default, so a connection that times out on every attempt
-raises `BluetoothTransportError` after roughly 40 seconds (plus small backoffs).
-That keeps the worst case prompt enough for a `VehicleRouter` to move to its
-cloud fallback when the vehicle is discoverable but every BLE connection slot is
-occupied.
+`connect()` and `connect_if_needed()` make up to three connection attempts by
+default. The underlying connector's per-attempt timeout is fixed at about 20
+seconds, so a connection that times out on every attempt raises
+`BluetoothTransportError` after roughly a minute, before a `VehicleRouter` moves
+to its cloud fallback.
 
 Under Home Assistant, each attempt re-selects the best connection path (local
 adapter or ESPHome proxy), so several attempts let a failed adapter or proxy be
 followed by another path within one connect. Path selection itself belongs to
 Home Assistant's Bluetooth stack: it ranks paths by signal strength with only a
-small penalty for past failures, so attempts reach a much weaker path only
-after the stronger ones have accumulated many failures.
+small penalty for past failures, so a much weaker path that works is reached
+sooner across repeated connects, not necessarily within a single one.
 
-Pass `max_attempts` and `attempt_timeout` explicitly when an environment needs a
-different budget:
+Pass `max_attempts` explicitly when an environment needs a different budget;
+each extra attempt adds up to about 20 seconds to the worst case:
 
 ```python
-await vehicle.connect(max_attempts=6, attempt_timeout=15)
+await vehicle.connect(max_attempts=4)
 ```
-
-The underlying connector's own per-attempt timeout is a fixed 20 seconds;
-`attempt_timeout` overrides it for every attempt.
 
 A failed session setup over an established link - notification setup, a
 handshake timeout or rejection, a failed pairing, or a failed

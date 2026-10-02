@@ -81,9 +81,7 @@ class LateBleakClientBindingTests(IsolatedAsyncioTestCase):
         ):
             await vehicle.connect()
 
-        # connect() hands establish_connection a subclass that only pins the
-        # per-attempt timeout; the late-installed class must be its base.
-        self.assertTrue(issubclass(captured["client_cls"], _SentinelClient))
+        self.assertIs(captured["client_cls"], _SentinelClient)
 
 
 class LateBleakClientBindingTopLevelTests(IsolatedAsyncioTestCase):

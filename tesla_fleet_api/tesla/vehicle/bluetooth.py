@@ -132,13 +132,10 @@ DEFAULT_KEEPALIVE_INTERVAL = 20.0
 DEFAULT_WAKE_TIMEOUT = 30.0
 
 # Under Home Assistant every connect attempt re-picks the best connection path
-# (local adapter or proxy), so the attempt count is how many paths a connect can
-# reach: 4 covers a typical adapter-plus-proxies setup. The connector's own
-# per-attempt timeout is a fixed 20s, so each attempt is bounded to 10s instead,
-# keeping the all-attempts-time-out worst case at ~40s (4 x 10s plus small
-# backoffs) - the same as the previous 2 x 20s budget.
-DEFAULT_CONNECT_ATTEMPTS = 4
-DEFAULT_CONNECT_ATTEMPT_TIMEOUT = 10.0
+# (local adapter or proxy), so the attempt count bounds how many paths one
+# connect can reach. The connector's per-attempt timeout is a fixed ~20s, so
+# three attempts keep an all-attempts-time-out failure to about a minute.
+DEFAULT_CONNECT_ATTEMPTS = 3
 
 # Bound on tearing down a link after a failed session setup; the failure is
 # what gets reported, so a stuck disconnect must not hold it back.
@@ -154,33 +151,6 @@ if TYPE_CHECKING:
 
 BluetoothParentT = TypeVar("BluetoothParentT", bound="Tesla")
 _BroadcastWatcher = Callable[[RoutableMessage], None]
-
-
-_bounded_client_classes: dict[tuple[type[BleakClient], float], type[BleakClient]] = {}
-
-
-def _bounded_connect_client(timeout: float) -> type[BleakClient]:
-    """Return a subclass of the live ``bleak.BleakClient`` whose ``connect()``
-    always uses ``timeout``.
-
-    ``establish_connection`` calls ``connect(timeout=BLEAK_TIMEOUT)`` with a
-    fixed, unexposed 20s; every bleak backend (BlueZ, ESPHome proxy) honors a
-    ``timeout`` keyword, so overriding it here is the only way to shorten each
-    attempt. The base is resolved at call time, never at import, so
-    habluetooth's late-installed wrapper stays in the chain; classes are cached
-    per base so repeated connects don't mint new types.
-    """
-    base: type[BleakClient] = bleak.BleakClient
-    key = (base, timeout)
-    if (cls := _bounded_client_classes.get(key)) is None:
-
-        class _BoundedConnectClient(base):
-            async def connect(self, **kwargs: Any) -> None:
-                kwargs["timeout"] = timeout
-                await super().connect(**kwargs)
-
-        cls = _bounded_client_classes[key] = _BoundedConnectClient
-    return cls
 
 
 def prependLength(message: bytes) -> bytearray:
@@ -694,17 +664,13 @@ class VehicleBluetooth(
         """Return the currently assigned BLE device, if one has been discovered."""
         return self.device
 
-    async def connect(
-        self,
-        max_attempts: int = DEFAULT_CONNECT_ATTEMPTS,
-        attempt_timeout: float = DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
-    ) -> None:
+    async def connect(self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS) -> None:
         """Connect to the Tesla BLE device.
 
-        Makes up to ``max_attempts`` connection attempts of at most
-        ``attempt_timeout`` seconds each. Under Home Assistant each attempt
-        re-selects the best available connection path, so a failed adapter or
-        proxy is followed by the next one rather than ending the connect.
+        Makes up to ``max_attempts`` connection attempts. Under Home Assistant
+        each attempt re-selects the best available connection path, so a
+        failed adapter or proxy is followed by the next one rather than ending
+        the connect.
 
         Any failure after a GATT link was established (notification setup, a
         dropped link) tears that link down before raising, so the vehicle is
@@ -718,7 +684,7 @@ class VehicleBluetooth(
         stage = "establish_connection"
         try:
             self.client = await establish_connection(
-                _bounded_connect_client(attempt_timeout),
+                bleak.BleakClient,
                 self.device,
                 self.vin,
                 disconnected_callback=self._on_ble_disconnected,
@@ -826,17 +792,13 @@ class VehicleBluetooth(
         self._set_connected(False)
 
     async def connect_if_needed(
-        self,
-        max_attempts: int = DEFAULT_CONNECT_ATTEMPTS,
-        attempt_timeout: float = DEFAULT_CONNECT_ATTEMPT_TIMEOUT,
+        self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS
     ) -> None:
         """Connect to the Tesla BLE device if not already connected."""
         async with self._connect_lock:
             if not self.client or not self.client.is_connected:
                 LOGGER.info(f"Reconnecting to {self.ble_name}")
-                await self.connect(
-                    max_attempts=max_attempts, attempt_timeout=attempt_timeout
-                )
+                await self.connect(max_attempts=max_attempts)
 
     async def _start_keepalive(self) -> None:
         """Start the idle keepalive task for this connection, if enabled."""
