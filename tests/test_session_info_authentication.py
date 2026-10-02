@@ -834,10 +834,12 @@ class EmptyTagHandshakeRetryTests(IsolatedAsyncioTestCase):
         async def deliver(*_: Any) -> None:
             vehicle._on_message(self._empty_tag_reply(vehicle))
 
-        vehicle.client.write_gatt_char = AsyncMock(side_effect=deliver)
+        write = vehicle.client.write_gatt_char = AsyncMock(side_effect=deliver)
         with self.assertRaises(SessionInfoAuthenticationFault):
             await vehicle.handshakeVehicleSecurity()
-        self.assertEqual(vehicle.client.write_gatt_char.await_count, 3)
+        # The failed handshake drops the link, so check the captured mock.
+        self.assertIsNone(vehicle.client)
+        self.assertEqual(write.await_count, 3)
         self.assertFalse(
             cast("dict[Any, Any]", vehicle._sessions)[
                 Domain.DOMAIN_VEHICLE_SECURITY

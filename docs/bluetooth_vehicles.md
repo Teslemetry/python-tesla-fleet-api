@@ -74,21 +74,33 @@ disable keepalive or disconnect when you have no work for it.
 
 ## Connection Retry Budget
 
-`connect()` and `connect_if_needed()` make at most two connection attempts by
-default. This allows one retry for a waking vehicle or weak signal while
-limiting a failed connection to roughly 40 seconds before raising
-`BluetoothTransportError`. In particular, this lets a `VehicleRouter` move to
-its cloud fallback promptly when the vehicle is discoverable but all of its BLE
-connection slots are occupied.
+`connect()` and `connect_if_needed()` make up to three connection attempts by
+default. The underlying connector's per-attempt timeout is fixed at about 20
+seconds, so a connection that times out on every attempt raises
+`BluetoothTransportError` after roughly a minute, before a `VehicleRouter` moves
+to its cloud fallback.
 
-Pass `max_attempts` explicitly when an environment needs a larger retry budget:
+Under Home Assistant, each attempt re-selects the best connection path (local
+adapter or ESPHome proxy), so several attempts let a failed adapter or proxy be
+followed by another path within one connect. Path selection itself belongs to
+Home Assistant's Bluetooth stack: it ranks paths by signal strength with only a
+small penalty for past failures, so a much weaker path that works is reached
+sooner across repeated connects, not necessarily within a single one.
+
+Pass `max_attempts` explicitly when an environment needs a different budget;
+each extra attempt adds up to about 20 seconds to the worst case:
 
 ```python
 await vehicle.connect(max_attempts=4)
 ```
 
-The underlying connector's per-attempt timeout is fixed at about 20 seconds, so
-increasing this value increases the worst-case connection delay accordingly.
+A failed session setup over an established link - notification setup, a
+handshake timeout or rejection, a failed pairing, or a failed
+`wake_up(wait=True)` - disconnects the link before raising, so a retry starts on
+a fresh connection rather than a half-open one. An infotainment handshake that
+times out while VCSEC reports the car asleep keeps the link, since that read
+proved the link healthy and a sleeping car's infotainment is expected to be
+silent.
 
 ## Pair Vehicle
 
