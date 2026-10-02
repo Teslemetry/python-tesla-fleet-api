@@ -653,6 +653,7 @@ class BleHandshakeAuthenticationTests(IsolatedAsyncioTestCase):
     ) -> None:
         vehicle = _make_ble_vehicle()
         vehicle._default_timeout = 1.0
+        vehicle._handshake_retry_interval = 0.01
         domain = Domain.DOMAIN_VEHICLE_SECURITY
         attacker_key = ec.generate_private_key(ec.SECP256R1())
         attacker_public_key = _public_key_bytes(attacker_key)
@@ -745,3 +746,100 @@ def _extract_request_uuid(write_mock: AsyncMock) -> bytes:
     # RoutableMessage (see bluetooth.py's prependLength).
     msg = RoutableMessage.FromString(payload[2:])
     return msg.uuid
+
+
+# Captured live 2026-10-01 22:21:06Z: VCSEC's first session_info reply after a
+# key-card-approved whitelist add carried session_info_tag with a zero-length
+# tag (signature_data = 6a 02 32 00), so it can never authenticate.
+CAPTURED_EMPTY_TAG_REPLY = bytes.fromhex(
+    "32121210b6897a37fea9067b25d7c387b9bcd58b3a0208026a0232007a5c1241"
+    "04ca71e4c8d4ee4bc18621cc8bbe33ec86d371a098a500c469510c02ac98530e"
+    "02951b4a83c80ffff1f139e5fa869a0367478d28c33e247d373d629f8ce65a8a"
+    "fe1a10e80d05f79f7277b1da527db0ce40dd3e25312e0000300e92031044e116"
+    "4ca45e6b61322b965995ca8073"
+)
+
+
+class EmptyTagHandshakeRetryTests(IsolatedAsyncioTestCase):
+    """A session_info reply that fails authentication is discarded and the
+    session-info request re-sent (vehicle-command's tryStartSession parity),
+    never trusted - and the handshake still fails after the last attempt."""
+
+    def test_captured_reply_has_present_but_empty_tag(self) -> None:
+        msg = RoutableMessage.FromString(CAPTURED_EMPTY_TAG_REPLY)
+        self.assertTrue(msg.signature_data.HasField("session_info_tag"))
+        self.assertEqual(msg.signature_data.session_info_tag.tag, b"")
+        self.assertEqual(msg.SerializeToString(), CAPTURED_EMPTY_TAG_REPLY)
+        commands = _make_commands(vin="LRW3F7EK4NC716336")
+        with self.assertRaises(SessionInfoAuthenticationFault) as ctx:
+            commands.validate_msg(msg, msg.request_uuid)
+        self.assertIn("missing its authentication tag", str(ctx.exception.data))
+        self.assertFalse(commands._sessions[Domain.DOMAIN_VEHICLE_SECURITY].ready)
+
+    def _empty_tag_reply(self, vehicle: VehicleBluetooth[Any]) -> RoutableMessage:
+        msg = RoutableMessage.FromString(CAPTURED_EMPTY_TAG_REPLY)
+        msg.to_destination.routing_address = vehicle._from_destination
+        msg.request_uuid = _extract_request_uuid(vehicle.client.write_gatt_char)
+        return msg
+
+    async def test_handshake_retries_past_one_empty_tag_reply(self) -> None:
+        vehicle = _make_ble_vehicle()
+        vehicle._default_timeout = 1.0
+        vehicle._handshake_retry_interval = 0.01
+        domain = Domain.DOMAIN_VEHICLE_SECURITY
+        vehicle_public_key = _public_key_bytes(ec.generate_private_key(ec.SECP256R1()))
+        writes = 0
+
+        async def deliver(*_: Any) -> None:
+            nonlocal writes
+            writes += 1
+            if writes == 1:
+                vehicle._on_message(self._empty_tag_reply(vehicle))
+                return
+            session = cast("dict[Any, Any]", vehicle._sessions)[domain]
+            info = SessionInfo(
+                publicKey=vehicle_public_key,
+                epoch=b"\x0b" * 16,
+                clock_time=11825,
+                handle=14,
+            ).SerializeToString()
+            _, _, key = session.keys_for(vehicle_public_key)
+            sent = _extract_request_uuid(vehicle.client.write_gatt_char)
+            vehicle._on_message(
+                RoutableMessage(
+                    to_destination=Destination(
+                        routing_address=vehicle._from_destination
+                    ),
+                    from_destination=Destination(domain=domain),
+                    session_info=info,
+                    request_uuid=sent,
+                    signature_data=SignatureData(
+                        session_info_tag=HMAC_Signature_Data(
+                            tag=_session_info_tag(key, vehicle.vin, sent, info)
+                        )
+                    ),
+                )
+            )
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=deliver)
+        await vehicle.handshakeVehicleSecurity()
+        self.assertTrue(cast("dict[Any, Any]", vehicle._sessions)[domain].ready)
+        self.assertEqual(writes, 2)
+
+    async def test_persistent_empty_tag_still_raises(self) -> None:
+        vehicle = _make_ble_vehicle()
+        vehicle._default_timeout = 1.0
+        vehicle._handshake_retry_interval = 0.01
+
+        async def deliver(*_: Any) -> None:
+            vehicle._on_message(self._empty_tag_reply(vehicle))
+
+        vehicle.client.write_gatt_char = AsyncMock(side_effect=deliver)
+        with self.assertRaises(SessionInfoAuthenticationFault):
+            await vehicle.handshakeVehicleSecurity()
+        self.assertEqual(vehicle.client.write_gatt_char.await_count, 3)
+        self.assertFalse(
+            cast("dict[Any, Any]", vehicle._sessions)[
+                Domain.DOMAIN_VEHICLE_SECURITY
+            ].ready
+        )
