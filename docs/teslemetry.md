@@ -21,6 +21,57 @@ async def main():
 asyncio.run(main())
 ```
 
+## Teslemetry for Business API Keys
+
+A Teslemetry for Business authenticates with a business API key
+(`sk_...`) and may read only the vehicles and energy sites its customers
+have shared with it. The client treats any token that starts with `sk_` as a
+business key.
+
+A business key may not call `/api/metadata`, so `find_server()` cannot look
+up the region. For a business key, `find_server()` makes no request: it
+returns the `region` you passed to `Teslemetry`, or raises
+`BusinessRegionRequired`. Pass `region="na"` or `region="eu"` to use that
+region's host.
+
+`business.products()` lists the shared products. Each product has a `region`
+and a `server`. A request on the other region's host still works, but it
+takes an extra proxy hop, so use one client per region:
+
+```python
+import asyncio
+import aiohttp
+from tesla_fleet_api import Teslemetry
+from tesla_fleet_api.teslemetry import BusinessProductType
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        clients = {
+            region: Teslemetry(session, access_token="sk_...", region=region)
+            for region in ("na", "eu")
+        }
+        for product in await clients["na"].business.products():
+            if product.product_type is BusinessProductType.VEHICLE:
+                vehicle = clients[product.region].vehicles.create(product.product_id)
+                print(product.customer.id, product.customer.ref, await vehicle.vehicle_data())
+
+asyncio.run(main())
+```
+
+`business.list_products()` returns the raw response. A business key gets these
+typed errors from `tesla_fleet_api.exceptions`. Each 403 error subclasses
+`BusinessForbidden` and `Forbidden`:
+
+| Error code | Exception |
+|---|---|
+| `business_not_active` | `BusinessNotActive` |
+| `business_route_not_allowed` | `BusinessRouteNotAllowed` |
+| `business_permission_missing` | `BusinessPermissionMissing` |
+| `business_product_not_consented` | `BusinessProductNotConsented` (also for an unknown product) |
+| `customer_reconnect_required` | `CustomerReconnectRequired` |
+| `customer_scope_missing` | `CustomerScopeMissing` |
+| `business_auth_unavailable` (503) | `BusinessAuthUnavailable`, a `ServiceUnavailable` with `retry_after` from the `Retry-After` header |
+
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each Teslemetry request's

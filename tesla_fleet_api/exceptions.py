@@ -280,6 +280,68 @@ class UnsupportedVehicle(TeslaFleetError):
     key = "unsupported vehicle"
 
 
+class BusinessForbidden(Forbidden):  # Teslemetry for Business specific
+    """A Teslemetry for Business API key (``sk_...``) was refused access.
+
+    Base class for the business 403 error codes, so ``except Forbidden``
+    still catches every one of them.
+    """
+
+    message = "This business API key is not permitted to make this request."
+
+
+class BusinessNotActive(BusinessForbidden):
+    """The business that owns this API key is not active."""
+
+    message = "This business is not active."
+    key = "business_not_active"
+
+
+class BusinessRouteNotAllowed(BusinessForbidden):
+    """This endpoint is not available to business API keys."""
+
+    message = "This endpoint is not available to business API keys."
+    key = "business_route_not_allowed"
+
+
+class BusinessPermissionMissing(BusinessForbidden):
+    """The business API key lacks the permission this endpoint requires."""
+
+    message = "This business API key lacks the permission this endpoint requires."
+    key = "business_permission_missing"
+
+
+class BusinessProductNotConsented(BusinessForbidden):
+    """No customer has shared this product with this business.
+
+    Teslemetry also returns this for an unknown product, so a business
+    cannot tell an unknown VIN from one it may not read.
+    """
+
+    message = "No customer has shared this product with this business."
+    key = "business_product_not_consented"
+
+
+class CustomerReconnectRequired(BusinessForbidden):
+    """The customer's Tesla connection is missing; they must sign in again."""
+
+    message = (
+        "The customer's Tesla connection to Teslemetry is missing; they must "
+        "sign in again."
+    )
+    key = "customer_reconnect_required"
+
+
+class CustomerScopeMissing(BusinessForbidden):
+    """The customer's Tesla grant lacks a permission this business requires."""
+
+    message = (
+        "The customer's Tesla grant lacks a permission this business requires; "
+        "they must sign in again."
+    )
+    key = "customer_scope_missing"
+
+
 class NotFound(TeslaFleetError):
     """The requested resource does not exist."""
 
@@ -405,6 +467,18 @@ class ServiceUnavailable(TeslaFleetError):
     status = 503
 
 
+class BusinessAuthUnavailable(ServiceUnavailable):  # Teslemetry for Business
+    """Teslemetry could not validate the business API key right now.
+
+    Transient: retry after ``retry_after`` seconds (the ``Retry-After``
+    header, ``None`` if absent). Consumer tokens are never affected.
+    """
+
+    message = "Business API key validation is temporarily unavailable."
+    key = "business_auth_unavailable"
+    retry_after: str | None = None
+
+
 class GatewayTimeout(TeslaFleetError):
     """Server did not receive a response."""
 
@@ -423,6 +497,15 @@ class DeviceUnexpectedResponse(TeslaFleetError):
 
 class LibraryError(Exception):
     """Errors related to this library."""
+
+
+class BusinessRegionRequired(LibraryError):
+    """A Teslemetry for Business API key cannot look up its region.
+
+    Business keys may not call ``/api/metadata``, so ``find_server()`` cannot
+    discover the region. Pass ``region=`` to ``Teslemetry``, using the
+    ``region`` of each product from ``business.products()``.
+    """
 
 
 class SigningDisabled(LibraryError):
@@ -1376,7 +1459,16 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
                 raise exception(data)
         raise PaymentRequired(data)
     elif resp.status == 403:
-        for exception in [InvalidScope, UnsupportedVehicle]:
+        for exception in [
+            InvalidScope,
+            UnsupportedVehicle,
+            BusinessNotActive,
+            BusinessRouteNotAllowed,
+            BusinessPermissionMissing,
+            BusinessProductNotConsented,
+            CustomerReconnectRequired,
+            CustomerScopeMissing,
+        ]:
             if error == exception.key:
                 raise exception(data)
         raise Forbidden(data)
@@ -1418,6 +1510,10 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
             raise EnergyGatewayUnreachable(data)
         raise BadGateway(data)
     elif resp.status == 503:
+        if error == BusinessAuthUnavailable.key:
+            exc = BusinessAuthUnavailable(data)
+            exc.retry_after = resp.headers.get("Retry-After")
+            raise exc
         raise ServiceUnavailable(data)
     elif resp.status == 504:
         raise GatewayTimeout(data)

@@ -6,12 +6,22 @@ from typing import Any, Final, cast
 import aiohttp
 
 from tesla_fleet_api.const import LOGGER, Method, is_valid_region
-from tesla_fleet_api.exceptions import TeslemetryRegistrationError
+from tesla_fleet_api.exceptions import (
+    BusinessRegionRequired,
+    TeslemetryRegistrationError,
+)
 from tesla_fleet_api.tesla import TeslaFleetApi
+from tesla_fleet_api.teslemetry.business import (
+    TeslemetryBusiness,
+    TeslemetryRegion,
+    is_business_key,
+    teslemetry_server,
+)
 from tesla_fleet_api.teslemetry.energysite import TeslemetryEnergySites
 from tesla_fleet_api.teslemetry.vehicle import TeslemetryVehicles
 
 REGISTER_URL: Final = "https://api.teslemetry.com/oauth/register"
+DEFAULT_SERVER: Final = "https://api.teslemetry.com"
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,22 +103,38 @@ async def register_client(
 
 class Teslemetry(TeslaFleetApi):
     vehicles: TeslemetryVehicles
+    business: TeslemetryBusiness
     Vehicles = TeslemetryVehicles
     EnergySites = TeslemetryEnergySites
+    Business = TeslemetryBusiness
     _transport_name = "teslemetry"
 
     def __init__(
         self,
         session: aiohttp.ClientSession,
         access_token: str | Callable[[], Awaitable[str | None]],
-        server: str = "https://api.teslemetry.com",
+        server: str = DEFAULT_SERVER,
+        region: TeslemetryRegion | None = None,
     ) -> None:
-        """Initialize the Teslemetry API."""
+        """Initialize the Teslemetry API.
+
+        ``region`` (``"na"`` or ``"eu"``) sets the region without a
+        ``find_server()`` lookup and, unless ``server`` is also given, uses
+        that region's host. A Teslemetry for Business key (``sk_...``) cannot
+        look up its region, so pass the ``region`` of the products to call.
+        """
 
         self.session = session
         self._access_token = access_token
         self.server = server
+        if region is not None:
+            if region not in ("na", "eu"):
+                raise ValueError("Teslemetry region must be one of na, eu")
+            self.region = region
+            if server == DEFAULT_SERVER:
+                self.server = teslemetry_server(region)
 
+        self.business = self.Business(self)
         self.charging = self.Charging(self)
         self.energySites = self.EnergySites(self)
         self.user = self.User(self)
@@ -156,7 +182,20 @@ class Teslemetry(TeslaFleetApi):
         return resp["scopes"]
 
     async def find_server(self) -> str:
-        """Find the server URL for the Tesla Fleet API."""
+        """Find the server URL for the Tesla Fleet API.
+
+        A Teslemetry for Business key (``sk_...``) may not call
+        ``/api/metadata``, so for one this makes no request: it returns the
+        ``region`` given to ``__init__``, or raises ``BusinessRegionRequired``.
+        """
+        if is_business_key(await self.access_token()):
+            if self.region is None:
+                raise BusinessRegionRequired(
+                    "Business API keys cannot look up a region; pass region= to "
+                    "Teslemetry, using each product's region from "
+                    "business.products()"
+                )
+            return self.region
         await self.metadata(True)
         assert self.region
         return self.region

@@ -18,3 +18,9 @@ class WaitTopic(StrEnum):
     CONNECTIVITY = "connectivity"
     ALERTS = "alerts"
     ERRORS = "errors"
+
+class BusinessProductType(StrEnum):
+    """Product types in the Teslemetry for Business product listing"""
+
+    VEHICLE = "vehicle"
+    ENERGY = "energy"
