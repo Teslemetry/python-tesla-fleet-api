@@ -163,6 +163,31 @@ def prependLength(message: bytes) -> bytearray:
 STALE_CHUNK_TIMEOUT = 1.0
 
 
+def _parse_frame(payload: bytes) -> RoutableMessage:
+    """Parse one reassembled frame, wrapping a bare VCSEC message.
+
+    On a fresh link the car sends ``FromVCSECMessage`` frames (such as a
+    repeating ``authenticationRequest``) without a ``RoutableMessage``
+    around them. None of ``FromVCSECMessage``'s field numbers exist on
+    ``RoutableMessage``, so such a frame parses as a ``RoutableMessage``
+    with no known fields. It is wrapped as an unaddressed VCSEC message so
+    it reaches the broadcast listeners like a wrapped one.
+    """
+    message = RoutableMessage()
+    message.ParseFromString(payload)
+    if payload and not message.ListFields():
+        try:
+            vcsec = FromVCSECMessage.FromString(payload)
+        except DecodeError:
+            return message
+        if vcsec.WhichOneof("sub_message") is not None:
+            return RoutableMessage(
+                from_destination=Destination(domain=Domain.DOMAIN_VEHICLE_SECURITY),
+                protobuf_message_as_bytes=payload,
+            )
+    return message
+
+
 class ReassemblingBuffer:
     """
     Reassembles BLE notification chunks into length-prefixed RoutableMessages.
@@ -225,10 +250,7 @@ class ReassemblingBuffer:
                 and len(self.buffer) >= self.expected_length
             ):
                 try:
-                    message = RoutableMessage()
-                    message.ParseFromString(
-                        bytes(self.buffer[2 : self.expected_length])
-                    )
+                    message = _parse_frame(bytes(self.buffer[2 : self.expected_length]))
                     self.buffer = self.buffer[self.expected_length :]
                     self.packet_starts = [
                         x - self.expected_length
