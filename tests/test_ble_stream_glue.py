@@ -384,6 +384,30 @@ class TestClosureTranslation(TestCase):
             ],
         )
 
+    def test_asleep_frame_without_closures_emits_no_closure_call(self) -> None:
+        """A live asleep frame with the charge port open omits closures.
+
+        Reporting its absent closures as the proto3 default would ingest
+        ``ChargePortDoorOpen: False`` for an open charge port.
+        """
+        vehicle = _make_vehicle()
+        sink = _FakeSink()
+        BleBroadcastStreamGlue(vehicle, sink)
+
+        vehicle._on_message(
+            _broadcast(VehicleStatus.FromString(bytes.fromhex("10011802200142020801")))
+        )
+
+        self.assertEqual(
+            sink.calls,
+            [
+                (
+                    {"Locked": True},
+                    {"source": "bluetooth", "raw": "VEHICLELOCKSTATE_LOCKED"},
+                ),
+            ],
+        )
+
 
 class TestGearTranslation(TestCase):
     """Targets ``Signal.GEAR`` (``"Gear"``), consumed by ``listen_Gear``.

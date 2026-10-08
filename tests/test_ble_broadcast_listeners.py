@@ -323,6 +323,34 @@ class ClosureListenerTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(seen, [])
 
+    async def test_asleep_frame_without_closures_fires_no_closure_listener(
+        self,
+    ) -> None:
+        # A live Model 3 sent this VehicleStatus while locked and asleep, with
+        # the charge port open. It has no closureStatuses submessage (field 2),
+        # so every closure would read as the proto3 default CLOSED if decoded.
+        status = VehicleStatus.FromString(bytes.fromhex("10011802200142020801"))
+        self.assertFalse(status.HasField("closureStatuses"))
+
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_closure_statuses(seen.append)
+        for listen in (
+            vehicle.listen_front_driver_door,
+            vehicle.listen_front_passenger_door,
+            vehicle.listen_rear_driver_door,
+            vehicle.listen_rear_passenger_door,
+            vehicle.listen_front_trunk,
+            vehicle.listen_rear_trunk,
+            vehicle.listen_charge_port,
+            vehicle.listen_tonneau,
+        ):
+            listen(seen.append)
+
+        vehicle._on_message(_status_broadcast(status))
+
+        self.assertEqual(seen, [])
+
 
 class TonneauPercentOpenTests(IsolatedAsyncioTestCase):
     async def test_fires_when_detailed_closure_status_present(self) -> None:
