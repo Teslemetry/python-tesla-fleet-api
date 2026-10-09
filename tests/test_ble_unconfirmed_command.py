@@ -111,7 +111,7 @@ class MutatingCommandTimeoutTests(MockedBleTransportTestCase):
         send.side_effect = [BluetoothTimeout()]
 
         with self.assertRaises(BluetoothUnconfirmedCommand):
-            await vehicle.charge_port_door_open()
+            await vehicle.charge_port_door_close()
 
     async def test_handshake_timeout_raises_plain_bluetooth_timeout(self) -> None:
         vehicle, send = self.make_vehicle()

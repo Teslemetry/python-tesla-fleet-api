@@ -96,7 +96,7 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
         send.side_effect = [BluetoothTimeout()]
 
         with self.assertRaises(BluetoothTimeout):
-            await vehicle.charge_port_door_open()
+            await vehicle.charge_port_door_close()
         # No prover read issued for an unverifiable command.
         self.assertEqual(send.await_count, 1)
 

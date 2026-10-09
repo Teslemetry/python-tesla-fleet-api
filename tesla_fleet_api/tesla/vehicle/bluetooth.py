@@ -24,8 +24,11 @@ from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
+    SessionInfoAuthenticationFault,
+    SignedCommandResponseReplayed,
     SigningDisabled,
     TeslaFleetError,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
     WhitelistOperationStatus,
 )
 from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners, Unsubscribe
@@ -291,6 +294,17 @@ class ReassemblingBuffer:
 VerifyPlan = tuple[str, Callable[[Any], bool]]
 
 
+def _charge_port_connected(state: ChargeState) -> bool | None:
+    """Classify positive cable evidence; absent/SNA fields are not unplugged."""
+    cable = state.conn_charge_cable.WhichOneof("type")
+    disconnected = state.charging_state.WhichOneof("type") == "Disconnected"
+    if cable in ("IEC", "SAE", "GB_AC", "GB_DC"):
+        return None if disconnected else True
+    if disconnected and cable in (None, "SNA"):
+        return False
+    return None
+
+
 def _decode_vcsec_status(msg: RoutableMessage) -> VehicleStatus | None:
     """Decode a broadcast frame's VCSEC status payload, if it carries one.
 
@@ -488,7 +502,9 @@ class VehicleBluetooth(
       falls through to ``raise_unconfirmed`` (the read itself could not be
       attempted, e.g. an INFO-domain prover needs the car awake). Commands
       with no derivable prover fall through to ``raise_unconfirmed`` exactly
-      as under ``"ack"``.
+      as under ``"ack"``. Charge-port opening is stricter: it prepares wake/INFO
+      readiness before submission and verifies the latch/flap even after an
+      ACK. Its unresolved outcome always raises ``BluetoothUnconfirmedCommand``.
 
     Both rungs above derive their expected-end-state predicate from the same
     per-command table (one source of truth), just applied to a broadcast frame
@@ -513,6 +529,8 @@ class VehicleBluetooth(
     and a write provably rejected before submission
     (``BluetoothTransportError``) are unaffected by this flag and always
     raise - it only converts the "could not determine what happened" outcome.
+    Charge-port opening in ``"verify"`` mode is also exempt: an unconfirmed
+    physical result always raises, so a router cannot replay the opening.
 
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
@@ -560,6 +578,8 @@ class VehicleBluetooth(
     # How long an awake car's infotainment gets to finish booting (measured up
     # to ~16s after a wake) before its handshake timeout is final.
     _infotainment_boot_timeout: float = 20
+    _charge_port_verify_timeout: float = 5
+    _charge_port_verify_interval: float = 0.25
     _keepalive_task: asyncio.Task[None] | None = None
     _last_activity: float = 0.0
     _connected: bool = False
@@ -1491,6 +1511,114 @@ class VehicleBluetooth(
             self._transport_name,
         )
         return {"response": {"result": True, "reason": ""}}
+
+    async def charge_port_door_open(self) -> dict[str, Any]:
+        """Open the flap or release a cable, verifying the physical result.
+
+        In ``verify`` mode, prepare the charging subsystem before actuating,
+        then require an explicit latch/flap result even after a successful
+        ACK. An unresolved result always raises ``BluetoothUnconfirmedCommand``
+        (including with ``raise_unconfirmed=False``), preventing cloud replay.
+        Other confirmation modes retain the ordinary VCSEC ACK/write contract.
+        """
+        if self.confirmation != "verify":
+            return await super().charge_port_door_open()
+
+        # Nothing has actuated yet. All readiness failures may safely fail over.
+        # Bound the entire preflight, including a stalled read or reconnect.
+        try:
+            async with asyncio.timeout(self._wake_timeout):
+                if await self._vehicle_asleep():
+                    if not self.wake_if_asleep:
+                        raise BluetoothCommandFailed("Vehicle asleep; wake disabled")
+                    await self._wake_for_command(BluetoothTimeout())
+                else:
+                    # Cached sessions and VCSEC AWAKE do not establish readiness.
+                    await self._await_infotainment(
+                        self._infotainment_boot_timeout, wake=False
+                    )
+                while True:
+                    try:
+                        before = await self.charge_state()
+                        break
+                    except (BluetoothTimeout, TimeoutError, BleakError):
+                        # INFO may answer its handshake before charge data is
+                        # available. Retry only the read within the preflight budget.
+                        await asyncio.sleep(self._charge_port_verify_interval)
+                connected = _charge_port_connected(before)
+                if connected is None:
+                    raise BluetoothCommandFailed(
+                        "Charge-port cable state unknown; no opening command sent"
+                    )
+                await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        except TimeoutError as err:
+            raise BluetoothTimeout("Charge-port readiness timed out") from err
+
+        # Bypass the generic best-effort VCSEC ladder: a successful ACK, or a
+        # missing one, must both proceed to physical verification for this action.
+        cause: BaseException | None = None
+        try:
+            result = await super()._sendVehicleSecurity(
+                UnsignedMessage(
+                    closureMoveRequest=ClosureMoveRequest(
+                        chargePort=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                    )
+                )
+            )
+            if result["response"]["result"] is False:
+                return result
+        except (
+            Exception,
+            BluetoothTimeout,
+            SessionInfoAuthenticationFault,
+            SignedCommandResponseReplayed,
+            TeslaFleetMessageFaultResponseSizeExceedsMTU,
+        ) as err:
+            # A malformed, unauthenticated or replayed reply says nothing about
+            # whether opening executed. Ordinary backend errors are likewise
+            # delivery-ambiguous. A response exceeding MTU may follow execution,
+            # per Tesla SDK RoutableMessageError.MayHaveSucceeded.
+            # Proven pre-submission transport failures and
+            # explicit car-side protocol rejections retain their TeslaFleetError
+            # types and are not caught here.
+            cause = err
+
+        # Keep the original goal if the cable changes during verification. In
+        # particular, an open flap must never stand in for an unreleased latch.
+        try:
+            async with asyncio.timeout(self._charge_port_verify_timeout):
+                while True:
+                    try:
+                        after = await self.charge_state()
+                        if connected:
+                            confirmed = (
+                                after.charge_port_latch.WhichOneof("type")
+                                == "Disengaged"
+                            )
+                        else:
+                            confirmed = (
+                                _charge_port_connected(after) is False
+                                and after.HasField("charge_port_door_open")
+                                and after.charge_port_door_open
+                            )
+                        if confirmed:
+                            LOGGER.debug(
+                                "command=chargePortOpen transport=%s physical_confirmation=confirmed",
+                                self._transport_name,
+                            )
+                            return {"response": {"result": True, "reason": ""}}
+                    except (Exception, TeslaFleetError) as err:
+                        # No read failure after submission may cause a replay.
+                        cause = err
+                    await asyncio.sleep(self._charge_port_verify_interval)
+        except TimeoutError:
+            LOGGER.debug(
+                "command=chargePortOpen transport=%s physical_confirmation=unconfirmed",
+                self._transport_name,
+            )
+            raise BluetoothUnconfirmedCommand(
+                "Charge-port opening was not confirmed by physical state"
+            ) from cause
 
     async def _sendVehicleSecurity(
         self,
