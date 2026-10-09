@@ -784,16 +784,18 @@ REST responses that are valid JSON but not objects, such as `null`, lists, or
 scalars, are returned unchanged and log as `result=success`.
 For charge-port opening with `confirmation="verify"`, physical verification logs
 `physical_confirmation=confirmed` or `physical_confirmation=unconfirmed` under
-`command=closureMoveRequest`. An unresolved outcome also logs a final
+`command=closureMoveRequest`. Successful physical confirmation also logs a final
+`result=True`. An unresolved outcome logs a final
 `result=error` and raises `BluetoothUnconfirmedCommand`, including with
 `raise_unconfirmed=False`. An earlier `result=True` records the ACK, before
 physical confirmation completes.
 
-For other BLE commands run with `confirmation="verify"`, a resolved state-read logs a
-second line with `verify_commands=resolved` and the confirmed result; an
-unresolved read logs `verify_commands=unresolved` before the exception
-propagates (`BluetoothCommandFailed` on a proven mismatch,
-`BluetoothUnconfirmedCommand` if the read itself couldn't complete). With
+For other BLE commands run with `confirmation="verify"`, a confirmed state-read
+logs a second line with `verify_commands=resolved` and the confirmed result.
+A proven mismatch raises `BluetoothCommandFailed` regardless of
+`raise_unconfirmed`. If the read cannot complete, it logs
+`verify_commands=unresolved`; `BluetoothUnconfirmedCommand` propagates only with
+`raise_unconfirmed=True`. With
 `raise_unconfirmed=False` (the default), an exhausted ladder logs
 `raise_unconfirmed=False result=success (best-effort)` instead of raising
 `BluetoothUnconfirmedCommand`. `Router` additionally logs

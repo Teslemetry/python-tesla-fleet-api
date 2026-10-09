@@ -775,6 +775,55 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     [record.getMessage() for record in logged.records],
                 )
 
+    async def test_logs_terminal_success_after_physical_confirmation(self):
+        """Finish confirmed latch/flap logs with success after an ACK or ambiguous reply."""
+        malformed = vcsec_ok_reply()
+        malformed.protobuf_message_as_bytes = b"\xff"
+        for goal in ("latch", "flap"):
+            for reply_kind, reply in (
+                ("ack", vcsec_ok_reply()),
+                ("timeout", BluetoothTimeout()),
+                ("malformed", malformed),
+            ):
+                with self.subTest(goal=goal, reply=reply_kind):
+                    if goal == "latch":
+                        before = charge()
+                        after = charge(latch="Disengaged")
+                    else:
+                        before = charge(cable=None, charging="Disconnected", flap=False)
+                        after = charge(cable=None, charging="Disconnected", flap=True)
+                    vehicle, car = self.setup_car(before, [after])
+                    car.ack = reply
+                    cloud = Cloud(vehicle.vin)
+                    with self.assertLogs("tesla_fleet_api", level="DEBUG") as logged:
+                        result = await VehicleRouter(
+                            vehicle, cloud
+                        ).charge_port_door_open()
+                    self.assertEqual(
+                        result, {"response": {"result": True, "reason": ""}}
+                    )
+                    command_logs = [
+                        record.getMessage()
+                        for record in logged.records
+                        if record.getMessage().startswith(
+                            "command=closureMoveRequest transport=bluetooth "
+                        )
+                    ]
+                    self.assertEqual(
+                        command_logs[-2:],
+                        [
+                            "command=closureMoveRequest transport=bluetooth "
+                            "physical_confirmation=confirmed",
+                            "command=closureMoveRequest transport=bluetooth result=True reason=",
+                        ],
+                    )
+                    if reply_kind != "ack":
+                        self.assertTrue(
+                            any("result=error " in line for line in command_logs)
+                        )
+                    self.assertEqual(len(car.open_requests), 1)
+                    cloud.charge_port_door_open.assert_not_awaited()
+
     async def test_logs_terminal_unconfirmed_error_after_submission(self):
         """End the command log with the raised error after an ACK or ambiguous reply."""
         malformed = vcsec_ok_reply()

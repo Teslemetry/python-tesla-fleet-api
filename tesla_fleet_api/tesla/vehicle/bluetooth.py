@@ -1616,6 +1616,10 @@ class VehicleBluetooth(
                                 "command=closureMoveRequest transport=%s physical_confirmation=confirmed",
                                 self._transport_name,
                             )
+                            LOGGER.debug(
+                                "command=closureMoveRequest transport=%s result=True reason=",
+                                self._transport_name,
+                            )
                             return {"response": {"result": True, "reason": ""}}
                     except (Exception, TeslaFleetError) as err:
                         # No read failure after submission may cause a replay.
