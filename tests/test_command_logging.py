@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 from tesla_fleet_api.const import Method
 from tesla_fleet_api.exceptions import BluetoothTimeout, NotFound
 from tesla_fleet_api.router import Router
+from tesla_fleet_api.router.energysite import EnergySiteRouter
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 from tesla_fleet_api.tessie.tessie import Tessie
@@ -352,7 +353,7 @@ class RouterCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=shared" in line
-                and "backend=_FakePrimary" in line
+                and "transport=_FakePrimary" in line
                 and "result=success" in line
                 for line in captured.output
             ),
@@ -367,8 +368,43 @@ class RouterCommandLoggingTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "fallback:1")
         joined = "\n".join(captured.output)
-        self.assertIn("backend=_FakePrimary", joined)
+        self.assertIn("transport=_FakePrimary", joined)
         self.assertIn("result=error", joined)
         self.assertIn("ConnectionError", joined)
-        self.assertIn("backend=_FakeFallback", joined)
+        self.assertIn("transport=_FakeFallback", joined)
         self.assertIn("result=success", joined)
+
+
+class _NamedBackend:
+    _transport_name = "bluetooth"
+
+    async def shared(self, value: int) -> str:
+        return f"named:{value}"
+
+
+class _LocalSite:
+    """Duck-typed local energy site that names no transport."""
+
+    async def shared(self, value: int) -> str:
+        return f"local:{value}"
+
+
+class RouterTransportNameTests(IsolatedAsyncioTestCase):
+    async def test_router_uses_backend_transport_name(self) -> None:
+        router = Router(_NamedBackend(), _FakeFallback())
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await router.shared(1)
+
+        self.assertIn("transport=bluetooth result=success", "\n".join(captured.output))
+
+    async def test_energy_site_router_logs_unnamed_primary_as_local(self) -> None:
+        cloud = MagicMock()
+        cloud._transport_name = "teslemetry"
+        cloud.shared = AsyncMock(side_effect=lambda v: f"cloud:{v}")
+        router = EnergySiteRouter(_LocalSite(), cloud)
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await router.shared(1)
+
+        self.assertIn("command=shared transport=local result=success", "\n".join(captured.output))

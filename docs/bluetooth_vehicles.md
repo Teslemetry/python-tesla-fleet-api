@@ -799,7 +799,7 @@ A proven mismatch raises `BluetoothCommandFailed` regardless of
 `raise_unconfirmed=False` (the default), an exhausted ladder logs
 `raise_unconfirmed=False result=success (best-effort)` instead of raising
 `BluetoothUnconfirmedCommand`. `Router` additionally logs
-`command=... backend=<ClassName> result=...` for each backend it tries, or
+`command=... transport=<name> result=...` for each backend it tries, or
 `result=unconfirmed` when it stops instead of failing over, so a
 BLE-primary/cloud-fallback setup shows exactly which backend served each call
 and why a failover happened.

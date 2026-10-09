@@ -72,3 +72,8 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
         router = EnergySiteRouter(local_energysite, teslemetry_energysite)
         await router.operation(...)  # local first, cloud on failure
     """
+
+    def _transport_label(self, backend: Any) -> str:
+        """Log ``transport=local`` for a backend that names no transport (the duck-typed local site)."""
+        label = super()._transport_label(backend)
+        return "local" if label == type(backend).__name__ else label

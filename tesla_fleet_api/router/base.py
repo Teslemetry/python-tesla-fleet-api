@@ -160,6 +160,14 @@ class Router(Generic[PrimaryT, SecondaryT]):
             return health
         return bool(await _maybe_await(health()))
 
+    def _transport_label(self, backend: Any) -> str:
+        """Name the transport for log lines: ``_transport_name`` on the backend or its parent, else the class name."""
+        for owner in (backend, getattr(backend, "parent", None)):
+            label = getattr(owner, "_transport_name", None)
+            if isinstance(label, str):
+                return label
+        return type(backend).__name__
+
     def _dispatch(
         self,
         name: str,
@@ -193,9 +201,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                     # replaying it on the next one risks double-executing it.
                     # Surface the ambiguity to the caller instead of failing over.
                     LOGGER.debug(
-                        "command=%s backend=%s result=unconfirmed error=%s: %s",
+                        "command=%s transport=%s result=unconfirmed error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._transport_label(backend),
                         type(e).__name__,
                         e,
                     )
@@ -203,9 +211,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                 except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
                     last_exc = e
                     LOGGER.debug(
-                        "command=%s backend=%s result=error error=%s: %s",
+                        "command=%s transport=%s result=error error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._transport_label(backend),
                         type(e).__name__,
                         e,
                     )
@@ -215,7 +223,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                         raise
                     continue
                 LOGGER.debug(
-                    "command=%s backend=%s result=success", name, type(backend).__name__
+                    "command=%s transport=%s result=success",
+                    name,
+                    self._transport_label(backend),
                 )
                 if self._on_result is not None:
                     await _maybe_await(self._on_result(None, backend, name))
