@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 import struct
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from bleak.exc import BleakError
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -44,6 +44,7 @@ from tesla_fleet_api.exceptions import (
     BluetoothUnconfirmedCommand,
     SessionInfoAuthenticationFault,
     SignedCommandResponseReplayed,
+    SigningDisabled,
     TeslaFleetMessageFaultResponseSizeExceedsMTU,
 )
 from tesla_fleet_api.router import VehicleRouter
@@ -151,6 +152,7 @@ class Car:
         self.probe_hangs = False
         self.read_hangs = False
         self.post_read_started = asyncio.Event()
+        self.security_handshake_started = asyncio.Event()
 
     async def __call__(self, msg: RoutableMessage, *_: Any, **__: Any) -> Any:
         """Decode signed requests, record their order, and inject configured faults."""
@@ -234,6 +236,189 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         )
         send.side_effect = car.__call__
         return vehicle, car
+
+    def setup_preflight_handshake(
+        self,
+        fault: BaseException | None = None,
+        *,
+        hang: bool = False,
+    ):
+        """Expire VCSEC after the baseline to exercise its real setup and link policy."""
+        vehicle, car = self.setup_car()
+        vehicle._handshake_retry_interval = 0
+        client = MagicMock(is_connected=True)
+        client.disconnect = AsyncMock()
+        vehicle.client = client
+        vehicle._set_connected(True)
+        connections: list[bool] = []
+        vehicle.listen_connection_status(connections.append)
+
+        async def reply(msg: RoutableMessage, *args: Any, **kwargs: Any):
+            """Serve reads, then script success, failure, or a stalled VCSEC renewal."""
+            if (
+                msg.HasField("session_info_request")
+                and msg.to_destination.domain == Domain.DOMAIN_VEHICLE_SECURITY
+            ):
+                car.events.append("security_handshake")
+                car.security_handshake_started.set()
+                if hang:
+                    await asyncio.Future()
+                if fault is not None:
+                    raise fault
+                vehicle._sessions[Domain.DOMAIN_VEHICLE_SECURITY].epoch = b"\x00" * 16
+                return RoutableMessage()
+            response = await car(msg, *args, **kwargs)
+            if car.events[-1] == "baseline":
+                vehicle._sessions[Domain.DOMAIN_VEHICLE_SECURITY].epoch = None
+            return response
+
+        vehicle._send.side_effect = reply
+        return vehicle, car, client, connections
+
+    async def test_preflight_vcsec_handshake_failure_drops_link(self):
+        """Disconnect late VCSEC setup failures without sending an opening request."""
+        for fault in (
+            BluetoothTimeout(),
+            SessionInfoAuthenticationFault(),
+            BleakError("handshake link lost"),
+            TimeoutError("proxy handshake timed out"),
+        ):
+            with self.subTest(fault=type(fault).__name__):
+                vehicle, car, client, connections = self.setup_preflight_handshake(
+                    fault
+                )
+                expected = (
+                    BluetoothTimeout if isinstance(fault, TimeoutError) else type(fault)
+                )
+                with self.assertRaises(expected) as caught:
+                    await vehicle.charge_port_door_open()
+                if isinstance(fault, TimeoutError):
+                    self.assertIs(caught.exception.__cause__, fault)
+                else:
+                    self.assertIs(caught.exception, fault)
+                client.disconnect.assert_awaited_once()
+                self.assertIsNone(vehicle.client)
+                self.assertFalse(vehicle._connected)
+                self.assertEqual(connections, [False])
+                self.assertEqual(car.open_requests, [])
+                self.assertEqual(
+                    car.events[:3], ["sleep_read", "ready_probe", "baseline"]
+                )
+                self.assertIn("security_handshake", car.events)
+
+    async def test_preflight_handshake_failure_can_fall_back_after_teardown(self):
+        """Permit cloud fallback after the failed pre-submission link is removed."""
+        vehicle, car, client, connections = self.setup_preflight_handshake(
+            BluetoothTimeout()
+        )
+        cloud = Cloud(vehicle.vin)
+        result = await VehicleRouter(vehicle, cloud).charge_port_door_open()
+        self.assertEqual(result["response"]["reason"], "cloud")
+        client.disconnect.assert_awaited_once()
+        self.assertIsNone(vehicle.client)
+        self.assertEqual(connections, [False])
+        self.assertEqual(car.open_requests, [])
+        cloud.charge_port_door_open.assert_awaited_once()
+
+    async def test_preflight_handshake_teardown_failure_preserves_original_error(self):
+        """A disconnect error must not mask the VCSEC setup failure or retain its link."""
+        fault = BluetoothTimeout()
+        vehicle, car, client, connections = self.setup_preflight_handshake(fault)
+        client.disconnect.side_effect = BleakError("disconnect failed")
+        with self.assertRaises(BluetoothTimeout) as caught:
+            await vehicle.charge_port_door_open()
+        self.assertIs(caught.exception, fault)
+        client.disconnect.assert_awaited_once()
+        self.assertIsNone(vehicle.client)
+        self.assertEqual(connections, [False])
+        self.assertEqual(car.open_requests, [])
+
+    async def test_preflight_handshake_exempt_errors_keep_link(self):
+        """Keep the held link on signing-disabled or cancelled session setup."""
+        for fault in (SigningDisabled(), asyncio.CancelledError()):
+            with self.subTest(fault=type(fault).__name__):
+                vehicle, car, client, connections = self.setup_preflight_handshake(
+                    fault
+                )
+                with self.assertRaises(type(fault)) as caught:
+                    await vehicle.charge_port_door_open()
+                self.assertIs(caught.exception, fault)
+                client.disconnect.assert_not_awaited()
+                self.assertIs(vehicle.client, client)
+                self.assertTrue(vehicle._connected)
+                self.assertEqual(connections, [])
+                self.assertEqual(car.open_requests, [])
+
+    async def test_preflight_handshake_success_keeps_link(self):
+        """Retain the connection when renewed VCSEC setup and physical verification pass."""
+        vehicle, car, client, connections = self.setup_preflight_handshake()
+        result = await vehicle.charge_port_door_open()
+        self.assertTrue(result["response"]["result"])
+        client.disconnect.assert_not_awaited()
+        self.assertIs(vehicle.client, client)
+        self.assertTrue(vehicle._connected)
+        self.assertEqual(connections, [])
+        self.assertIn("security_handshake", car.events)
+        self.assertEqual(len(car.open_requests), 1)
+
+    async def test_preflight_handshake_deadline_drops_link_before_cloud_fallback(self):
+        """Share one readiness deadline and tear down VCSEC when that deadline expires."""
+        vehicle, car, client, connections = self.setup_preflight_handshake(hang=True)
+        vehicle._wake_timeout = 10
+        cloud = Cloud(vehicle.vin)
+        timeouts: list[asyncio.Timeout] = []
+        timeout_at = asyncio.timeout_at
+
+        def record_timeout(deadline: float | None) -> asyncio.Timeout:
+            """Keep real timeout cancellation while recording each preflight deadline."""
+            timeout = timeout_at(deadline)
+            timeouts.append(timeout)
+            return timeout
+
+        with patch("asyncio.timeout_at", side_effect=record_timeout):
+            task = asyncio.create_task(
+                VehicleRouter(vehicle, cloud).charge_port_door_open()
+            )
+            try:
+                await asyncio.wait_for(car.security_handshake_started.wait(), 1)
+                self.assertEqual(len(timeouts), 2)
+                self.assertEqual(timeouts[0].when(), timeouts[1].when())
+                # Expire the real active timeout without a narrow scheduling gap.
+                timeouts[1].reschedule(asyncio.get_running_loop().time())
+                result = await asyncio.wait_for(task, 1)
+            finally:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+        self.assertEqual(result["response"]["reason"], "cloud")
+        self.assertTrue(car.security_handshake_started.is_set())
+        client.disconnect.assert_awaited_once()
+        self.assertIsNone(vehicle.client)
+        self.assertFalse(vehicle._connected)
+        self.assertEqual(connections, [False])
+        self.assertEqual(car.open_requests, [])
+        cloud.charge_port_door_open.assert_awaited_once()
+
+    async def test_cancelling_preflight_handshake_keeps_link_without_cloud_replay(self):
+        """Distinguish caller cancellation from the preflight deadline during setup."""
+        vehicle, car, client, connections = self.setup_preflight_handshake(hang=True)
+        cloud = Cloud(vehicle.vin)
+        task = asyncio.create_task(
+            VehicleRouter(vehicle, cloud).charge_port_door_open()
+        )
+        await asyncio.wait_for(car.security_handshake_started.wait(), 0.5)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        client.disconnect.assert_not_awaited()
+        self.assertIs(vehicle.client, client)
+        self.assertTrue(vehicle._connected)
+        self.assertEqual(connections, [])
+        self.assertEqual(car.open_requests, [])
+        cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_asleep_wakes_and_waits_for_readiness_before_one_open(self):
         """Retry INFO readiness after waking, then send only the charge-port closure."""
@@ -585,12 +770,39 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     else:
                         with self.assertRaises(BluetoothUnconfirmedCommand):
                             await vehicle.charge_port_door_open()
-                self.assertTrue(
-                    any(
-                        f"physical_confirmation={outcome}" in line
-                        for line in logged.output
-                    )
+                self.assertIn(
+                    f"command=closureMoveRequest transport=bluetooth physical_confirmation={outcome}",
+                    [record.getMessage() for record in logged.records],
                 )
+
+    async def test_logs_terminal_unconfirmed_error_after_submission(self):
+        """End the command log with the raised error after an ACK or ambiguous reply."""
+        malformed = vcsec_ok_reply()
+        malformed.protobuf_message_as_bytes = b"\xff"
+        for reply_kind, reply in (
+            ("ack", vcsec_ok_reply()),
+            ("timeout", BluetoothTimeout()),
+            ("malformed", malformed),
+        ):
+            with self.subTest(reply=reply_kind):
+                vehicle, car = self.setup_car(after=[charge()])
+                car.ack = reply
+                with self.assertLogs("tesla_fleet_api", level="DEBUG") as logged:
+                    with self.assertRaises(BluetoothUnconfirmedCommand) as caught:
+                        await vehicle.charge_port_door_open()
+                command_results = [
+                    record.getMessage()
+                    for record in logged.records
+                    if record.getMessage().startswith(
+                        "command=closureMoveRequest transport=bluetooth result="
+                    )
+                ]
+                self.assertEqual(
+                    command_results[-1],
+                    "command=closureMoveRequest transport=bluetooth result=error "
+                    f"error=BluetoothUnconfirmedCommand: {caught.exception}",
+                )
+                self.assertEqual(len(car.open_requests), 1)
 
     async def test_explicit_rejection_is_not_overridden_by_already_released_latch(self):
         """Return an explicit VCSEC rejection without consulting the latch prover."""

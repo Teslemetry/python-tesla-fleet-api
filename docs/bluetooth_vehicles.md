@@ -768,7 +768,7 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
-Each command logs one terse, grep-friendly line:
+Command results use terse, grep-friendly lines:
 
 ```
 command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
@@ -782,7 +782,14 @@ commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
 REST responses that are valid JSON but not objects, such as `null`, lists, or
 scalars, are returned unchanged and log as `result=success`.
-For BLE commands run with `confirmation="verify"`, a resolved state-read logs a
+For charge-port opening with `confirmation="verify"`, physical verification logs
+`physical_confirmation=confirmed` or `physical_confirmation=unconfirmed` under
+`command=closureMoveRequest`. An unresolved outcome also logs a final
+`result=error` and raises `BluetoothUnconfirmedCommand`, including with
+`raise_unconfirmed=False`. An earlier `result=True` records the ACK, before
+physical confirmation completes.
+
+For other BLE commands run with `confirmation="verify"`, a resolved state-read logs a
 second line with `verify_commands=resolved` and the confirmed result; an
 unresolved read logs `verify_commands=unresolved` before the exception
 propagates (`BluetoothCommandFailed` on a proven mismatch,

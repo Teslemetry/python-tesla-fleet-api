@@ -1526,8 +1526,9 @@ class VehicleBluetooth(
 
         # Nothing has actuated yet. All readiness failures may safely fail over.
         # Bound the entire preflight, including a stalled read or reconnect.
+        deadline = asyncio.get_running_loop().time() + self._wake_timeout
         try:
-            async with asyncio.timeout(self._wake_timeout):
+            async with asyncio.timeout_at(deadline):
                 if await self._vehicle_asleep():
                     if not self.wake_if_asleep:
                         raise BluetoothCommandFailed("Vehicle asleep; wake disabled")
@@ -1550,7 +1551,16 @@ class VehicleBluetooth(
                     raise BluetoothCommandFailed(
                         "Charge-port cable state unknown; no opening command sent"
                     )
-                await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+            # Use the same deadline, but let expiry become TimeoutError before
+            # applying link cleanup; actual caller cancellation remains exempt.
+            try:
+                async with asyncio.timeout_at(deadline):
+                    await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+            except BaseException as err:
+                await self._drop_link_on_failure(
+                    "vehicle security handshake failed", err
+                )
+                raise
         except TimeoutError as err:
             raise BluetoothTimeout("Charge-port readiness timed out") from err
 
@@ -1603,7 +1613,7 @@ class VehicleBluetooth(
                             )
                         if confirmed:
                             LOGGER.debug(
-                                "command=chargePortOpen transport=%s physical_confirmation=confirmed",
+                                "command=closureMoveRequest transport=%s physical_confirmation=confirmed",
                                 self._transport_name,
                             )
                             return {"response": {"result": True, "reason": ""}}
@@ -1612,13 +1622,20 @@ class VehicleBluetooth(
                         cause = err
                     await asyncio.sleep(self._charge_port_verify_interval)
         except TimeoutError:
+            unconfirmed = BluetoothUnconfirmedCommand(
+                "Charge-port opening was not confirmed by physical state"
+            )
             LOGGER.debug(
-                "command=chargePortOpen transport=%s physical_confirmation=unconfirmed",
+                "command=closureMoveRequest transport=%s physical_confirmation=unconfirmed",
                 self._transport_name,
             )
-            raise BluetoothUnconfirmedCommand(
-                "Charge-port opening was not confirmed by physical state"
-            ) from cause
+            LOGGER.debug(
+                "command=closureMoveRequest transport=%s result=error error=%s: %s",
+                self._transport_name,
+                type(unconfirmed).__name__,
+                unconfirmed,
+            )
+            raise unconfirmed from cause
 
     async def _sendVehicleSecurity(
         self,
