@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 from tesla_fleet_api.const import Method
 from tesla_fleet_api.exceptions import BluetoothTimeout, NotFound
 from tesla_fleet_api.router import Router
+from tesla_fleet_api.router.energysite import EnergySiteRouter
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 from tesla_fleet_api.tessie.tessie import Tessie
@@ -372,3 +373,30 @@ class RouterCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertIn("ConnectionError", joined)
         self.assertIn("backend=_FakeFallback", joined)
         self.assertIn("result=success", joined)
+
+
+class _LocalSite:
+    """Duck-typed local energy site with a duck-typed cloud fallback."""
+
+    async def shared(self, value: int) -> str:
+        return f"local:{value}"
+
+
+class EnergySiteRouterLocalTransportTests(IsolatedAsyncioTestCase):
+    async def test_local_backend_logs_transport_lan(self) -> None:
+        router = EnergySiteRouter(_LocalSite(), _FakeFallback())
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await router.shared(1)
+
+        self.assertIn("command=shared transport=lan result=success", "\n".join(captured.output))
+
+    async def test_non_primary_duck_typed_backend_keeps_backend_field(self) -> None:
+        router = EnergySiteRouter(_FakePrimary(fail=True), _LocalSite())
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await router.shared(1)
+
+        joined = "\n".join(captured.output)
+        self.assertIn("transport=lan result=error", joined)
+        self.assertIn("backend=_LocalSite result=success", joined)

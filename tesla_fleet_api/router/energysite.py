@@ -72,3 +72,9 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
         router = EnergySiteRouter(local_energysite, teslemetry_energysite)
         await router.operation(...)  # local first, cloud on failure
     """
+
+    def _backend_field(self, backend: Any) -> str:
+        """Log ``transport=lan`` for the local primary; cloud fallbacks keep the ``backend=`` field."""
+        if backend is self.primary:
+            return "transport=lan"
+        return super()._backend_field(backend)

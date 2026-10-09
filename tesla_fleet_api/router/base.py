@@ -160,6 +160,10 @@ class Router(Generic[PrimaryT, SecondaryT]):
             return health
         return bool(await _maybe_await(health()))
 
+    def _backend_field(self, backend: Any) -> str:
+        """Return the ``key=value`` log field naming the backend."""
+        return f"backend={type(backend).__name__}"
+
     def _dispatch(
         self,
         name: str,
@@ -193,9 +197,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                     # replaying it on the next one risks double-executing it.
                     # Surface the ambiguity to the caller instead of failing over.
                     LOGGER.debug(
-                        "command=%s backend=%s result=unconfirmed error=%s: %s",
+                        "command=%s %s result=unconfirmed error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._backend_field(backend),
                         type(e).__name__,
                         e,
                     )
@@ -203,9 +207,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                 except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
                     last_exc = e
                     LOGGER.debug(
-                        "command=%s backend=%s result=error error=%s: %s",
+                        "command=%s %s result=error error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._backend_field(backend),
                         type(e).__name__,
                         e,
                     )
@@ -215,7 +219,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
                         raise
                     continue
                 LOGGER.debug(
-                    "command=%s backend=%s result=success", name, type(backend).__name__
+                    "command=%s %s result=success", name, self._backend_field(backend)
                 )
                 if self._on_result is not None:
                     await _maybe_await(self._on_result(None, backend, name))

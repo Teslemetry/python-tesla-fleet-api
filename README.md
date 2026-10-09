@@ -301,7 +301,7 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
 Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
-Routers also emit `backend=<ClassName>` lines for each backend tried. See
+Routers also emit `backend=<ClassName>` lines for each backend tried, except a local Powerwall in an `EnergySiteRouter`, which logs `transport=lan`. See
 [Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
 for examples and the signed-command naming details.
 REST responses that are valid JSON but not objects, such as `null`, lists, or
