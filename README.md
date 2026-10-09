@@ -195,10 +195,14 @@ entered backend I/O and then failed or timed out is delivery-ambiguous and
 raises `BluetoothTimeout`/`BluetoothUnconfirmedCommand` instead. Mutating BLE
 commands use a confirmation ladder controlled by `confirmation` (`"ack"` by
 default) and `raise_unconfirmed` (`False` by default): an inconclusive lost
-acknowledgement resolves as best-effort success unless you opt in to
+acknowledgement normally resolves as best-effort success unless you opt in to
 `BluetoothUnconfirmedCommand`, while a command proven not to have applied raises
-`BluetoothCommandFailed`. See [Bluetooth for Vehicles](docs/bluetooth_vehicles.md)
-for the full ladder. Catch `TeslaFleetError` to handle Bluetooth transport
+`BluetoothCommandFailed`. Charge-port opening under `confirmation="verify"`
+requires physical latch/flap confirmation even after an acknowledgement. An
+unresolved result raises `BluetoothUnconfirmedCommand` regardless of
+`raise_unconfirmed`, preventing cloud replay. See
+[Bluetooth for Vehicles](docs/bluetooth_vehicles.md) for the full ladder.
+Catch `TeslaFleetError` to handle Bluetooth transport
 failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
 ESPHome proxies) and response-wait timeouts through the same library error
 hierarchy.

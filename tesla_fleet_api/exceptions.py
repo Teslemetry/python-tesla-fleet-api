@@ -29,11 +29,13 @@ class BluetoothTimeout(TeslaFleetError):
 
 
 class BluetoothUnconfirmedCommand(BluetoothTimeout):
-    """A mutating Bluetooth command has an unresolved delivery outcome.
+    """A mutating Bluetooth command has an unresolved outcome.
 
     The write either completed and its ack was lost, or it entered backend I/O
     and then failed/timed out in a way that cannot prove whether the vehicle
-    received it. The vehicle may have executed the command - lock/unlock have
+    received it. It can also have acknowledged the request without a required
+    physical state check confirming completion. The vehicle may have executed
+    the command - lock/unlock have
     both been observed to execute despite this exception. Treat the outcome as
     unknown, not failed: verify by reading state back when possible, and never
     blind-retry or re-issue the same command on another transport, since it may
@@ -48,8 +50,8 @@ class BluetoothUnconfirmedCommand(BluetoothTimeout):
     """
 
     message = (
-        "Bluetooth command timed out waiting for an ack after being written to "
-        "the vehicle; it may have executed anyway."
+        "Bluetooth command outcome could not be confirmed after submission; "
+        "it may have executed anyway."
     )
 
 

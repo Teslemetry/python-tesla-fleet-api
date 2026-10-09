@@ -240,7 +240,8 @@ attempts.
 
 ### The confirmation ladder
 
-A mutating BLE command tries to confirm itself in up to four steps: write the
+Except for the stricter charge-port opening workflow described below, a
+mutating BLE command tries to confirm itself in up to four steps: write the
 GATT characteristic, wait for the addressed ack (racing a matching state
 broadcast for lock/unlock), fall back to a state read, then decide the final
 outcome. `confirmation` (constructor/factory arg, default `"ack"`) picks how
@@ -304,6 +305,43 @@ volume steps, and ack-only actions such as `flash_lights()` or
 `trigger_homelink()` - are the documented best-effort set: they have no
 broadcast and no prover to confirm against, so a still-unresolved wait always
 falls through to `raise_unconfirmed` regardless of `confirmation`.
+
+### Charge-port opening with physical confirmation
+
+`charge_port_door_open()` has a stricter contract under `confirmation="verify"`.
+Before sending the opening request it reads VCSEC sleep state, uses the existing
+`wake_up(wait=True)` path if asleep, and checks fresh infotainment readiness even
+if a signed session is cached. A live `charge_state()` read must identify whether
+a cable is connected; transient read timeouts are retried within the same
+preflight budget. This preflight has the existing wake timeout as an overall
+limit; an asleep vehicle with `wake_if_asleep=False` is not actuated.
+
+It then sends the opening request and polls `charge_state()` for up to five
+seconds, **including after a successful ACK**:
+
+- With a cable connected before the request, only the explicit
+  `charge_port_latch.Disengaged` value confirms cable release. An already-open
+  flap and `charge_cable_unlatched` do not confirm it.
+- With an explicitly disconnected cable before the request, the cable must
+  still be disconnected and a present `charge_port_door_open` must be true.
+- Missing, `SNA`, or conflicting cable state cannot select a verification goal.
+  Missing or inconclusive state after submission cannot confirm completion.
+
+No opening request is automatically resent by this workflow. Existing protocol
+`WAIT`/epoch recovery still applies. If submission is ambiguous, the reply cannot
+be decoded/authenticated, or an ACK arrives but the required state is not
+observed before the deadline, it raises
+`BluetoothUnconfirmedCommand`, **even with `raise_unconfirmed=False`**. This keeps
+a fallback router from replaying a request that may still complete. Failures
+before opening is submitted can still use ordinary cloud fallback; an explicit
+command rejection retains its normal failure result. `"ack"` and `"optimistic"`
+keep their existing behavior, as do frunk, boot and charge-port closing.
+
+The readiness check addresses a suspected wake timing issue. It does not prove
+that the vehicle's charging interlocks are ready, and it does not stop charging
+or override an interlock. A completed asleep-state acceptance trial is recorded
+in `OBSERVATIONS.md`; its setup and sample limits matter when applying the
+result to other vehicles or charging conditions.
 
 ### Skipping the wait (`confirmation="optimistic"`) and defaulting to success (`raise_unconfirmed`)
 
@@ -730,12 +768,12 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
-Each command logs one terse, grep-friendly line:
+Command results use terse, grep-friendly lines:
 
 ```
 command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
 command=set_charge_limit transport=teslemetry result=True reason=
-command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command timed out waiting for an ack after being written to the vehicle; it may have executed anyway.
+command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
 ```
 
 `transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
@@ -744,11 +782,20 @@ commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
 REST responses that are valid JSON but not objects, such as `null`, lists, or
 scalars, are returned unchanged and log as `result=success`.
-For BLE commands run with `confirmation="verify"`, a resolved state-read logs a
-second line with `verify_commands=resolved` and the confirmed result; an
-unresolved read logs `verify_commands=unresolved` before the exception
-propagates (`BluetoothCommandFailed` on a proven mismatch,
-`BluetoothUnconfirmedCommand` if the read itself couldn't complete). With
+For charge-port opening with `confirmation="verify"`, physical verification logs
+`physical_confirmation=confirmed` or `physical_confirmation=unconfirmed` under
+`command=closureMoveRequest`. Successful physical confirmation also logs a final
+`result=True`. An unresolved outcome logs a final
+`result=error` and raises `BluetoothUnconfirmedCommand`, including with
+`raise_unconfirmed=False`. An earlier `result=True` records the ACK, before
+physical confirmation completes.
+
+For other BLE commands run with `confirmation="verify"`, a confirmed state-read
+logs a second line with `verify_commands=resolved` and the confirmed result.
+A proven mismatch raises `BluetoothCommandFailed` regardless of
+`raise_unconfirmed`. If the read cannot complete, it logs
+`verify_commands=unresolved`; `BluetoothUnconfirmedCommand` propagates only with
+`raise_unconfirmed=True`. With
 `raise_unconfirmed=False` (the default), an exhausted ladder logs
 `raise_unconfirmed=False result=success (best-effort)` instead of raising
 `BluetoothUnconfirmedCommand`. `Router` additionally logs
