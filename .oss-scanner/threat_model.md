@@ -17,8 +17,10 @@ caller asks it to create.
 
 ## Where untrusted input enters
 
-- **Bluetooth LE.** Any device in radio range can advertise as a Tesla (the
-  advertised name is derived from the VIN) and send GATT notifications.
+- **Bluetooth LE.** A device in radio range can advertise the car's
+  VIN-derived name and expose Tesla's GATT service and notify characteristic
+  (`SERVICE_UUID`, `READ_UUID`). The library then connects to it and parses
+  its notifications before any message is authenticated.
   `ReassemblingBuffer` in `tesla/vehicle/bluetooth.py` reassembles
   length-prefixed frames and parses them as `RoutableMessage` protobufs.
   Every byte of a notification is attacker-controlled.
@@ -72,13 +74,13 @@ cryptographic paths.
 
 ## How we rate severity
 
-- **Critical**: forging, replaying or misdirecting a vehicle command (for
-  example, making the library sign a command the caller did not ask for, or
+- **Critical**: forging, misdirecting, or replaying without the caller's
+  request, a vehicle command (for example, making the library sign a command the caller did not ask for, or
   accept a forged or replayed `SessionInfo` or response); leaking a private
   key, session key or command HMAC key.
 - **High**: leaking an OAuth or API token; a Bluetooth peer making the library
   report a command as confirmed when the car did not execute it, or making the
-  library repeat a command the caller sent once.
+  library send a second time a command the caller sent once.
 - **Medium**: denial of service from a malformed Bluetooth frame or HTTP reply
   (crash, hang, unbounded memory or CPU).
 - **Low**: other robustness issues with no security effect.
