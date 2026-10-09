@@ -776,7 +776,7 @@ command=set_charge_limit transport=Teslemetry result=True reason=
 command=mediaPlayAction transport=Bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
 ```
 
-`transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
+`transport` is `Bluetooth`, `Tesla Fleet`, `Teslemetry`, `Tessie`, or `Local`. For BLE signed
 commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 `RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
