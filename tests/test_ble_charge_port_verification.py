@@ -771,7 +771,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                         with self.assertRaises(BluetoothUnconfirmedCommand):
                             await vehicle.charge_port_door_open()
                 self.assertIn(
-                    f"command=closureMoveRequest transport=bluetooth physical_confirmation={outcome}",
+                    f"command=closureMoveRequest transport=Bluetooth physical_confirmation={outcome}",
                     [record.getMessage() for record in logged.records],
                 )
 
@@ -806,15 +806,15 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                         record.getMessage()
                         for record in logged.records
                         if record.getMessage().startswith(
-                            "command=closureMoveRequest transport=bluetooth "
+                            "command=closureMoveRequest transport=Bluetooth "
                         )
                     ]
                     self.assertEqual(
                         command_logs[-2:],
                         [
-                            "command=closureMoveRequest transport=bluetooth "
+                            "command=closureMoveRequest transport=Bluetooth "
                             "physical_confirmation=confirmed",
-                            "command=closureMoveRequest transport=bluetooth result=True reason=",
+                            "command=closureMoveRequest transport=Bluetooth result=True reason=",
                         ],
                     )
                     if reply_kind != "ack":
@@ -843,12 +843,12 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     record.getMessage()
                     for record in logged.records
                     if record.getMessage().startswith(
-                        "command=closureMoveRequest transport=bluetooth result="
+                        "command=closureMoveRequest transport=Bluetooth result="
                     )
                 ]
                 self.assertEqual(
                     command_results[-1],
-                    "command=closureMoveRequest transport=bluetooth result=error "
+                    "command=closureMoveRequest transport=Bluetooth result=error "
                     f"error=BluetoothUnconfirmedCommand: {caught.exception}",
                 )
                 self.assertEqual(len(car.open_requests), 1)

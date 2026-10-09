@@ -28,7 +28,7 @@ LOGGER_NAME = "tesla_fleet_api"
 
 
 class BleCommandLoggingTests(MockedBleTransportTestCase):
-    """BLE commands log their command name, ``transport=bluetooth``, and outcome."""
+    """BLE commands log their command name, ``transport=Bluetooth``, and outcome."""
 
     async def test_success_logs_command_transport_and_result(self) -> None:
         vehicle, send = self.make_vehicle()
@@ -40,7 +40,7 @@ class BleCommandLoggingTests(MockedBleTransportTestCase):
         self.assertTrue(
             any(
                 "command=RKE_ACTION_LOCK" in line
-                and "transport=bluetooth" in line
+                and "transport=Bluetooth" in line
                 and "result=True" in line
                 for line in captured.output
             ),
@@ -58,7 +58,7 @@ class BleCommandLoggingTests(MockedBleTransportTestCase):
         self.assertTrue(
             any(
                 "command=RKE_ACTION_LOCK" in line
-                and "transport=bluetooth" in line
+                and "transport=Bluetooth" in line
                 and "result=error" in line
                 and "BluetoothTimeout" in line
                 for line in captured.output
@@ -91,7 +91,7 @@ class BleCommandLoggingTests(MockedBleTransportTestCase):
         self.assertTrue(
             any(
                 "command=RKE_ACTION_LOCK" in line
-                and "transport=bluetooth" in line
+                and "transport=Bluetooth" in line
                 and "verify_commands=resolved" in line
                 for line in captured.output
             ),
@@ -148,7 +148,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=door_lock" in line
-                and "transport=fleet" in line
+                and "transport=Tesla Fleet" in line
                 and "result=True" in line
                 and "reason=" in line
                 for line in captured.output
@@ -180,7 +180,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=remote_seat_heater_request" in line
-                and "transport=fleet" in line
+                and "transport=Tesla Fleet" in line
                 and "result=False" in line
                 and "reason=cabin comfort remote settings not enabled" in line
                 for line in captured.output
@@ -202,7 +202,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=vehicle_data" in line
-                and "transport=fleet" in line
+                and "transport=Tesla Fleet" in line
                 and "result=success" in line
                 for line in captured.output
             ),
@@ -226,7 +226,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=door_lock" in line
-                and "transport=fleet" in line
+                and "transport=Tesla Fleet" in line
                 and "result=error" in line
                 and "NotFound" in line
                 for line in captured.output
@@ -251,7 +251,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=list_authorized_clients" in line
-                and "transport=fleet" in line
+                and "transport=Tesla Fleet" in line
                 and "result=success" in line
                 for line in captured.output
             ),
@@ -290,7 +290,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
             await api._request(Method.POST, "api/1/vehicles/VIN123/command/door_lock")
 
         self.assertTrue(
-            any("transport=teslemetry" in line for line in captured.output),
+            any("transport=Teslemetry" in line for line in captured.output),
             captured.output,
         )
 
@@ -302,7 +302,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
             await api._request(Method.POST, "vehicles/VIN123/command/door_lock")
 
         self.assertTrue(
-            any("transport=tessie" in line for line in captured.output),
+            any("transport=Tessie" in line for line in captured.output),
             captured.output,
         )
 
@@ -316,7 +316,7 @@ class RestCommandLoggingTests(IsolatedAsyncioTestCase):
         self.assertTrue(
             any(
                 "command=door_lock" in line
-                and "transport=tessie" in line
+                and "transport=Tessie" in line
                 and "result=False" in line
                 and "reason=already_locked" in line
                 for line in captured.output
@@ -376,7 +376,7 @@ class RouterCommandLoggingTests(IsolatedAsyncioTestCase):
 
 
 class _NamedBackend:
-    _transport_name = "bluetooth"
+    _transport_name = "Bluetooth"
 
     async def shared(self, value: int) -> str:
         return f"named:{value}"
@@ -396,7 +396,7 @@ class RouterTransportNameTests(IsolatedAsyncioTestCase):
         with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
             await router.shared(1)
 
-        self.assertIn("transport=bluetooth result=success", "\n".join(captured.output))
+        self.assertIn("transport=Bluetooth result=success", "\n".join(captured.output))
 
     async def test_energy_site_router_logs_unnamed_primary_as_local(self) -> None:
         cloud = MagicMock()
@@ -407,4 +407,4 @@ class RouterTransportNameTests(IsolatedAsyncioTestCase):
         with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
             await router.shared(1)
 
-        self.assertIn("command=shared transport=local result=success", "\n".join(captured.output))
+        self.assertIn("command=shared transport=Local result=success", "\n".join(captured.output))

@@ -74,6 +74,6 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
     """
 
     def _transport_label(self, backend: Any) -> str:
-        """Log ``transport=local`` for a backend that names no transport (the duck-typed local site)."""
+        """Log ``transport=Local`` for a backend that names no transport (the duck-typed local site)."""
         label = super()._transport_label(backend)
-        return "local" if label == type(backend).__name__ else label
+        return "Local" if label == type(backend).__name__ else label

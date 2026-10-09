@@ -11,7 +11,7 @@ class Tessie(TeslaFleetApi):
     server = "https://api.tessie.com"
     vehicles: TessieVehicles
     Vehicles = TessieVehicles
-    _transport_name = "tessie"
+    _transport_name = "Tessie"
 
     def __init__(
         self,

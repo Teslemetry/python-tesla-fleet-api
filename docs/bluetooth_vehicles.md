@@ -771,9 +771,9 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 Command results use terse, grep-friendly lines:
 
 ```
-command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
-command=set_charge_limit transport=teslemetry result=True reason=
-command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
+command=RKE_ACTION_LOCK transport=Bluetooth result=True reason=
+command=set_charge_limit transport=Teslemetry result=True reason=
+command=mediaPlayAction transport=Bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
 ```
 
 `transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed

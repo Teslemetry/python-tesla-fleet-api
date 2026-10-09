@@ -300,7 +300,7 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
-Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, `tessie`, or `local` (a Powerwall reached over the LAN).
+Command log lines use `transport=Bluetooth`, `Tesla Fleet`, `Teslemetry`, `Tessie`, or `Local` (a Powerwall reached over the LAN).
 Routers also emit `transport=<name>` lines for each backend tried. See
 [Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
 for examples and the signed-command naming details.

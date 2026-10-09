@@ -558,7 +558,7 @@ class VehicleBluetooth(
     _ekey: ec.EllipticCurvePublicKey
     _buffer: ReassemblingBuffer
     _auth_method = "aes"
-    _transport_name = "bluetooth"
+    _transport_name = "Bluetooth"
     _ack_followup_timeout: float = 2
     _default_timeout: float = 5
     # A lost actuation ack is inconclusive; the contract is verify-by-state, so

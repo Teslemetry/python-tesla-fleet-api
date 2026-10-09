@@ -31,7 +31,7 @@ asyncio.run(main())
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each Tessie request's
-final path segment, `transport=tessie`, and result:
+final path segment, `transport=Tessie`, and result:
 
 ```python
 import logging

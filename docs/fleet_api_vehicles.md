@@ -32,7 +32,7 @@ asyncio.run(main())
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each Fleet API request's
-final path segment, `transport=fleet`, and result:
+final path segment, `transport=Tesla Fleet`, and result:
 
 ```python
 import logging
@@ -44,8 +44,8 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 Example command lines:
 
 ```
-command=vehicle_data transport=fleet result=success
-command=set_charge_limit transport=fleet result=True reason=
+command=vehicle_data transport=Tesla Fleet result=success
+command=set_charge_limit transport=Tesla Fleet result=True reason=
 ```
 
 Responses that are valid JSON but not objects, such as `null`, lists, or
