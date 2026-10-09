@@ -71,6 +71,7 @@ def charge(
     flap: bool | None = True,
     unlatched: bool = False,
 ) -> ChargeState:
+    """Build charge data with explicit oneof values or deliberately absent fields."""
     state = ChargeState(charge_cable_unlatched=unlatched)
     if cable is not None:
         getattr(state.conn_charge_cable, cable).SetInParent()
@@ -137,6 +138,7 @@ class Car:
     """Small stateful peer: decode requests and answer only the requested domain."""
 
     def __init__(self, vehicle: Any, before: ChargeState, after: list[Any]):
+        """Set the baseline and post-command replies, with an awake peer by default."""
         self.vehicle = vehicle
         self.before = before
         self.after = after
@@ -151,6 +153,7 @@ class Car:
         self.post_read_started = asyncio.Event()
 
     async def __call__(self, msg: RoutableMessage, *_: Any, **__: Any) -> Any:
+        """Decode signed requests, record their order, and inject configured faults."""
         if msg.HasField("session_info_request"):
             assert msg.to_destination.domain == Domain.DOMAIN_INFOTAINMENT
             self.events.append("ready_probe")
@@ -205,6 +208,7 @@ class Car:
 
 class Cloud:
     def __init__(self, vin: str):
+        """Expose a mock cloud command so tests can detect accidental fallback."""
         self.vin = vin
         self.charge_port_door_open = AsyncMock(
             return_value={"response": {"result": True, "reason": "cloud"}}
@@ -215,6 +219,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
     def setup_car(
         self, before: ChargeState | None = None, after: list[Any] | None = None
     ):
+        """Create a verify-mode vehicle and peer with short, bounded test deadlines."""
         vehicle, send = self.make_vehicle(
             confirmation="verify", raise_unconfirmed=False
         )
@@ -231,6 +236,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         return vehicle, car
 
     async def test_asleep_wakes_and_waits_for_readiness_before_one_open(self):
+        """Retry INFO readiness after waking, then send only the charge-port closure."""
         vehicle, car = self.setup_car()
         car.sleep = ASLEEP
         car.probe_failures = 2
@@ -257,6 +263,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         )
 
     async def test_awake_still_probes_fresh_readiness_with_cached_session(self):
+        """Require a fresh INFO probe despite an awake car and cached signed session."""
         vehicle, car = self.setup_car()
         await vehicle.charge_port_door_open()
         self.assertEqual(
@@ -264,6 +271,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         )
 
     async def test_ack_without_latch_release_never_succeeds_or_falls_back(self):
+        """An ACK with the latch still engaged must remain unresolved on Bluetooth."""
         vehicle, car = self.setup_car(after=[charge()])
         cloud = Cloud(vehicle.vin)
         with self.assertRaises(BluetoothUnconfirmedCommand):
@@ -272,6 +280,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_late_release_after_ack_is_confirmed_without_repeating_open(self):
+        """Poll past engaged and blocking states without repeating the opening."""
         vehicle, car = self.setup_car(
             after=[charge(), charge(latch="Blocking"), charge(latch="Disengaged")]
         )
@@ -280,6 +289,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_lost_ack_can_be_confirmed_by_latch_without_cloud_replay(self):
+        """Accept explicit latch release after a lost ACK for either strictness flag."""
         for raise_unconfirmed in (False, True):
             with self.subTest(raise_unconfirmed=raise_unconfirmed):
                 vehicle, car = self.setup_car()
@@ -293,6 +303,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 self.assertEqual(vehicle.raise_unconfirmed, raise_unconfirmed)
 
     async def test_lost_ack_with_unknown_state_is_not_best_effort_success(self):
+        """Missing state after a lost ACK must raise instead of succeeding or replaying."""
         vehicle, car = self.setup_car(after=[ChargeState()])
         car.ack = BluetoothTimeout()
         cloud = Cloud(vehicle.vin)
@@ -302,6 +313,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_missing_sna_and_blocking_latches_cannot_confirm(self):
+        """Reject inconclusive latch values even when the legacy unlatched flag is true."""
         for latch in (None, "SNA", "Blocking", "Engaged"):
             with self.subTest(latch=latch):
                 vehicle, car = self.setup_car(
@@ -312,10 +324,12 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 self.assertEqual(len(car.open_requests), 1)
 
     async def test_explicit_disengaged_wins_over_false_unlatched_flag(self):
+        """Use explicit latch release when the legacy unlatched flag disagrees."""
         vehicle, _ = self.setup_car(after=[charge(latch="Disengaged", unlatched=False)])
         self.assertTrue((await vehicle.charge_port_door_open())["response"]["result"])
 
     async def test_unplugged_requires_open_flap_not_disengaged_latch(self):
+        """For a disconnected cable, require a present true flap field to confirm."""
         baseline = charge(
             cable="SNA", charging="Disconnected", latch="Disengaged", flap=False
         )
@@ -342,6 +356,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 self.assertEqual(len(car.open_requests), 1)
 
     async def test_missing_cable_type_with_explicit_disconnected_can_open_flap(self):
+        """An explicit Disconnected state can select the flap goal without a cable type."""
         vehicle, _ = self.setup_car(
             charge(cable=None, charging="Disconnected", flap=False),
             [charge(cable=None, charging="Disconnected", flap=True)],
@@ -351,6 +366,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
     async def test_unknown_or_conflicting_baseline_never_actuates_and_can_fail_over(
         self,
     ):
+        """Allow cloud fallback for an ambiguous baseline before any opening is sent."""
         for before in (
             ChargeState(),
             charge(cable="SNA"),
@@ -366,6 +382,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 cloud.charge_port_door_open.assert_awaited_once()
 
     async def test_all_known_cable_types_require_latch_release(self):
+        """Select latch verification for every supported positive cable type."""
         for cable in ("IEC", "SAE", "GB_AC", "GB_DC"):
             with self.subTest(cable=cable):
                 vehicle, _ = self.setup_car(
@@ -376,6 +393,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 )
 
     async def test_removing_cable_does_not_replace_latch_goal_with_flap_goal(self):
+        """Keep the original latch goal when later reads show an unplugged cable."""
         vehicle, car = self.setup_car(
             after=[charge(cable="SNA", charging="Disconnected", latch=None, flap=True)]
         )
@@ -384,6 +402,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_inserting_cable_cannot_confirm_original_flap_goal(self):
+        """An inserted cable invalidates flap confirmation despite an open flap."""
         vehicle, _ = self.setup_car(
             charge(cable="SNA", charging="Disconnected", flap=False),
             [charge(latch="Disengaged", flap=True)],
@@ -392,6 +411,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
             await vehicle.charge_port_door_open()
 
     async def test_disabled_wake_never_sends_open_or_wake_when_asleep(self):
+        """Respect disabled wake by rejecting an asleep car before either actuation."""
         vehicle, car = self.setup_car()
         car.sleep = ASLEEP
         vehicle.wake_if_asleep = False
@@ -400,6 +420,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(car.events, ["sleep_read"])
 
     async def test_disabled_wake_allows_already_awake_vehicle(self):
+        """Allow an awake car to complete verification without issuing a wake request."""
         vehicle, car = self.setup_car()
         vehicle.wake_if_asleep = False
         await vehicle.charge_port_door_open()
@@ -408,6 +429,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
     async def test_readiness_deadline_prevents_open_and_allows_safe_cloud_fallback(
         self,
     ):
+        """Bound a stalled INFO probe before opening for both asleep and awake cars."""
         for sleep in (ASLEEP, AWAKE):
             with self.subTest(sleep=sleep):
                 vehicle, car = self.setup_car()
@@ -423,6 +445,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 cloud.charge_port_door_open.assert_awaited_once()
 
     async def test_hung_post_read_is_bounded_and_blocks_cloud_fallback(self):
+        """Bound a stalled verification read while preserving the no-replay guarantee."""
         vehicle, car = self.setup_car()
         car.read_hangs = True
         cloud = Cloud(vehicle.vin)
@@ -434,6 +457,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_post_read_failures_remain_unconfirmed_not_replayable(self):
+        """Wrap post-submission read and transport faults as unresolved outcomes."""
         for error in (
             BluetoothTimeout(),
             BluetoothTransportError(),
@@ -450,6 +474,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_transient_read_failure_can_recover_without_resending(self):
+        """Recover verification from a transient read timeout with no second opening."""
         vehicle, car = self.setup_car(
             after=[BluetoothTimeout(), charge(latch="Disengaged")]
         )
@@ -458,6 +483,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_pre_submission_transport_failure_can_fall_back(self):
+        """Preserve cloud fallback for a write known to fail before submission."""
         vehicle, car = self.setup_car()
         car.ack = BluetoothTransportError()
         cloud = Cloud(vehicle.vin)
@@ -467,6 +493,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         cloud.charge_port_door_open.assert_awaited_once()
 
     async def test_ambiguous_backend_write_failure_never_replays(self):
+        """Treat timeout and Bleak write faults as delivery-unknown, blocking replay."""
         for error in (TimeoutError(), BleakError("ambiguous write")):
             with self.subTest(error=type(error).__name__):
                 vehicle, car = self.setup_car(after=[charge()])
@@ -478,6 +505,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_bad_actuation_replies_are_verified_without_cloud_replay(self):
+        """Use latch evidence after decode, authentication, replay, or MTU faults."""
         malformed = vcsec_ok_reply()
         malformed.protobuf_message_as_bytes = b"\xff"
         for reply, error_type in (
@@ -515,6 +543,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     cloud.charge_port_door_open.assert_not_awaited()
 
     async def test_valid_encrypted_ack_still_requires_physical_confirmation(self):
+        """A valid authenticated ACK alone cannot prove an engaged latch released."""
         vehicle, car = self.setup_car(after=[charge()])
         car.ack = encrypted_ack
         with self.assertRaises(BluetoothUnconfirmedCommand) as caught:
@@ -523,6 +552,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_transient_baseline_timeout_waits_before_actuating(self):
+        """Retry baseline reads within preflight and open only after a valid response."""
         vehicle, car = self.setup_car()
         car.sleep = ASLEEP
         car.baseline_failures = 2
@@ -532,6 +562,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(len(car.open_requests), 1)
 
     async def test_baseline_read_timeouts_exhaust_preflight_without_opening(self):
+        """Exhaust persistent baseline timeouts before any opening, allowing fallback."""
         vehicle, car = self.setup_car()
         car.baseline_failures = 10000
         vehicle._wake_timeout = 0.02
@@ -544,6 +575,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         cloud.charge_port_door_open.assert_awaited_once()
 
     async def test_logs_physical_outcome_after_ack(self):
+        """Log the observed confirmation outcome rather than inferring it from an ACK."""
         for latch, outcome in (("Engaged", "unconfirmed"), ("Disengaged", "confirmed")):
             with self.subTest(latch=latch):
                 vehicle, _ = self.setup_car(after=[charge(latch=latch)])
@@ -561,6 +593,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                 )
 
     async def test_explicit_rejection_is_not_overridden_by_already_released_latch(self):
+        """Return an explicit VCSEC rejection without consulting the latch prover."""
         vehicle, car = self.setup_car()
         car.ack = vcsec_ok_reply()
         car.ack.protobuf_message_as_bytes = FromVCSECMessage(
@@ -573,6 +606,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertNotIn("verify", car.events)
 
     async def test_cancellation_propagates_without_cloud_replay(self):
+        """Propagate cancellation during verification without replay or policy changes."""
         vehicle, car = self.setup_car()
         car.read_hangs = True
         cloud = Cloud(vehicle.vin)
@@ -588,6 +622,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(vehicle.confirmation, "verify")
 
     async def test_real_transport_with_cold_info_session_and_bare_ack(self):
+        """Exercise cold INFO authentication and ambiguous actuation via real queues."""
         # Keep real domain locks, request/response queues, handshake validation,
         # command signing and response decoding. Only GATT I/O is replaced.
         for latch in ("Engaged", "Disengaged"):
@@ -612,6 +647,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     )
 
                     async def write(uuid, payload, response):
+                        """Authenticate INFO and inject bare ACK, write timeout, or MTU replies."""
                         self.assertEqual(uuid, WRITE_UUID)
                         self.assertTrue(response)
                         msg = RoutableMessage.FromString(payload[2:])
@@ -674,6 +710,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
                     )
 
     async def test_other_confirmation_modes_keep_ack_or_write_only_contract(self):
+        """Leave ack and optimistic modes on their existing single-send paths."""
         for mode in ("ack", "optimistic"):
             with self.subTest(mode=mode):
                 vehicle, send = self.make_vehicle(confirmation=mode)
@@ -686,6 +723,7 @@ class ChargePortVerificationTests(MockedBleTransportTestCase):
     async def test_frunk_boot_and_port_close_do_not_gain_readiness_or_verification(
         self,
     ):
+        """Keep frunk, boot, and port closing outside charge-port-specific preflight."""
         for action, args in (
             ("actuate_trunk", (Trunk.FRONT,)),
             ("actuate_trunk", (Trunk.REAR,)),
