@@ -376,7 +376,7 @@ class RouterCommandLoggingTests(IsolatedAsyncioTestCase):
 
 
 class _LocalSite:
-    """Duck-typed local energy site (not a Fleet ``EnergySite``)."""
+    """Duck-typed local energy site with a duck-typed cloud fallback."""
 
     async def shared(self, value: int) -> str:
         return f"local:{value}"
@@ -390,3 +390,13 @@ class EnergySiteRouterLocalTransportTests(IsolatedAsyncioTestCase):
             await router.shared(1)
 
         self.assertIn("command=shared transport=lan result=success", "\n".join(captured.output))
+
+    async def test_non_primary_duck_typed_backend_keeps_backend_field(self) -> None:
+        router = EnergySiteRouter(_FakePrimary(fail=True), _LocalSite())
+
+        with self.assertLogs(LOGGER_NAME, level="DEBUG") as captured:
+            await router.shared(1)
+
+        joined = "\n".join(captured.output)
+        self.assertIn("transport=lan result=error", joined)
+        self.assertIn("backend=_LocalSite result=success", joined)

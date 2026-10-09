@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from tesla_fleet_api.router.base import PrimaryT, Router, SecondaryT
-from tesla_fleet_api.tesla.energysite import EnergySite
 
 LOCAL_LIVE_STATUS_KEYS: frozenset[str] = frozenset(
     {
@@ -75,7 +74,7 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
     """
 
     def _backend_field(self, backend: Any) -> str:
-        """Log ``transport=lan`` for the local site; cloud sites keep the ``backend=`` field."""
-        if isinstance(backend, EnergySite):
-            return super()._backend_field(backend)
-        return "transport=lan"
+        """Log ``transport=lan`` for the local primary; cloud fallbacks keep the ``backend=`` field."""
+        if backend is self.primary:
+            return "transport=lan"
+        return super()._backend_field(backend)
