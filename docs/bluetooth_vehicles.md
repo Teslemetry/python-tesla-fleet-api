@@ -771,12 +771,12 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 Command results use terse, grep-friendly lines:
 
 ```
-command=RKE_ACTION_LOCK transport=Bluetooth result=True reason=
-command=set_charge_limit transport=Teslemetry result=True reason=
-command=mediaPlayAction transport=Bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
+command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
+command=set_charge_limit transport=teslemetry result=True reason=
+command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
 ```
 
-`transport` is `Bluetooth`, `Tesla Fleet`, `Teslemetry`, `Tessie`, or `Local`. For BLE signed
+`transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
 commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 `RKE_ACTION_LOCK`, `chargingSetLimitAction`), not the Python method name; for
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
@@ -799,7 +799,7 @@ A proven mismatch raises `BluetoothCommandFailed` regardless of
 `raise_unconfirmed=False` (the default), an exhausted ladder logs
 `raise_unconfirmed=False result=success (best-effort)` instead of raising
 `BluetoothUnconfirmedCommand`. `Router` additionally logs
-`command=... transport=<name> result=...` for each backend it tries, or
+`command=... backend=<ClassName> result=...` for each backend it tries, or
 `result=unconfirmed` when it stops instead of failing over, so a
 BLE-primary/cloud-fallback setup shows exactly which backend served each call
 and why a failover happened.

@@ -72,7 +72,7 @@ class TeslaFleetApi(Tesla):
     partner: "Partner"
     vehicles: "Vehicles[TeslaFleetApi]"
     # Transport identity for debug logging; Teslemetry/Tessie override this.
-    _transport_name: ClassVar[str] = "Tesla Fleet"
+    _transport_name: ClassVar[str] = "fleet"
 
     def __init__(
         self,

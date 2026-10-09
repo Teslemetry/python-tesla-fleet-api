@@ -212,7 +212,7 @@ the data in `chunk_size` pages. `chunk_size` must be a positive integer.
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each signed command's
-protobuf command name, `transport=Tesla Fleet`, and result:
+protobuf command name, `transport=fleet`, and result:
 
 ```python
 import logging

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from tesla_fleet_api.router.base import PrimaryT, Router, SecondaryT
+from tesla_fleet_api.tesla.energysite import EnergySite
 
 LOCAL_LIVE_STATUS_KEYS: frozenset[str] = frozenset(
     {
@@ -73,7 +74,8 @@ class EnergySiteRouter(Router[PrimaryT, SecondaryT]):
         await router.operation(...)  # local first, cloud on failure
     """
 
-    def _transport_label(self, backend: Any) -> str:
-        """Log ``transport=Local`` for a backend that names no transport (the duck-typed local site)."""
-        label = super()._transport_label(backend)
-        return "Local" if label == type(backend).__name__ else label
+    def _backend_field(self, backend: Any) -> str:
+        """Log ``transport=lan`` for the local site; cloud sites keep the ``backend=`` field."""
+        if isinstance(backend, EnergySite):
+            return super()._backend_field(backend)
+        return "transport=lan"

@@ -26,7 +26,6 @@ class EnergySite:
 
     def __init__(self, parent: TeslaFleetApi, energy_site_id: int) -> None:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
-        self._transport_name = parent._transport_name  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
 
     # Energy device gRPC commands based on research from

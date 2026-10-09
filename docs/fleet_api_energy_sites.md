@@ -33,7 +33,7 @@ asyncio.run(main())
 ## Troubleshooting: Debug Logging
 
 Enable the `tesla_fleet_api` logger at `DEBUG` to log each Fleet API request's
-final path segment, `transport=Tesla Fleet`, and result:
+final path segment, `transport=fleet`, and result:
 
 ```python
 import logging
