@@ -24,13 +24,13 @@ jobs:
 
   test:
     name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -44,9 +44,9 @@ jobs:
 
   build:
     name: Build distribution
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
