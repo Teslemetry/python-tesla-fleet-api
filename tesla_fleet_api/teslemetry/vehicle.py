@@ -128,6 +128,18 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             json=data,
         )
 
+    async def open_tonneau(self) -> dict[str, Any]:
+        """Opens the tonneau cover."""
+        return await self.closure(tonneau=ClosureState.OPEN)
+
+    async def close_tonneau(self) -> dict[str, Any]:
+        """Closes the tonneau cover."""
+        return await self.closure(tonneau=ClosureState.CLOSE)
+
+    async def stop_tonneau(self) -> dict[str, Any]:
+        """Stops the tonneau cover."""
+        return await self.closure(tonneau=ClosureState.STOP)
+
     async def seat_heater(
         self,
         front_left: SeatHeaterLevel | None = None,
