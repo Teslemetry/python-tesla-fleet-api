@@ -375,3 +375,53 @@ class CustomCommandRequestShapeTests(IsolatedAsyncioTestCase):
             Method.POST,
             f"api/1/vehicles/{VIN}/custom_command/set_rate_tariff",
         )
+
+
+class TonneauTests(IsolatedAsyncioTestCase):
+    """Tonneau methods mirror the signed ``Commands`` names via ``closure``."""
+
+    async def _assert_tonneau(self, method: str, body: str) -> None:
+        vehicle, request = _make_vehicle()
+        result = await getattr(vehicle, method)()
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"api/1/vehicles/{VIN}/custom_command/closure",
+            json={"tonneau": body},
+        )
+        self.assertEqual(result, {"response": {"result": True}})
+
+    async def test_open_tonneau(self) -> None:
+        await self._assert_tonneau("open_tonneau", "open")
+
+    async def test_close_tonneau(self) -> None:
+        await self._assert_tonneau("close_tonneau", "close")
+
+    async def test_stop_tonneau(self) -> None:
+        await self._assert_tonneau("stop_tonneau", "stop")
+
+    async def test_router_prefers_ble_and_falls_back_to_cloud(self) -> None:
+        from tesla_fleet_api.router import VehicleRouter
+
+        class _Ble:
+            vin = VIN
+
+            def __init__(self, fail: bool) -> None:
+                self.fail = fail
+                self.calls = 0
+
+            async def open_tonneau(self) -> dict[str, bool]:
+                self.calls += 1
+                if self.fail:
+                    raise ConnectionError("ble down")
+                return {"ble": True}
+
+        cloud, request = _make_vehicle()
+
+        ble = _Ble(fail=False)
+        self.assertEqual(await VehicleRouter(ble, cloud).open_tonneau(), {"ble": True})
+        request.assert_not_awaited()
+
+        ble = _Ble(fail=True)
+        await VehicleRouter(ble, cloud).open_tonneau()
+        self.assertEqual(ble.calls, 1)
+        request.assert_awaited_once()
