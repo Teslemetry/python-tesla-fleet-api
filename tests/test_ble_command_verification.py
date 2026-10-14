@@ -91,12 +91,13 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
     async def test_unverifiable_vcsec_command_reraises_without_read(self) -> None:
+        """Port closing has no absolute prover, so its timeout triggers no state read."""
         # A closure move has no derivable lock prover.
         vehicle, send = self.make_vehicle(verify_commands=True)
         send.side_effect = [BluetoothTimeout()]
 
         with self.assertRaises(BluetoothTimeout):
-            await vehicle.charge_port_door_open()
+            await vehicle.charge_port_door_close()
         # No prover read issued for an unverifiable command.
         self.assertEqual(send.await_count, 1)
 

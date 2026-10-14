@@ -5,6 +5,7 @@ import base64
 import re
 import socket
 import struct
+import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, cast
@@ -191,9 +192,10 @@ def _authorized_clients_list(payload: Any) -> list[Any]:
     return cast("list[Any]", value)
 
 
-def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
-    """Parse a raw ``list_authorized_clients()`` response into typed clients.
+def parse_authorized_clients(payload: Any) -> AuthorizedClients:
+    """The one parser for a Teslemetry/aiopowerwall authorized-clients cloud envelope.
 
+    Parses a raw ``list_authorized_clients()`` response into typed clients.
     Raises :class:`~tesla_fleet_api.exceptions.InvalidResponse` if
     ``payload`` is null or doesn't match the confirmed envelope shape - see
     :func:`_authorized_clients_list`.
@@ -204,6 +206,18 @@ def _parse_authorized_clients(payload: Any) -> AuthorizedClients:
         if isinstance(entry, dict)
     ]
     return AuthorizedClients(clients=clients, raw=payload)
+
+
+def _parse_authorized_clients(  # pyright: ignore[reportUnusedFunction]
+    payload: Any,
+) -> AuthorizedClients:
+    """Deprecated alias for :func:`parse_authorized_clients`, kept for one release."""
+    warnings.warn(
+        "_parse_authorized_clients is deprecated; use parse_authorized_clients instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return parse_authorized_clients(payload)
 
 
 _GATEWAY_INTERFACES = ("eth", "wifi")
@@ -403,8 +417,11 @@ class TeslemetryEnergySite(EnergySite):
         response body or an unrecognized response shape rather than
         treating either as "no clients". See :class:`AuthorizedClients` for
         the exact parsing semantics.
+
+        For the unparsed response, use :meth:`list_authorized_clients`.
         """
-        return _parse_authorized_clients(await self.list_authorized_clients())
+        response = await self.list_authorized_clients()
+        return parse_authorized_clients(response)
 
     async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
         """Remove an authorized client from the energy gateway via the

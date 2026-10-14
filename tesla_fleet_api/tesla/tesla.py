@@ -7,9 +7,11 @@ import os
 import sys
 import time
 from os.path import exists
+from typing import TypeVar
 import aiofiles
 
 from tesla_fleet_api.const import LOGGER
+from tesla_fleet_api.exceptions import PrivateKeyError
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites
 from tesla_fleet_api.tesla.partner import Partner
@@ -214,6 +216,46 @@ async def _load_pem_private_key(
             await asyncio.sleep(_KEY_READ_RETRY_INTERVAL)
 
 
+_KeyT = TypeVar("_KeyT", ec.EllipticCurvePrivateKey, rsa.RSAPrivateKey)
+
+
+async def _load_existing_private_key(
+    path: str,
+    expected_type: type[_KeyT],
+    unsafe_skip_rsa_key_validation: bool = False,
+) -> _KeyT:
+    """Read and parse a key file already known to exist, raising ``PrivateKeyError`` for every failure shape.
+
+    Only covers a known-existing file's read/parse - key generation and the
+    O_EXCL create-race fallback are separate call sites that keep raising
+    their original exceptions.
+    """
+    try:
+        value = await _load_pem_private_key(
+            path,
+            retry_invalid=True,
+            unsafe_skip_rsa_key_validation=unsafe_skip_rsa_key_validation,
+        )
+    except OSError as err:
+        raise PrivateKeyError(
+            "unreadable", f"Could not read private key file at {path}"
+        ) from err
+    except TypeError as err:
+        raise PrivateKeyError(
+            "encrypted", f"Private key file at {path} is encrypted"
+        ) from err
+    except ValueError as err:
+        raise PrivateKeyError(
+            "malformed", f"Private key file at {path} is not a valid PEM private key"
+        ) from err
+    if not isinstance(value, expected_type):
+        raise PrivateKeyError(
+            "wrong_type",
+            f"Private key file at {path} is not a {expected_type.__name__}",
+        )
+    return value
+
+
 class Tesla:
     """Base class describing interactions with Tesla products."""
 
@@ -258,15 +300,7 @@ class Tesla:
                 self.private_key = value
                 return self.private_key
 
-        try:
-            value = await _load_pem_private_key(path, retry_invalid=True)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Private key file not found at {path}")
-        except PermissionError:
-            raise PermissionError(f"Permission denied when trying to read {path}")
-
-        if not isinstance(value, ec.EllipticCurvePrivateKey):
-            raise AssertionError("Loaded key is not an EllipticCurvePrivateKey")
+        value = await _load_existing_private_key(path, ec.EllipticCurvePrivateKey)
         self.private_key = value
         return self.private_key
 
@@ -350,13 +384,9 @@ class Tesla:
                 self.rsa_private_key = value
                 return self.rsa_private_key
 
-        value = await _load_pem_private_key(
-            path,
-            retry_invalid=True,
-            unsafe_skip_rsa_key_validation=skip_rsa_key_validation,
+        value = await _load_existing_private_key(
+            path, rsa.RSAPrivateKey, skip_rsa_key_validation
         )
-        if not isinstance(value, rsa.RSAPrivateKey):
-            raise AssertionError("Loaded key is not an RSAPrivateKey")
         self.rsa_private_key = value
         return self.rsa_private_key
 

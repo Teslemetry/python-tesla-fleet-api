@@ -12,6 +12,7 @@ from tesla_protocol.command.car_server_pb2 import Action
 from tesla_protocol.command.vehicle_pb2 import (
     AlertState,
     ChildPresenceDetectionState,
+    CurrentVehicleState,
     DisplayState,
     GuiSettings,
     LightShowState,
@@ -64,6 +65,38 @@ class LegacyVehicleStateTests(MockedBleTransportTestCase):
         result = await vehicle.legacy_vehicle_state()
         self.assertIsInstance(result, VehicleState)
         self.assertEqual(result.car_version, "2025.14.3")
+
+    async def test_legacy_vehicle_state_requests_legacy_field(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(VehicleData())
+        await vehicle.legacy_vehicle_state()
+        get = Action.FromString(
+            decrypt_sent_command(vehicle, send.await_args.args[0])
+        ).vehicleAction.getVehicleData
+        self.assertTrue(get.HasField("getLegacyVehicleState"))
+        self.assertFalse(get.HasField("getVehicleState"))
+
+    async def test_current_vehicle_state_reads_tag_18(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(vehicle_state=CurrentVehicleState(api_version=42))
+        )
+        result = await vehicle.current_vehicle_state()
+        self.assertIsInstance(result, CurrentVehicleState)
+        self.assertEqual(result.api_version, 42)
+        get = Action.FromString(
+            decrypt_sent_command(vehicle, send.await_args.args[0])
+        ).vehicleAction.getVehicleData
+        self.assertTrue(get.HasField("getVehicleState"))
+        self.assertFalse(get.HasField("getLegacyVehicleState"))
+
+    async def test_current_vehicle_state_ignores_legacy_tag(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_vehicle_data_reply(
+            VehicleData(legacy_vehicle_state=VehicleState(car_version="x"))
+        )
+        result = await vehicle.current_vehicle_state()
+        self.assertEqual(result.api_version, 0)
 
 
 class AlertStateTests(MockedBleTransportTestCase):

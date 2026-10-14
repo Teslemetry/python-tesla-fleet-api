@@ -34,7 +34,12 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 
 from tesla_fleet_api.funnel import CLOSURE_STATES, LOCK_STATES
 from tesla_fleet_api.tesla.vehicle.broadcast import Unsubscribe
-from tesla_protocol.command.vcsec_pb2 import ClosureState_E, Gear_E, VehicleLockState_E
+from tesla_protocol.command.vcsec_pb2 import (
+    ClosureState_E,
+    ClosureStatuses,
+    Gear_E,
+    VehicleLockState_E,
+)
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
@@ -49,18 +54,19 @@ class StreamSink(Protocol):
 
 
 # teslemetry-stream's listen_Gear reads a ShiftState-prefixed wire string and
-# strips the prefix via TeslemetryEnum.get() - GEAR_UNKNOWN is VCSEC's
-# always-present proto3 default (0), mirroring LOCK_STATES' treatment of
-# VEHICLELOCKSTATE_UNLOCKED.
+# strips the prefix via TeslemetryEnum.get(). GEAR_UNKNOWN is deliberately
+# unmapped: it is the proto3 default (0) of a field with no presence, so a
+# broadcast that omits gear (every lock-only broadcast) decodes to it and
+# carries no information - emitting ShiftStateUnknown would overwrite a real
+# gear in consumers.
 #
 # These values stay hardcoded rather than derived from Gear_E's own
 # descriptor names (GEAR_UNKNOWN/GEAR_PARK/GEAR_DRIVE/GEAR_REVERSE/
 # GEAR_NEUTRAL): there is no total stripping rule from those names to the
-# wire strings above - PARK/DRIVE/REVERSE/NEUTRAL each collapse to an
-# unrelated single letter while UNKNOWN spells out in full - so any
-# derivation would need a per-value special case anyway.
+# wire strings below - PARK/DRIVE/REVERSE/NEUTRAL each collapse to an
+# unrelated single letter - so any derivation would need a per-value special
+# case anyway.
 GEAR_STATES: Mapping[int, str] = {
-    Gear_E.GEAR_UNKNOWN: "ShiftStateUnknown",
     Gear_E.GEAR_PARK: "ShiftStateP",
     Gear_E.GEAR_DRIVE: "ShiftStateD",
     Gear_E.GEAR_REVERSE: "ShiftStateR",
@@ -99,12 +105,7 @@ class BleBroadcastStreamGlue:
         self._unsubs: list[Unsubscribe] = [
             vehicle.listen_vehicle_lock_state(self._on_lock_state),
             vehicle.listen_charge_port(self._on_charge_port),
-            vehicle.listen_front_trunk(self._on_front_trunk),
-            vehicle.listen_rear_trunk(self._on_rear_trunk),
-            vehicle.listen_front_driver_door(self._on_front_driver_door),
-            vehicle.listen_front_passenger_door(self._on_front_passenger_door),
-            vehicle.listen_rear_driver_door(self._on_rear_driver_door),
-            vehicle.listen_rear_passenger_door(self._on_rear_passenger_door),
+            vehicle.listen_closure_statuses(self._ingest_door_state),
             vehicle.listen_gear(self._on_gear),
             vehicle.listen_tonneau(self._on_tonneau),
             vehicle.listen_tonneau_percent_open(self._on_tonneau_percent_open),
@@ -132,32 +133,44 @@ class BleBroadcastStreamGlue:
             {"source": "bluetooth", "raw": ClosureState_E.Name(raw)},
         )
 
-    def _ingest_door_state(self, key: str, raw: int) -> None:
-        """Ingest one leaf of the ``DoorState`` dict signal by its wire key."""
-        if raw not in CLOSURE_STATES:
+    def _ingest_door_state(self, closures: ClosureStatuses) -> None:
+        """Ingest a broadcast's doors and trunks as one ``DoorState`` event.
+
+        Every teslemetry-stream door listener fires on any ``DoorState`` event
+        and reads its own key with ``.get()``, so a leaf sent alone would
+        reach the other five listeners as ``None``. A native event carries all
+        six leaves together; so does this. A leaf in an unmapped state is
+        left out rather than guessed.
+        """
+        raw = {
+            "DriverFront": closures.frontDriverDoor,
+            "PassengerFront": closures.frontPassengerDoor,
+            "DriverRear": closures.rearDriverDoor,
+            "PassengerRear": closures.rearPassengerDoor,
+            "TrunkFront": closures.frontTrunk,
+            "TrunkRear": closures.rearTrunk,
+        }
+        door_state = {
+            key: CLOSURE_STATES[state]
+            for key, state in raw.items()
+            if state in CLOSURE_STATES
+        }
+        if not door_state:
             return
         self._sink.ingest(
-            {"DoorState": {key: CLOSURE_STATES[raw]}},
-            {"source": "bluetooth", "raw": ClosureState_E.Name(raw)},
+            {"DoorState": door_state},
+            {
+                "source": "bluetooth",
+                # proto3 preserves an enum number this build has no name for,
+                # and Name() raises on one - report the bare number instead.
+                "raw": {
+                    key: ClosureState_E.Name(state)
+                    if state in ClosureState_E.values()
+                    else str(state)
+                    for key, state in raw.items()
+                },
+            },
         )
-
-    def _on_front_trunk(self, raw: int) -> None:
-        self._ingest_door_state("TrunkFront", raw)
-
-    def _on_rear_trunk(self, raw: int) -> None:
-        self._ingest_door_state("TrunkRear", raw)
-
-    def _on_front_driver_door(self, raw: int) -> None:
-        self._ingest_door_state("DriverFront", raw)
-
-    def _on_front_passenger_door(self, raw: int) -> None:
-        self._ingest_door_state("PassengerFront", raw)
-
-    def _on_rear_driver_door(self, raw: int) -> None:
-        self._ingest_door_state("DriverRear", raw)
-
-    def _on_rear_passenger_door(self, raw: int) -> None:
-        self._ingest_door_state("PassengerRear", raw)
 
     def _on_gear(self, raw: int) -> None:
         if raw not in GEAR_STATES:

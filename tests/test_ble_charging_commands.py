@@ -22,12 +22,6 @@ plugged in throughout) per-command status:
   ``charge_limit_soc_std`` is cleanly rejected by the car
   (``{"result": False, "reason": "already_standard"}``) rather than treated
   as a no-op success - the test below exercises the accepted path.
-- Live-discovered: ``set_scheduled_departure()``'s ``preconditioning_enabled``
-  and ``off_peak_charging_enabled`` parameters are accepted by the Python
-  signature but never wired into ``ScheduledDepartureAction`` (that proto
-  message has no such fields, see ``tesla_protocol.command.car_server_pb2``) - passing
-  ``preconditioning_enabled=False`` live had no effect on the vehicle's
-  observed ``ChargeState.preconditioning_enabled``. Documented in AGENTS.md.
 - ``charge_port_door_open``/``charge_port_door_close`` are EXCLUDED from live
   testing (CAPTAIN-PRESENT-ONLY - unlatching a plugged-in cable does not
   re-engage without a physical reseat) and ship mocked-transport-only below.
@@ -147,11 +141,9 @@ class SetScheduledChargingTests(MockedBleTransportTestCase):
 
 
 class SetScheduledDepartureTests(MockedBleTransportTestCase):
-    """``preconditioning_enabled``/``off_peak_charging_enabled`` are accepted by
-    the Python signature but not wired into ``ScheduledDepartureAction`` - live-
-    verified (see module docstring). This asserts the actual wire behavior:
-    only ``enabled``/``departure_time``/the two *_times recurrence messages/
-    ``off_peak_hours_end_time`` reach the proto."""
+    """``ScheduledDepartureAction`` has no enable flags for preconditioning or
+    off-peak charging: a present ``*_times`` block turns the feature on, so it
+    must be omitted when the caller disables it."""
 
     async def test_sends_departure_time_and_recurrence_windows(self) -> None:
         vehicle, send = self.make_vehicle()
@@ -187,11 +179,15 @@ class SetScheduledDepartureTests(MockedBleTransportTestCase):
             "off_peak_charging_enabled", [f.name for f in departure.DESCRIPTOR.fields]
         )
 
-    async def test_all_week_when_not_weekdays_only(self) -> None:
+    async def test_all_week_when_enabled_and_not_weekdays_only(self) -> None:
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.set_scheduled_departure(departure_time=0)
+        await vehicle.set_scheduled_departure(
+            departure_time=0,
+            preconditioning_enabled=True,
+            off_peak_charging_enabled=True,
+        )
 
         action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         departure = action.scheduledDepartureAction
@@ -203,6 +199,24 @@ class SetScheduledDepartureTests(MockedBleTransportTestCase):
             departure.off_peak_charging_times,
             OffPeakChargingTimes(all_week=departure.off_peak_charging_times.all_week),
         )
+
+    async def test_disabled_features_omit_their_times(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.set_scheduled_departure(
+            enable=True,
+            preconditioning_enabled=False,
+            departure_time=480,
+            off_peak_charging_enabled=False,
+        )
+
+        action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        departure = action.scheduledDepartureAction
+        self.assertTrue(departure.enabled)
+        self.assertEqual(departure.departure_time, 480)
+        self.assertFalse(departure.HasField("preconditioning_times"))
+        self.assertFalse(departure.HasField("off_peak_charging_times"))
 
 
 class ChargeScheduleTests(MockedBleTransportTestCase):
@@ -233,6 +247,48 @@ class ChargeScheduleTests(MockedBleTransportTestCase):
         self.assertTrue(schedule.one_time)
         self.assertEqual(schedule.id, 42)
         self.assertEqual(schedule.name, "test")
+
+    async def test_add_charge_schedule_accepts_day_names(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.add_charge_schedule(
+            days_of_week="monday, Friday,sunday",
+            enabled=True,
+            lat=0.0,
+            lon=0.0,
+            end_time=420,
+        )
+
+        action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        self.assertEqual(action.addChargeScheduleAction.days_of_week, 2 | 32 | 1)
+
+    async def test_add_charge_schedule_rejects_unknown_day_name(self) -> None:
+        vehicle, send = self.make_vehicle()
+
+        with self.assertRaises(ValueError):
+            await vehicle.add_charge_schedule(
+                days_of_week="monday,funday",
+                enabled=True,
+                lat=0.0,
+                lon=0.0,
+                end_time=420,
+            )
+        send.assert_not_awaited()
+
+    async def test_add_charge_schedule_accepts_midnight_start(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.add_charge_schedule(
+            days_of_week=127, enabled=True, lat=0.0, lon=0.0, start_time=0
+        )
+
+        action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        schedule = action.addChargeScheduleAction
+        self.assertTrue(schedule.start_enabled)
+        self.assertEqual(schedule.start_time, 0)
+        self.assertFalse(schedule.end_enabled)
 
     async def test_add_charge_schedule_requires_start_or_end_time(self) -> None:
         vehicle, _send = self.make_vehicle()

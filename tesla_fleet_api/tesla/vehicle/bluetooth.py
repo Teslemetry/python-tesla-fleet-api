@@ -29,8 +29,11 @@ from tesla_fleet_api.exceptions import (
     BluetoothTimeout,
     BluetoothTransportError,
     BluetoothUnconfirmedCommand,
+    SessionInfoAuthenticationFault,
+    SignedCommandResponseReplayed,
     SigningDisabled,
     TeslaFleetError,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
     WhitelistOperationStatus,
 )
 from tesla_fleet_api.tesla.vehicle.broadcast import BroadcastListeners, Unsubscribe
@@ -66,6 +69,7 @@ from tesla_protocol.command.car_server_pb2 import (
     GetVehicleConfig,
     GetVehicleData,
     GetVehicleDetailState,
+    GetLegacyVehicleState,
     GetVehicleState,
     VehicleAction,
 )
@@ -88,6 +92,7 @@ from tesla_protocol.command.vcsec_pb2 import (
     RKEAction_E,
     UnsignedMessage,
     VehicleLockState_E,
+    VehicleSleepStatus_E,
     VehicleStatus,
     WhitelistOperation,
 )
@@ -112,6 +117,7 @@ from tesla_protocol.command.vehicle_pb2 import (
     SoftwareUpdateState,
     SuspensionState,
     TirePressureState,
+    CurrentVehicleState,
     VehicleConfig,
     VehicleData,
     VehicleDetailState,
@@ -125,9 +131,19 @@ VERSION_UUID = "00000214-b2d1-43f0-9b88-960cebf8b91e"
 NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb"
 APPEARANCE_UUID = "00002a01-0000-1000-8000-00805f9b34fb"
 
-# The connector's per-attempt timeout is fixed and unexposed. Keep one retry for
-# transient failures without delaying Router fallback for its full default.
-DEFAULT_CONNECT_ATTEMPTS = 2
+# Measured on a Model 3: infotainment first answers a handshake 4-16s after an RKE
+# wake of a sleeping car, while VCSEC reports awake after ~0.5s.
+DEFAULT_WAKE_TIMEOUT = 30.0
+
+# Under Home Assistant every connect attempt re-picks the best connection path
+# (local adapter or proxy), so the attempt count bounds how many paths one
+# connect can reach. The connector's per-attempt timeout is a fixed ~20s, so
+# three attempts keep an all-attempts-time-out failure to about a minute.
+DEFAULT_CONNECT_ATTEMPTS = 3
+
+# Bound on tearing down a link after a failed session setup; the failure is
+# what gets reported, so a stuck disconnect must not hold it back.
+LINK_TEARDOWN_TIMEOUT = 5.0
 
 if TYPE_CHECKING:
     # Resolved dynamically as ``bleak.BleakClient``/``bleak.BleakScanner`` at
@@ -151,6 +167,31 @@ def prependLength(message: bytes) -> bytearray:
 STALE_CHUNK_TIMEOUT = 1.0
 
 
+def _parse_frame(payload: bytes) -> RoutableMessage:
+    """Parse one reassembled frame, wrapping a bare VCSEC message.
+
+    On a fresh link the car sends ``FromVCSECMessage`` frames (such as a
+    repeating ``authenticationRequest``) without a ``RoutableMessage``
+    around them. None of ``FromVCSECMessage``'s field numbers exist on
+    ``RoutableMessage``, so such a frame parses as a ``RoutableMessage``
+    with no known fields. It is wrapped as an unaddressed VCSEC message so
+    it reaches the broadcast listeners like a wrapped one.
+    """
+    message = RoutableMessage()
+    message.ParseFromString(payload)
+    if payload and not message.ListFields():
+        try:
+            vcsec = FromVCSECMessage.FromString(payload)
+        except DecodeError:
+            return message
+        if vcsec.WhichOneof("sub_message") is not None:
+            return RoutableMessage(
+                from_destination=Destination(domain=Domain.DOMAIN_VEHICLE_SECURITY),
+                protobuf_message_as_bytes=payload,
+            )
+    return message
+
+
 class ReassemblingBuffer:
     """
     Reassembles BLE notification chunks into length-prefixed RoutableMessages.
@@ -162,7 +203,7 @@ class ReassemblingBuffer:
     the next chunk doesn't arrive within ``STALE_CHUNK_TIMEOUT``.
     """
 
-    def __init__(self, callback: Callable[[RoutableMessage], None]):
+    def __init__(self, callback: Callable[[RoutableMessage], None]) -> None:
         """
         Initializes the buffer.
 
@@ -213,10 +254,7 @@ class ReassemblingBuffer:
                 and len(self.buffer) >= self.expected_length
             ):
                 try:
-                    message = RoutableMessage()
-                    message.ParseFromString(
-                        bytes(self.buffer[2 : self.expected_length])
-                    )
+                    message = _parse_frame(bytes(self.buffer[2 : self.expected_length]))
                     self.buffer = self.buffer[self.expected_length :]
                     self.packet_starts = [
                         x - self.expected_length
@@ -255,6 +293,17 @@ class ReassemblingBuffer:
 # outcome cannot be derived from the request - have no plan and fall through to
 # ``raise_unconfirmed``.
 VerifyPlan = tuple[str, Callable[[Any], bool]]
+
+
+def _charge_port_connected(state: ChargeState) -> bool | None:
+    """Classify positive cable evidence; absent/SNA fields are not unplugged."""
+    cable = state.conn_charge_cable.WhichOneof("type")
+    disconnected = state.charging_state.WhichOneof("type") == "Disconnected"
+    if cable in ("IEC", "SAE", "GB_AC", "GB_DC"):
+        return None if disconnected else True
+    if disconnected and cable in (None, "SNA"):
+        return False
+    return None
 
 
 def _decode_vcsec_status(msg: RoutableMessage) -> VehicleStatus | None:
@@ -454,7 +503,9 @@ class VehicleBluetooth(
       falls through to ``raise_unconfirmed`` (the read itself could not be
       attempted, e.g. an INFO-domain prover needs the car awake). Commands
       with no derivable prover fall through to ``raise_unconfirmed`` exactly
-      as under ``"ack"``.
+      as under ``"ack"``. Charge-port opening is stricter: it prepares wake/INFO
+      readiness before submission and verifies the latch/flap even after an
+      ACK. Its unresolved outcome always raises ``BluetoothUnconfirmedCommand``.
 
     Both rungs above derive their expected-end-state predicate from the same
     per-command table (one source of truth), just applied to a broadcast frame
@@ -479,6 +530,8 @@ class VehicleBluetooth(
     and a write provably rejected before submission
     (``BluetoothTransportError``) are unaffected by this flag and always
     raise - it only converts the "could not determine what happened" outcome.
+    Charge-port opening in ``"verify"`` mode is also exempt: an unconfirmed
+    physical result always raises, so a router cannot replay the opening.
 
     ``keepalive_interval`` (default ~20s, ``None``/``0`` disables) keeps an
     otherwise idle held connection from dropping: after that many seconds with
@@ -495,6 +548,7 @@ class VehicleBluetooth(
     ble_name: str
     confirmation: BluetoothConfirmation
     raise_unconfirmed: bool
+    wake_if_asleep: bool
     keepalive_interval: float | None
     device: BLEDevice | None = None
     client: BleakClient | None = None
@@ -513,6 +567,20 @@ class VehicleBluetooth(
     _actuation_timeout: float = 2
     # Bounded so a keepalive read against a sleeping car can never hang the loop.
     _keepalive_timeout: float = 2
+    # A ready infotainment answers a handshake in 0.26-0.39s (measured); bound
+    # each readiness probe so a waking car is re-probed promptly.
+    _wake_probe_timeout: float = 1.0
+    # Re-send the idempotent RKE wake while infotainment hasn't answered: BLE
+    # is local and free, and after a long sleep a first wake was observed not
+    # to bring infotainment up until it was re-sent.
+    _wake_resend_interval: float = 3
+    # How long a command woken by ``wake_if_asleep`` waits for infotainment.
+    _wake_timeout: float = DEFAULT_WAKE_TIMEOUT
+    # How long an awake car's infotainment gets to finish booting (measured up
+    # to ~16s after a wake) before its handshake timeout is final.
+    _infotainment_boot_timeout: float = 20
+    _charge_port_verify_timeout: float = 5
+    _charge_port_verify_interval: float = 0.25
     _keepalive_task: asyncio.Task[None] | None = None
     _last_activity: float = 0.0
     _connected: bool = False
@@ -530,7 +598,8 @@ class VehicleBluetooth(
         raise_unconfirmed: bool = False,
         *,
         verify_commands: bool | None = None,
-    ):
+        wake_if_asleep: bool = True,
+    ) -> None:
         """Initialize a BLE-connected vehicle.
 
         ``verify_commands`` and ``optimistic`` are deprecated aliases for
@@ -544,6 +613,10 @@ class VehicleBluetooth(
         passive listener that only observes broadcasts via the ``listen_*``
         methods and never sends a command. ``key=None`` (the default, and an
         explicit ``None``) keeps the usual fallback to the parent's key.
+
+        ``wake_if_asleep`` (default ``True``) wakes a sleeping vehicle over BLE
+        and resends an infotainment command that went unanswered because of
+        it, instead of raising ``BluetoothCommandFailed``.
         """
         super().__init__(parent, vin, key)
         if isinstance(confirmation, bool):
@@ -576,6 +649,7 @@ class VehicleBluetooth(
         self.confirmation = confirmation
         self.keepalive_interval = keepalive_interval
         self.raise_unconfirmed = raise_unconfirmed
+        self.wake_if_asleep = wake_if_asleep
         self.ble_name = "S" + hashlib.sha1(vin.encode("utf-8")).hexdigest()[:16] + "C"
         self._queues = {
             Domain.DOMAIN_VEHICLE_SECURITY: asyncio.Queue(),
@@ -634,7 +708,17 @@ class VehicleBluetooth(
         return self.device
 
     async def connect(self, max_attempts: int = DEFAULT_CONNECT_ATTEMPTS) -> None:
-        """Connect to the Tesla BLE device."""
+        """Connect to the Tesla BLE device.
+
+        Makes up to ``max_attempts`` connection attempts. Under Home Assistant
+        each attempt re-selects the best available connection path, so a
+        failed adapter or proxy is followed by the next one rather than ending
+        the connect.
+
+        Any failure after a GATT link was established (notification setup, a
+        dropped link) tears that link down before raising, so the vehicle is
+        never left holding a half-open connection.
+        """
         if not self.device:
             raise ValueError(f"BLEDevice {self.ble_name} has not been found or set")
         # Resolve BleakClient dynamically: habluetooth replaces
@@ -670,14 +754,45 @@ class VehicleBluetooth(
                 type(e).__name__,
                 e,
             )
-            client = self.client
-            self.client = None
-            if client:
-                try:
-                    await client.disconnect()
-                except (BleakError, TimeoutError):
-                    pass
+            await self._drop_link(f"connect failed at {stage}")
             raise BluetoothTransportError from e
+        except (Exception, TeslaFleetError):
+            await self._drop_link(f"connect failed at {stage}")
+            raise
+
+    async def _drop_link(self, reason: str) -> None:
+        """Tear down the current GATT link after a failed session setup.
+
+        Best effort and bounded: it never raises, so the caller's own failure
+        is what surfaces. The next send reconnects via ``connect_if_needed``.
+        """
+        await self._stop_keepalive()
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+        LOGGER.debug("BLE dropping link vin=%s: %s", self.vin, reason)
+        try:
+            async with asyncio.timeout(LINK_TEARDOWN_TIMEOUT):
+                await client.disconnect()
+        except Exception as e:
+            LOGGER.debug(
+                "BLE link teardown failed vin=%s %s: %s", self.vin, type(e).__name__, e
+            )
+        self._set_connected(False)
+
+    async def _drop_link_on_failure(self, reason: str, err: BaseException) -> None:
+        """Drop the link for a failed session setup unless ``err`` is exempt.
+
+        ``SigningDisabled`` is raised before anything touches the link (a
+        passive listener's held link must survive it), and cancellation or
+        interpreter exit is not a session failure.
+        """
+        if isinstance(err, SigningDisabled) or not isinstance(
+            err, (Exception, TeslaFleetError)
+        ):
+            return
+        await self._drop_link(f"{reason}: {type(err).__name__}")
 
     async def disconnect(self) -> bool:
         """Disconnect from the Tesla BLE device."""
@@ -1313,6 +1428,35 @@ class VehicleBluetooth(
             confirm_broadcast=confirm_broadcast,
         )
 
+    async def handshakeVehicleSecurity(self) -> None:
+        """Perform a handshake with the vehicle security domain.
+
+        A failed handshake drops the BLE link before raising, so a retry starts
+        on a fresh connection instead of a half-open one.
+        """
+        try:
+            await super().handshakeVehicleSecurity()
+        except BaseException as err:
+            await self._drop_link_on_failure("vehicle security handshake failed", err)
+            raise
+
+    async def handshakeInfotainment(self) -> None:
+        """Perform a handshake with the infotainment domain.
+
+        A failed handshake drops the BLE link before raising, unless VCSEC
+        reports the car asleep - a sleeping car's infotainment is expected to
+        be silent, and that read proves the link itself is alive.
+        """
+        try:
+            await super().handshakeInfotainment()
+        except BluetoothTimeout:
+            if not await self._vehicle_asleep():
+                await self._drop_link("infotainment handshake failed")
+            raise
+        except BaseException as err:
+            await self._drop_link_on_failure("infotainment handshake failed", err)
+            raise
+
     async def _ensure_handshake(self, domain: Domain) -> None:
         if not self._sessions[domain].ready:
             await self._handshake(domain)
@@ -1369,6 +1513,135 @@ class VehicleBluetooth(
         )
         return {"response": {"result": True, "reason": ""}}
 
+    async def charge_port_door_open(self) -> dict[str, Any]:
+        """Open the flap or release a cable, verifying the physical result.
+
+        In ``verify`` mode, prepare the charging subsystem before actuating,
+        then require an explicit latch/flap result even after a successful
+        ACK. An unresolved result always raises ``BluetoothUnconfirmedCommand``
+        (including with ``raise_unconfirmed=False``), preventing cloud replay.
+        Other confirmation modes retain the ordinary VCSEC ACK/write contract.
+        """
+        if self.confirmation != "verify":
+            return await super().charge_port_door_open()
+
+        # Nothing has actuated yet. All readiness failures may safely fail over.
+        # Bound the entire preflight, including a stalled read or reconnect.
+        deadline = asyncio.get_running_loop().time() + self._wake_timeout
+        try:
+            async with asyncio.timeout_at(deadline):
+                if await self._vehicle_asleep():
+                    if not self.wake_if_asleep:
+                        raise BluetoothCommandFailed("Vehicle asleep; wake disabled")
+                    await self._wake_for_command(BluetoothTimeout())
+                else:
+                    # Cached sessions and VCSEC AWAKE do not establish readiness.
+                    await self._await_infotainment(
+                        self._infotainment_boot_timeout, wake=False
+                    )
+                while True:
+                    try:
+                        before = await self.charge_state()
+                        break
+                    except (BluetoothTimeout, TimeoutError, BleakError):
+                        # INFO may answer its handshake before charge data is
+                        # available. Retry only the read within the preflight budget.
+                        await asyncio.sleep(self._charge_port_verify_interval)
+                connected = _charge_port_connected(before)
+                if connected is None:
+                    raise BluetoothCommandFailed(
+                        "Charge-port cable state unknown; no opening command sent"
+                    )
+            # Use the same deadline, but let expiry become TimeoutError before
+            # applying link cleanup; actual caller cancellation remains exempt.
+            try:
+                async with asyncio.timeout_at(deadline):
+                    await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+            except BaseException as err:
+                await self._drop_link_on_failure(
+                    "vehicle security handshake failed", err
+                )
+                raise
+        except TimeoutError as err:
+            raise BluetoothTimeout("Charge-port readiness timed out") from err
+
+        # Bypass the generic best-effort VCSEC ladder: a successful ACK, or a
+        # missing one, must both proceed to physical verification for this action.
+        cause: BaseException | None = None
+        try:
+            result = await super()._sendVehicleSecurity(
+                UnsignedMessage(
+                    closureMoveRequest=ClosureMoveRequest(
+                        chargePort=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                    )
+                )
+            )
+            if result["response"]["result"] is False:
+                return result
+        except (
+            Exception,
+            BluetoothTimeout,
+            SessionInfoAuthenticationFault,
+            SignedCommandResponseReplayed,
+            TeslaFleetMessageFaultResponseSizeExceedsMTU,
+        ) as err:
+            # A malformed, unauthenticated or replayed reply says nothing about
+            # whether opening executed. Ordinary backend errors are likewise
+            # delivery-ambiguous. A response exceeding MTU may follow execution,
+            # per Tesla SDK RoutableMessageError.MayHaveSucceeded.
+            # Proven pre-submission transport failures and
+            # explicit car-side protocol rejections retain their TeslaFleetError
+            # types and are not caught here.
+            cause = err
+
+        # Keep the original goal if the cable changes during verification. In
+        # particular, an open flap must never stand in for an unreleased latch.
+        try:
+            async with asyncio.timeout(self._charge_port_verify_timeout):
+                while True:
+                    try:
+                        after = await self.charge_state()
+                        if connected:
+                            confirmed = (
+                                after.charge_port_latch.WhichOneof("type")
+                                == "Disengaged"
+                            )
+                        else:
+                            confirmed = (
+                                _charge_port_connected(after) is False
+                                and after.HasField("charge_port_door_open")
+                                and after.charge_port_door_open
+                            )
+                        if confirmed:
+                            LOGGER.debug(
+                                "command=closureMoveRequest transport=%s physical_confirmation=confirmed",
+                                self._transport_name,
+                            )
+                            LOGGER.debug(
+                                "command=closureMoveRequest transport=%s result=True reason=",
+                                self._transport_name,
+                            )
+                            return {"response": {"result": True, "reason": ""}}
+                    except (Exception, TeslaFleetError) as err:
+                        # No read failure after submission may cause a replay.
+                        cause = err
+                    await asyncio.sleep(self._charge_port_verify_interval)
+        except TimeoutError:
+            unconfirmed = BluetoothUnconfirmedCommand(
+                "Charge-port opening was not confirmed by physical state"
+            )
+            LOGGER.debug(
+                "command=closureMoveRequest transport=%s physical_confirmation=unconfirmed",
+                self._transport_name,
+            )
+            LOGGER.debug(
+                "command=closureMoveRequest transport=%s result=error error=%s: %s",
+                self._transport_name,
+                type(unconfirmed).__name__,
+                unconfirmed,
+            )
+            raise unconfirmed from cause
+
     async def _sendVehicleSecurity(
         self,
         command: UnsignedMessage,
@@ -1405,7 +1678,11 @@ class VehicleBluetooth(
         unresolved resolves as a best-effort success instead of raising - see
         the class docstring.
         """
-        await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        try:
+            await self._ensure_handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+        except BaseException as err:
+            await self._drop_link_on_failure("vehicle security handshake failed", err)
+            raise
         if self.confirmation == "optimistic":
             return await self._send_optimistic(
                 Domain.DOMAIN_VEHICLE_SECURITY,
@@ -1446,8 +1723,48 @@ class VehicleBluetooth(
         semantics as ``_sendVehicleSecurity`` - see there. ``mutating=False``
         (``ping()`` only) is exempt from all three: it always waits for its
         real reply.
+
+        When an unresolved command under ``raise_unconfirmed=False`` finds the
+        vehicle asleep, it cannot have run, so with ``wake_if_asleep`` the
+        vehicle is woken over BLE and the command sent once more; otherwise
+        (or if still asleep after that) ``BluetoothCommandFailed`` is raised.
         """
-        await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
+        return await self._send_infotainment_ladder(
+            command, mutating=mutating, wake=self.wake_if_asleep
+        )
+
+    async def _send_infotainment_ladder(
+        self, command: Action, *, mutating: bool, wake: bool
+    ) -> dict[str, Any]:
+        try:
+            await self._ensure_handshake(Domain.DOMAIN_INFOTAINMENT)
+        except BluetoothTimeout as timeout:
+            # Nothing was sent yet, so waking and retrying cannot double-execute.
+            sleep_status = await self._sleep_status()
+            if sleep_status == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP:
+                # A sleeping car's silent infotainment is expected, and the
+                # VCSEC read just proved the link alive: keep it.
+                if not wake:
+                    raise
+                await self._wake_for_command(timeout)
+                wake = False
+            elif sleep_status == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_AWAKE:
+                # VCSEC reports awake seconds before infotainment finishes
+                # booting (e.g. just woken by something else), so keep retrying
+                # the handshake. This wakes nothing, so ignores wake_if_asleep.
+                try:
+                    await self._await_infotainment(
+                        self._infotainment_boot_timeout, wake=False
+                    )
+                except BluetoothTimeout:
+                    await self._drop_link("infotainment handshake failed")
+                    raise timeout from None
+            else:
+                await self._drop_link("infotainment handshake failed")
+                raise
+        except BaseException as err:
+            await self._drop_link_on_failure("infotainment handshake failed", err)
+            raise
         if self.confirmation == "optimistic" and mutating:
             return await self._send_optimistic(
                 Domain.DOMAIN_INFOTAINMENT,
@@ -1480,7 +1797,49 @@ class VehicleBluetooth(
                     name,
                     self._transport_name,
                 )
+            # A best-effort success here would stop a router's cloud fallback,
+            # so first ask VCSEC (which answers while asleep) whether the
+            # infotainment computer could have run the command at all.
+            if not self.raise_unconfirmed and await self._vehicle_asleep():
+                if not wake:
+                    raise BluetoothCommandFailed(
+                        timeout.data, timeout.status
+                    ) from timeout
+                # Waking over BLE is free, unlike the cloud, and a sleeping car
+                # provably did not run the command, so resending cannot
+                # double-execute it. Only one wake per command, so a car that
+                # stays asleep still reaches the router's cloud fallback.
+                await self._wake_for_command(timeout)
+                return await self._send_infotainment_ladder(
+                    command, mutating=mutating, wake=False
+                )
             return self._unconfirmed_outcome(name, unconfirmed, cause=timeout)
+
+    async def _wake_for_command(self, timeout: BluetoothTimeout) -> None:
+        """Wake a sleeping car until infotainment is ready for a command.
+
+        Failing to wake means the command provably never ran, so it raises
+        ``BluetoothCommandFailed`` - safe for a router to fail over on.
+        """
+        try:
+            await self.wake_up(wait=True, timeout=self._wake_timeout)
+        except TeslaFleetError as err:
+            raise BluetoothCommandFailed(timeout.data, timeout.status) from err
+
+    async def _vehicle_asleep(self) -> bool:
+        """Whether VCSEC reports the vehicle asleep; ``False`` if unreadable."""
+        return (
+            await self._sleep_status()
+            == VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
+        )
+
+    async def _sleep_status(self) -> int | None:
+        """VCSEC's reported sleep status, or ``None`` if unreadable."""
+        try:
+            status = await self.vehicle_state()
+        except TeslaFleetError:
+            return None
+        return status.vehicleSleepStatus
 
     async def _resolve_timeout(
         self, plan: VerifyPlan | None, timeout: BluetoothTimeout
@@ -1552,6 +1911,15 @@ class VehicleBluetooth(
             uuid=randbytes(16),
         )
 
+        try:
+            await self._pair(msg, timeout, poll_interval)
+        except BaseException as err:
+            await self._drop_link_on_failure("pairing failed", err)
+            raise
+
+    async def _pair(
+        self, msg: RoutableMessage, timeout: float, poll_interval: float
+    ) -> None:
         deadline = time.monotonic() + timeout
 
         # Fast path: write the op once and wait one interval for its one-shot
@@ -1641,20 +2009,77 @@ class VehicleBluetooth(
                 f"Unknown whitelist operation failure: {info}"
             )
 
-    async def wake_up(self):
-        """Wake up the vehicle security computer.
+    async def wake_up(
+        self, wait: bool = False, timeout: float = DEFAULT_WAKE_TIMEOUT
+    ) -> dict[str, Any]:
+        """Wake up the vehicle.
 
-        A ``BluetoothUnconfirmedCommand`` from this command can be a false
-        negative even when the vehicle wakes successfully, so callers should
-        treat wake as best-effort and confirm readiness with a retried
-        INFO-domain read. The infotainment computer may still need a short
-        delay before it can complete signed-command handshakes, so callers that
-        issue INFO-domain reads immediately after waking should retry
-        ``BluetoothTimeout`` with backoff.
+        Without ``wait`` this only sends the RKE wake to the vehicle security
+        computer, which acks well before the infotainment computer can answer:
+        an INFO command sent straight after can still time out. A
+        ``BluetoothUnconfirmedCommand`` from it can be a false negative even
+        when the vehicle wakes.
+
+        With ``wait=True`` this blocks until infotainment completes a session
+        handshake - the only proof it can take commands - re-sending the
+        (idempotent) wake while it has not, and raises ``BluetoothTimeout``
+        if it has not within ``timeout`` seconds. VCSEC's own sleep status is
+        not used: it reports awake seconds before infotainment is reachable.
         """
-        return await self._sendVehicleSecurity(
-            UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+        if not wait:
+            return await self._sendVehicleSecurity(
+                UnsignedMessage(RKEAction=RKEAction_E.RKE_ACTION_WAKE_VEHICLE)
+            )
+        try:
+            await self._await_infotainment(timeout, wake=True)
+        except BaseException as err:
+            await self._drop_link_on_failure("wake failed", err)
+            raise
+        return {"response": {"result": True, "reason": ""}}
+
+    async def _await_infotainment(self, timeout: float, *, wake: bool) -> None:
+        """Retry the infotainment handshake until it answers or ``timeout``.
+
+        With ``wake`` the idempotent RKE wake is (re-)sent every
+        ``_wake_resend_interval`` too. Raises ``BluetoothTimeout`` at the deadline.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        next_wake = loop.time()
+        while True:
+            if wake and loop.time() >= next_wake:
+                try:
+                    await self.wake_up()
+                except BluetoothTimeout:
+                    # An unconfirmed wake may still have landed; the handshake
+                    # probe below is what decides.
+                    pass
+                next_wake = loop.time() + self._wake_resend_interval
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise BluetoothTimeout()
+            try:
+                await self._probe_infotainment(min(self._wake_probe_timeout, remaining))
+                return
+            except BluetoothTimeout:
+                pass
+
+    async def _probe_infotainment(self, timeout: float) -> None:
+        """Handshake with infotainment, bounded by ``timeout``.
+
+        Always sends a fresh session-info request, even with a session already
+        cached: only a live reply proves infotainment is awake. Raises
+        ``BluetoothTimeout`` if it does not answer in time.
+        """
+        if self.private_key is None:
+            raise SigningDisabled()
+        await self._send(
+            self._session_info_request(Domain.DOMAIN_INFOTAINMENT),
+            "session_info",
+            timeout=timeout,
         )
+        if not self._sessions[Domain.DOMAIN_INFOTAINMENT].ready:
+            raise BluetoothTimeout()
 
     async def vehicle_data(self, endpoints: list[BluetoothVehicleData]) -> VehicleData:
         """Get vehicle data over the BLE infotainment channel.
@@ -1730,7 +2155,7 @@ class VehicleBluetooth(
                         getParkedAccessoryState=GetParkedAccessoryState()
                         if BluetoothVehicleData.PARKED_ACCESSORY_STATE in endpoints
                         else None,
-                        getVehicleState=GetVehicleState()
+                        getLegacyVehicleState=GetLegacyVehicleState()
                         if BluetoothVehicleData.LEGACY_VEHICLE_STATE in endpoints
                         else None,
                         getAlertState=GetAlertState()
@@ -1944,6 +2369,30 @@ class VehicleBluetooth(
         not ``vehicle_state()``: that name is already taken by the VCSEC
         ``VehicleStatus`` reader below, a different message from a different
         domain.
+
+        Requests ``getLegacyVehicleState`` and reads the reply on VehicleData
+        tag 6, which only older firmware populates; newer firmware answers on
+        tag 18 - use ``current_vehicle_state()`` there.
+        """
+        return (
+            await self._getInfotainment(
+                Action(
+                    vehicleAction=VehicleAction(
+                        getVehicleData=GetVehicleData(
+                            getLegacyVehicleState=GetLegacyVehicleState()
+                        )
+                    )
+                )
+            )
+        ).legacy_vehicle_state
+
+    async def current_vehicle_state(self) -> CurrentVehicleState:
+        """Return CarServer's current vehicle state over BLE.
+
+        Requests ``getVehicleState`` and reads the reply on VehicleData tag 18
+        (``VehicleData.vehicle_state``), the only tag current firmware (e.g.
+        2026.26.6) answers on. Older firmware answers on tag 6; use
+        ``legacy_vehicle_state()`` there.
         """
         return (
             await self._getInfotainment(
@@ -1953,7 +2402,7 @@ class VehicleBluetooth(
                     )
                 )
             )
-        ).legacy_vehicle_state
+        ).vehicle_state
 
     async def vehicle_config(self) -> VehicleConfig:
         """Return the vehicle's configuration/options state over BLE."""

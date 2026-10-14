@@ -85,7 +85,7 @@ class TeslaFleetApi(Tesla):
         partner_scope: bool = True,
         user_scope: bool = True,
         vehicle_scope: bool = True,
-    ):
+    ) -> None:
         """Initialize the Tesla Fleet API."""
 
         self.session = session or aiohttp.ClientSession()

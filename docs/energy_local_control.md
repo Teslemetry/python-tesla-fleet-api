@@ -200,6 +200,12 @@ a genuinely empty client list. Catch `InvalidResponse` (or
 will not catch it. Either way, a `null` response here tells you nothing
 about whether the key actually works.
 
+Any 502 response, including one from a gateway-relay command endpoint, raises
+`tesla_fleet_api.exceptions.BadGateway` regardless of whether the response
+carries a JSON body. Teslemetry's `energy_gateway_unreachable` error code
+raises the `EnergyGatewayUnreachable` subclass, so catch that to tell an
+unreachable gateway apart from any other 502.
+
 To revoke a key, call `remove_authorized_client(public_key)` with its DER bytes
 or the base64 string returned by `list_authorized_clients()`. Removal does not
 require physical presence proof: any paired key can revoke every other key,
@@ -265,6 +271,39 @@ and the `health` check).
 > the contactor moved. Always confirm the actual outcome with a signed local
 > status read (for example `live_status()`'s grid/island fields) before
 > trusting the response for anything actuation-critical.
+
+### Merge contract
+
+`EnergySiteRouter`'s per-command dispatch is **not** a merge - calling
+`router.live_status()` returns one whole source's response (local, or cloud on
+failover), not a blend of both. `PowerwallEnergySite.live_status()` reports all
+of the cloud response's keys but fills in `None` for the ones it cannot serve
+locally, so a consumer that wants "local readings where available, cloud
+otherwise" needs to merge the two responses itself, field by field.
+
+`tesla_fleet_api.router.energysite` provides that merge via two entry points,
+one per response shape:
+
+```python
+from tesla_fleet_api.router.energysite import merge_live_status, merge_site_info
+
+cloud_status = await teslemetry_energysite.live_status()
+local_status = await local_energysite.live_status()
+merged = merge_live_status(cloud_status, local_status)
+```
+
+- `merge_live_status` overlays the `live_status()` fields the local gateway can
+  actually serve; `merge_site_info` does the same for `site_info()`
+  (`backup_reserve_percent`, `default_real_mode`).
+- Only keys the wrapper owns **and** present in `local` are overlaid onto a
+  copy of `cloud`; every other key keeps its cloud value.
+- If the local read failed entirely (`local is None`, e.g. the LAN call
+  raised), the result is just `cloud` - the same fallback-to-cloud behavior
+  `Router` gives non-merged commands.
+
+Both wrappers call the underlying primitive, `merge_local_into_cloud(cloud,
+local, owned_keys)`, which is still public for a caller with its own key set
+(`LOCAL_LIVE_STATUS_KEYS`/`LOCAL_SITE_INFO_KEYS` are also exported).
 
 ## See also
 

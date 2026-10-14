@@ -27,7 +27,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         access_token: str | None = None,
         refresh_token: str | None = None,
         expires: int = 0,
-    ):
+    ) -> None:
         if not is_valid_region(region):
             raise ValueError("Invalid region")
 

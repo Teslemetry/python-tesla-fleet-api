@@ -1,6 +1,18 @@
+from tesla_fleet_api.const import (
+    AuthorizationRole,
+    AuthorizedClientKeyType,
+    AuthorizedClientState,
+    AuthorizedClientType,
+    AuthorizedVerificationType,
+)
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySite, EnergySites
 from tesla_fleet_api.tesla.user import User
+from tesla_fleet_api.teslemetry.energysite import (
+    AuthorizedClient,
+    AuthorizedClients,
+    parse_authorized_clients,
+)
 from tesla_fleet_api.teslemetry.teslemetry import (
     Teslemetry,
     TeslemetryClientRegistration,
@@ -13,6 +25,14 @@ __all__ = [
     "Teslemetry",
     "TeslemetryClientRegistration",
     "register_client",
+    "AuthorizationRole",
+    "AuthorizedClient",
+    "AuthorizedClientKeyType",
+    "AuthorizedClients",
+    "AuthorizedClientState",
+    "AuthorizedClientType",
+    "AuthorizedVerificationType",
+    "parse_authorized_clients",
     "Charging",
     "EnergySites",
     "EnergySite",

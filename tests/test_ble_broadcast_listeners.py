@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from tesla_fleet_api.exceptions import BluetoothTimeout
-from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth, prependLength
 from tesla_protocol.command.universal_message_pb2 import (
     Destination,
     Domain,
@@ -25,6 +25,8 @@ from tesla_protocol.command.universal_message_pb2 import (
 )
 from tesla_protocol.command.vcsec_pb2 import (
     ClosureState_E,
+    AuthenticationLevel_E,
+    AuthenticationRequest,
     ClosureStatuses,
     CommandStatus,
     DetailedClosureStatus,
@@ -280,6 +282,28 @@ class ClosureListenerTests(IsolatedAsyncioTestCase):
         self.assertEqual(results["charge_port"], ClosureState_E.CLOSURESTATE_OPEN)
         self.assertEqual(results["tonneau"], ClosureState_E.CLOSURESTATE_UNKNOWN)
 
+    async def test_closure_statuses_listener_fires_once_with_the_whole_block(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        seen: list[ClosureStatuses] = []
+        vehicle.listen_closure_statuses(seen.append)
+
+        closures = ClosureStatuses(
+            frontDriverDoor=ClosureState_E.CLOSURESTATE_OPEN,
+            rearTrunk=ClosureState_E.CLOSURESTATE_AJAR,
+        )
+        vehicle._on_message(_status_broadcast(VehicleStatus(closureStatuses=closures)))
+        vehicle._on_message(
+            _status_broadcast(
+                VehicleStatus(
+                    vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+                )
+            )
+        )
+
+        self.assertEqual(seen, [closures])
+
     async def test_closure_listener_does_not_fire_without_closure_statuses(
         self,
     ) -> None:
@@ -296,6 +320,34 @@ class ClosureListenerTests(IsolatedAsyncioTestCase):
                 )
             )
         )
+
+        self.assertEqual(seen, [])
+
+    async def test_asleep_frame_without_closures_fires_no_closure_listener(
+        self,
+    ) -> None:
+        # A live Model 3 sent this VehicleStatus while locked and asleep, with
+        # the charge port open. It has no closureStatuses submessage (field 2),
+        # so every closure would read as the proto3 default CLOSED if decoded.
+        status = VehicleStatus.FromString(bytes.fromhex("10011802200142020801"))
+        self.assertFalse(status.HasField("closureStatuses"))
+
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_closure_statuses(seen.append)
+        for listen in (
+            vehicle.listen_front_driver_door,
+            vehicle.listen_front_passenger_door,
+            vehicle.listen_rear_driver_door,
+            vehicle.listen_rear_passenger_door,
+            vehicle.listen_front_trunk,
+            vehicle.listen_rear_trunk,
+            vehicle.listen_charge_port,
+            vehicle.listen_tonneau,
+        ):
+            listen(seen.append)
+
+        vehicle._on_message(_status_broadcast(status))
 
         self.assertEqual(seen, [])
 
@@ -418,6 +470,59 @@ class GenericBroadcastListenerTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(seen, [])
+
+
+class UnwrappedVcsecFrameTests(IsolatedAsyncioTestCase):
+    """A bare ``FromVCSECMessage`` frame with no ``RoutableMessage`` around it.
+
+    On a fresh link the car sends ``authenticationRequest`` (level DRIVE)
+    about every 1.1 s this way. Frames enter through the reassembly buffer,
+    as they do from a GATT notification.
+    """
+
+    async def test_bare_authentication_request_reaches_generic_listener(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle()
+        seen: list[RoutableMessage] = []
+        vehicle.listen_broadcast(DOMAIN, seen.append)
+
+        body = FromVCSECMessage(
+            authenticationRequest=AuthenticationRequest(
+                requestedLevel=AuthenticationLevel_E.AUTHENTICATION_LEVEL_DRIVE
+            )
+        )
+        vehicle._buffer.receive_data(prependLength(body.SerializeToString()))
+
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].from_destination.domain, DOMAIN)
+        self.assertEqual(
+            FromVCSECMessage.FromString(seen[0].protobuf_message_as_bytes), body
+        )
+
+    async def test_bare_vehicle_status_reaches_typed_listener(self) -> None:
+        vehicle = _make_vehicle()
+        seen: list[Any] = []
+        vehicle.listen_vehicle_lock_state(seen.append)
+
+        body = FromVCSECMessage(
+            vehicleStatus=VehicleStatus(
+                vehicleLockState=VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
+            )
+        )
+        vehicle._buffer.receive_data(prependLength(body.SerializeToString()))
+
+        self.assertEqual(seen, [VehicleLockState_E.VEHICLELOCKSTATE_LOCKED])
+
+    async def test_wrapped_frame_is_unchanged(self) -> None:
+        vehicle = _make_vehicle()
+        seen: list[RoutableMessage] = []
+        vehicle.listen_broadcast(DOMAIN, seen.append)
+
+        msg = _command_status_broadcast()
+        vehicle._buffer.receive_data(prependLength(msg.SerializeToString()))
+
+        self.assertEqual(seen, [msg])
 
 
 class ListenerExceptionIsolationTests(IsolatedAsyncioTestCase):

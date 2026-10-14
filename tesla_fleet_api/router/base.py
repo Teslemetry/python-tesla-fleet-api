@@ -21,6 +21,18 @@ SecondaryT = TypeVar("SecondaryT")
 # directly and fails over to the next backend on exception (no up-front probe).
 HealthCheck = Union[bool, Callable[[], bool], Callable[[], Awaitable[bool]]]
 
+# Called with (exception, backend, method_name) after every dispatched call.
+# On failure (any backend exception during per-command failover except
+# BluetoothUnconfirmedCommand) its return decides whether failover proceeds to
+# the next backend (True) or stops and re-raises that exception immediately
+# (False). On success it is called with exception=None and its return is
+# ignored - this is the only way to observe a *successful* dispatch (e.g. to
+# clear a repair raised by an earlier failure), since Router has no other
+# success hook.
+ResultHandler = Callable[
+    [Union[BaseException, None], Any, str], Union[bool, Awaitable[bool]]
+]
+
 
 async def _maybe_await(value: Any) -> Any:
     """Await ``value`` if it is awaitable, otherwise return it unchanged."""
@@ -88,6 +100,20 @@ class Router(Generic[PrimaryT, SecondaryT]):
     are always reached purely through per-command failover — there is deliberately
     no per-backend health matrix.
 
+    An optional ``on_result`` handler is called ``(exception, backend, method_name)``
+    after every dispatched call, success or failure — it is the only hook into
+    dispatch outcomes, so it doubles as the success notification. On failure
+    (a backend raising during per-command failover; ``BluetoothUnconfirmedCommand``
+    excepted — it never reaches the handler) its return value, sync or async,
+    decides whether failover continues to the next backend (``True``) or stops
+    and re-raises that exception immediately (``False``), which lets a caller
+    both suppress a failover it knows would also fail and run side effects (e.g.
+    raising a repair) at the point of failure. On success it is called with
+    ``exception=None`` and its return value is ignored — e.g. to clear a repair
+    raised by an earlier failure once a command goes through again. A handler
+    that itself raises propagates as-is, uncaught. The handler only ever fires
+    for a dispatched (callable) attribute, never for plain attribute access.
+
     Dispatch is implemented via :meth:`__getattr__`, which does **not** proxy
     special/dunder methods (Python looks those up on the type, not the instance).
     In particular ``async with Router(...)`` does *not* enter a backend's async
@@ -104,6 +130,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
 
     _backends: tuple[Any, ...]
     _health: HealthCheck | None
+    _on_result: ResultHandler | None
 
     def __init__(
         self,
@@ -111,11 +138,13 @@ class Router(Generic[PrimaryT, SecondaryT]):
         secondary: SecondaryT,
         *more_backends: Any,
         health: HealthCheck | None = None,
-    ):
+        on_result: ResultHandler | None = None,
+    ) -> None:
         # The two-argument ``Router(primary, secondary, health=...)`` form is
         # preserved exactly; additional positional backends extend the chain.
         self._backends = (primary, secondary, *more_backends)
         self._health = health
+        self._on_result = on_result
 
     async def is_healthy(self) -> bool:
         """Resolve an explicit health check to a bool.
@@ -130,6 +159,10 @@ class Router(Generic[PrimaryT, SecondaryT]):
         if isinstance(health, bool):
             return health
         return bool(await _maybe_await(health()))
+
+    def _backend_field(self, backend: Any) -> str:
+        """Return the ``key=value`` log field naming the backend."""
+        return f"backend={type(backend).__name__}"
 
     def _dispatch(
         self,
@@ -164,9 +197,9 @@ class Router(Generic[PrimaryT, SecondaryT]):
                     # replaying it on the next one risks double-executing it.
                     # Surface the ambiguity to the caller instead of failing over.
                     LOGGER.debug(
-                        "command=%s backend=%s result=unconfirmed error=%s: %s",
+                        "command=%s %s result=unconfirmed error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._backend_field(backend),
                         type(e).__name__,
                         e,
                     )
@@ -174,16 +207,22 @@ class Router(Generic[PrimaryT, SecondaryT]):
                 except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
                     last_exc = e
                     LOGGER.debug(
-                        "command=%s backend=%s result=error error=%s: %s",
+                        "command=%s %s result=error error=%s: %s",
                         name,
-                        type(backend).__name__,
+                        self._backend_field(backend),
                         type(e).__name__,
                         e,
                     )
+                    if self._on_result is not None and not await _maybe_await(
+                        self._on_result(e, backend, name)
+                    ):
+                        raise
                     continue
                 LOGGER.debug(
-                    "command=%s backend=%s result=success", name, type(backend).__name__
+                    "command=%s %s result=success", name, self._backend_field(backend)
                 )
+                if self._on_result is not None:
+                    await _maybe_await(self._on_result(None, backend, name))
                 return result
             # The loop always runs at least once (``start`` only advances past
             # the primary when a later backend remains), so a failure here means
@@ -199,7 +238,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
         # __getattr__ is only reached when normal lookup fails. Guard the private
         # attributes so an access before __init__ completes raises rather than
         # recursing infinitely through this method.
-        if name in ("_backends", "_health"):
+        if name in ("_backends", "_health", "_on_result"):
             raise AttributeError(name)
 
         backends = self._backends

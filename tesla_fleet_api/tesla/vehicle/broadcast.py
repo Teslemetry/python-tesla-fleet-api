@@ -22,6 +22,7 @@ from tesla_protocol.command.universal_message_pb2 import (
 )
 from tesla_protocol.command.vcsec_pb2 import (
     ClosureState_E,
+    ClosureStatuses,
     Gear_E,
     UIDesire_E,
     UserPresence_E,
@@ -144,6 +145,21 @@ class BroadcastListeners:
         def on_status(status: VehicleStatus) -> None:
             if status.HasField("detailedClosureStatus"):
                 callback(status.detailedClosureStatus.tonneauPercentOpen)
+
+        return self._register(self._status_listeners, on_status)
+
+    def listen_closure_statuses(
+        self, callback: Callable[[ClosureStatuses], None]
+    ) -> Unsubscribe:
+        """Listen for a broadcast's whole closure block in one call.
+
+        The per-closure listeners below each fire separately for the same
+        broadcast; use this when the closures must be read together.
+        """
+
+        def on_status(status: VehicleStatus) -> None:
+            if status.HasField("closureStatuses"):
+                callback(status.closureStatuses)
 
         return self._register(self._status_listeners, on_status)
 

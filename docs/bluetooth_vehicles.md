@@ -41,11 +41,9 @@ async def main():
 asyncio.run(main())
 ```
 
-`get_private_key(path)` loads an existing EC private key or creates a new
-unencrypted PEM key file. Newly created key files are created owner-readable
-and owner-writable only (`0600`) from the start, with no write-then-chmod
-window, and concurrent creators fall back to reading the file that won the
-create race.
+See the [README](../README.md#bluetooth-for-vehicles) for
+`get_private_key(path)`'s create/load semantics and the `PrivateKeyError`
+raised for an unusable existing key file.
 
 ## Keeping the Connection Alive (`keepalive_interval`)
 
@@ -78,21 +76,33 @@ disable keepalive or disconnect when you have no work for it.
 
 ## Connection Retry Budget
 
-`connect()` and `connect_if_needed()` make at most two connection attempts by
-default. This allows one retry for a waking vehicle or weak signal while
-limiting a failed connection to roughly 40 seconds before raising
-`BluetoothTransportError`. In particular, this lets a `VehicleRouter` move to
-its cloud fallback promptly when the vehicle is discoverable but all of its BLE
-connection slots are occupied.
+`connect()` and `connect_if_needed()` make up to three connection attempts by
+default. The underlying connector's per-attempt timeout is fixed at about 20
+seconds, so a connection that times out on every attempt raises
+`BluetoothTransportError` after roughly a minute, before a `VehicleRouter` moves
+to its cloud fallback.
 
-Pass `max_attempts` explicitly when an environment needs a larger retry budget:
+Under Home Assistant, each attempt re-selects the best connection path (local
+adapter or ESPHome proxy), so several attempts let a failed adapter or proxy be
+followed by another path within one connect. Path selection itself belongs to
+Home Assistant's Bluetooth stack: it ranks paths by signal strength with only a
+small penalty for past failures, so a much weaker path that works is reached
+sooner across repeated connects, not necessarily within a single one.
+
+Pass `max_attempts` explicitly when an environment needs a different budget;
+each extra attempt adds up to about 20 seconds to the worst case:
 
 ```python
 await vehicle.connect(max_attempts=4)
 ```
 
-The underlying connector's per-attempt timeout is fixed at about 20 seconds, so
-increasing this value increases the worst-case connection delay accordingly.
+A failed session setup over an established link - notification setup, a
+handshake timeout or rejection, a failed pairing, or a failed
+`wake_up(wait=True)` - disconnects the link before raising, so a retry starts on
+a fresh connection rather than a half-open one. An infotainment handshake that
+times out while VCSEC reports the car asleep keeps the link, since that read
+proved the link healthy and a sleeping car's infotainment is expected to be
+silent.
 
 ## Pair Vehicle
 
@@ -135,25 +145,33 @@ async def main():
     private_key = await tesla_bluetooth.get_private_key("path/to/private_key.pem")
     vehicle = tesla_bluetooth.vehicles.create("<vin>")
     try:
-        await vehicle.wake_up()
+        await vehicle.wake_up(wait=True)
     except BluetoothTimeout:
-        pass
+        print("Vehicle did not become ready in time")
     except TeslaFleetError as e:
         print(e)
-    print(f"Sent wake request to VehicleBluetooth instance for VIN: {vehicle.vin}")
 
 asyncio.run(main())
 ```
 
-`wake_up()` is best-effort over BLE: with `raise_unconfirmed=True`, a
-`BluetoothUnconfirmedCommand` from the wake request can be a false negative
-even when the vehicle wakes successfully (and still matches
-`except BluetoothTimeout`). Confirm readiness by retrying a cheap INFO-domain
-read, such as `charge_state()`, with backoff. The
-infotainment computer can also take longer to become ready than the
-vehicle-security computer, so INFO-domain reads immediately after waking should
-retry `BluetoothTimeout` with backoff. Keep one BLE connection open across
-related commands when possible instead of reconnecting for each command.
+`wake_up(wait=True, timeout=30)` blocks until the vehicle can take commands,
+raising `BluetoothTimeout` if it cannot within `timeout` seconds. Readiness is
+proven by the infotainment computer completing a session handshake: the
+vehicle-security computer acks the wake and reports itself awake within about
+half a second, but infotainment only answers 4-16s later (measured on a Model
+3; longer after a long sleep). The wake is re-sent every few seconds until then
+- over BLE it is local, free and idempotent. Neither VCSEC's sleep status nor
+status broadcasts are used to decide readiness.
+
+Plain `wake_up()` only sends the wake request and returns on its ack, so an
+INFO-domain command sent straight after can still time out. With
+`raise_unconfirmed=True`, a `BluetoothUnconfirmedCommand` from it can be a
+false negative even when the vehicle wakes (and still matches
+`except BluetoothTimeout`).
+
+A vehicle woken and then left idle can fall back asleep within about 80
+seconds, so issue commands promptly after waking, and keep one BLE connection
+open across related commands instead of reconnecting for each command.
 
 `VehicleBluetooth` raises `BluetoothTransportError`, a `TeslaFleetError`
 subclass, when the BLE connection, notification setup, or GATT characteristic
@@ -224,7 +242,8 @@ attempts.
 
 ### The confirmation ladder
 
-A mutating BLE command tries to confirm itself in up to four steps: write the
+Except for the stricter charge-port opening workflow described below, a
+mutating BLE command tries to confirm itself in up to four steps: write the
 GATT characteristic, wait for the addressed ack (racing a matching state
 broadcast for lock/unlock), fall back to a state read, then decide the final
 outcome. `confirmation` (constructor/factory arg, default `"ack"`) picks how
@@ -236,7 +255,7 @@ last step does when nothing above it settled the question.
 | GATT write | every level, incl. `"optimistic"` | proceeds to the next rung (or returns, under `"optimistic"`) | pre-submission (e.g. characteristic not found): `BluetoothTransportError`, always raises. Submitted-then-failed/timed-out: ambiguous, races any armed broadcast watcher, then falls to the "genuinely unresolved" outcome below |
 | Addressed ack + broadcast race (lock/unlock only) | `"ack"`, `"verify"` | returns a confirmed result | a proven mismatch at window end raises `BluetoothCommandFailed`; a lost ack with nothing else confirming falls to the next rung |
 | State-read verification | `"verify"` only | returns a confirmed result | a proven mismatch raises `BluetoothCommandFailed`; an unreadable prover (e.g. asleep car) falls to the next rung |
-| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success. `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
+| Genuinely unresolved outcome | every level | - | `raise_unconfirmed=False` (default): best-effort success, except an infotainment command whose VCSEC status read shows the car asleep, which is woken over BLE with `wake_up(wait=True)` and resent once infotainment is ready (`wake_if_asleep=True`, the default) or raises `BluetoothCommandFailed` (`wake_if_asleep=False`, or not ready before the wake times out). `raise_unconfirmed=True`: raises `BluetoothUnconfirmedCommand` |
 
 The GATT write rung's ambiguous case is not hypothetical: field measurements
 of write-level transport errors found some had already executed on the
@@ -288,6 +307,43 @@ volume steps, and ack-only actions such as `flash_lights()` or
 `trigger_homelink()` - are the documented best-effort set: they have no
 broadcast and no prover to confirm against, so a still-unresolved wait always
 falls through to `raise_unconfirmed` regardless of `confirmation`.
+
+### Charge-port opening with physical confirmation
+
+`charge_port_door_open()` has a stricter contract under `confirmation="verify"`.
+Before sending the opening request it reads VCSEC sleep state, uses the existing
+`wake_up(wait=True)` path if asleep, and checks fresh infotainment readiness even
+if a signed session is cached. A live `charge_state()` read must identify whether
+a cable is connected; transient read timeouts are retried within the same
+preflight budget. This preflight has the existing wake timeout as an overall
+limit; an asleep vehicle with `wake_if_asleep=False` is not actuated.
+
+It then sends the opening request and polls `charge_state()` for up to five
+seconds, **including after a successful ACK**:
+
+- With a cable connected before the request, only the explicit
+  `charge_port_latch.Disengaged` value confirms cable release. An already-open
+  flap and `charge_cable_unlatched` do not confirm it.
+- With an explicitly disconnected cable before the request, the cable must
+  still be disconnected and a present `charge_port_door_open` must be true.
+- Missing, `SNA`, or conflicting cable state cannot select a verification goal.
+  Missing or inconclusive state after submission cannot confirm completion.
+
+No opening request is automatically resent by this workflow. Existing protocol
+`WAIT`/epoch recovery still applies. If submission is ambiguous, the reply cannot
+be decoded/authenticated, or an ACK arrives but the required state is not
+observed before the deadline, it raises
+`BluetoothUnconfirmedCommand`, **even with `raise_unconfirmed=False`**. This keeps
+a fallback router from replaying a request that may still complete. Failures
+before opening is submitted can still use ordinary cloud fallback; an explicit
+command rejection retains its normal failure result. `"ack"` and `"optimistic"`
+keep their existing behavior, as do frunk, boot and charge-port closing.
+
+The readiness check addresses a suspected wake timing issue. It does not prove
+that the vehicle's charging interlocks are ready, and it does not stop charging
+or override an interlock. A completed asleep-state acceptance trial is recorded
+in `OBSERVATIONS.md`; its setup and sample limits matter when applying the
+result to other vehicles or charging conditions.
 
 ### Skipping the wait (`confirmation="optimistic"`) and defaulting to success (`raise_unconfirmed`)
 
@@ -376,9 +432,10 @@ mode and fields when preserving the other schedule matters.
 
 For signed commands, `set_scheduled_departure()` sends `enable`,
 `departure_time`, weekday/all-week recurrence choices, and
-`end_off_peak_time`. Its `preconditioning_enabled` and
-`off_peak_charging_enabled` arguments are accepted for API compatibility but do
-not map to fields in the vehicle's signed-command protobuf.
+`end_off_peak_time`. The signed-command protobuf has no on/off fields for
+preconditioning or off-peak charging, so each recurrence is sent only when its
+`*_enabled` or `*_weekdays_only` argument is true and left unset (off)
+otherwise.
 
 `charge_standard()` is not treated as a no-op by all vehicles: if the current
 charge limit already equals `charge_limit_soc_std`, the vehicle may reject the
@@ -485,7 +542,8 @@ Available BLE state readers:
 - `parental_controls_state()`
 - `gui_settings()`
 - `parked_accessory_state()`
-- `legacy_vehicle_state()` (CarServer's `GetVehicleState` - a different message from `vehicle_state()` above)
+- `legacy_vehicle_state()` (CarServer's `GetLegacyVehicleState`, reply on VehicleData tag 6 - older firmware only; a different message from `vehicle_state()` above)
+- `current_vehicle_state()` (CarServer's `GetVehicleState`, reply on VehicleData tag 18 - current firmware; use this on newer vehicles)
 - `vehicle_config()`
 - `soh_state()`
 - `vehicle_detail_state()`
@@ -532,6 +590,7 @@ similar in spirit to
 - `listen_user_presence(callback)` - `UserPresence_E`
 - `listen_gear(callback)` - `Gear_E`
 - `listen_ui_desire(callback)` - `UIDesire_E`
+- `listen_closure_statuses(callback)` - `ClosureStatuses` (every closure below, in one call)
 - `listen_front_driver_door(callback)` - `ClosureState_E`
 - `listen_front_passenger_door(callback)` - `ClosureState_E`
 - `listen_rear_driver_door(callback)` - `ClosureState_E`
@@ -588,7 +647,8 @@ teslemetry-stream API can carry into any object with a
 `ingest(data, metadata=None)` method, translating each broadcast into the
 same stream-shaped payload a native SSE event produces: lock state, charge
 port, all 6 `DoorState` leaves (front/rear driver and passenger doors, front
-and rear trunk), gear, tonneau position, and tonneau open percent.
+and rear trunk) together in one `DoorState` event per broadcast, gear, tonneau
+position, and tonneau open percent.
 
 ```python
 from tesla_fleet_api import BleBroadcastStreamGlue
@@ -710,12 +770,12 @@ logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
-Each command logs one terse, grep-friendly line:
+Command results use terse, grep-friendly lines:
 
 ```
 command=RKE_ACTION_LOCK transport=bluetooth result=True reason=
 command=set_charge_limit transport=teslemetry result=True reason=
-command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command timed out waiting for an ack after being written to the vehicle; it may have executed anyway.
+command=mediaPlayAction transport=bluetooth result=error error=BluetoothUnconfirmedCommand: Bluetooth command outcome could not be confirmed after submission; it may have executed anyway.
 ```
 
 `transport` is `bluetooth`, `fleet`, `teslemetry`, or `tessie`. For BLE signed
@@ -724,11 +784,20 @@ commands, `command` is the underlying VCSEC/infotainment field name (e.g.
 REST commands it is the endpoint's final path segment (e.g. `set_charge_limit`).
 REST responses that are valid JSON but not objects, such as `null`, lists, or
 scalars, are returned unchanged and log as `result=success`.
-For BLE commands run with `confirmation="verify"`, a resolved state-read logs a
-second line with `verify_commands=resolved` and the confirmed result; an
-unresolved read logs `verify_commands=unresolved` before the exception
-propagates (`BluetoothCommandFailed` on a proven mismatch,
-`BluetoothUnconfirmedCommand` if the read itself couldn't complete). With
+For charge-port opening with `confirmation="verify"`, physical verification logs
+`physical_confirmation=confirmed` or `physical_confirmation=unconfirmed` under
+`command=closureMoveRequest`. Successful physical confirmation also logs a final
+`result=True`. An unresolved outcome logs a final
+`result=error` and raises `BluetoothUnconfirmedCommand`, including with
+`raise_unconfirmed=False`. An earlier `result=True` records the ACK, before
+physical confirmation completes.
+
+For other BLE commands run with `confirmation="verify"`, a confirmed state-read
+logs a second line with `verify_commands=resolved` and the confirmed result.
+A proven mismatch raises `BluetoothCommandFailed` regardless of
+`raise_unconfirmed`. If the read cannot complete, it logs
+`verify_commands=unresolved`; `BluetoothUnconfirmedCommand` propagates only with
+`raise_unconfirmed=True`. With
 `raise_unconfirmed=False` (the default), an exhausted ladder logs
 `raise_unconfirmed=False result=success (best-effort)` instead of raising
 `BluetoothUnconfirmedCommand`. `Router` additionally logs

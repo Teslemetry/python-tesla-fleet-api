@@ -740,7 +740,7 @@ wheels = [
 
 [[package]]
 name = "tesla-fleet-api"
-version = "1.12.1"
+version = "1.18.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -772,8 +772,8 @@ requires-dist = [
     { name = "bleak", marker = "extra == 'ble'", specifier = ">=0.22" },
     { name = "bleak-retry-connector", marker = "extra == 'ble'", specifier = ">=3.9" },
     { name = "cryptography", specifier = ">=43" },
-    { name = "protobuf", specifier = ">=6.32.0" },
-    { name = "tesla-protocol", specifier = ">=1.4.0" },
+    { name = "protobuf", specifier = ">=6.33.5" },
+    { name = "tesla-protocol", specifier = ">=3.0.0" },
 ]
 provides-extras = ["ble"]
 
@@ -786,15 +786,15 @@ dev = [
 
 [[package]]
 name = "tesla-protocol"
-version = "1.4.0"
+version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "googleapis-common-protos" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/3a/2960e20ebd883dec8818387044b6714f312560143940518f9c6aca739e54/tesla_protocol-1.4.0.tar.gz", hash = "sha256:1db7484072526668380d5be21d547a437964e2ae4b7fc7b35e2c5e3bfb905617", size = 217084, upload-time = "2026-08-31T08:51:18.42Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/47/78fb737ea266c273fc194453bab74d919814b63685e96420ced52366c1a2/tesla_protocol-3.0.0.tar.gz", hash = "sha256:1ea79e83fb13342160ee4d050765d1cb07c809c976caa7d29625ee7413c6b625", size = 227146, upload-time = "2026-09-25T02:40:41.223Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/90/88f63e5a41fe4bfcef32f52c6ed0aef88bcdd33fde86c65f1657fac2371a/tesla_protocol-1.4.0-py3-none-any.whl", hash = "sha256:ba2d70405278d5f39cd7b2da8e9cadbf5dff1f02a5aa7a1e0753dbba4c8cf3e7", size = 263084, upload-time = "2026-08-31T08:51:17.156Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/3b/a35b5541179f3ea40c8ec5ed61ec2ac71987e1b97e04a3a7efcfb606ed06/tesla_protocol-3.0.0-py3-none-any.whl", hash = "sha256:96ed1aa2cd11c731b316ba172557755beae79373883fe3e3c92ec466f56b5e25", size = 274047, upload-time = "2026-09-25T02:40:39.834Z" },
 ]
 
 [[package]]

@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING, Any
 
 __author__ = "hello@teslemetry.com"
-__version__ = "1.12.1"
+__version__ = "1.18.0"
 
 from tesla_fleet_api.const import Region, is_valid_region
 from tesla_fleet_api.funnel import (

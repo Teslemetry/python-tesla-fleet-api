@@ -150,3 +150,55 @@ class ChargeStateTypedReplyTests(MockedBleTransportTestCase):
 
         self.assertIsInstance(charge_state, ChargeState)
         self.assertEqual(charge_state.battery_level, 42)
+
+
+class OutletPowerFeedEnumTests(MockedBleTransportTestCase):
+    """tesla-protocol 3.0.0 removed the invented ``*_UNKNOWN = 0``: the wire
+    values are the documented ones (0=off, 1=..., no off-by-one shift)."""
+
+    async def _sent_vehicle_action(self, call):  # type: ignore[no-untyped-def]
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await call(vehicle)
+        sent_msg = send.await_args.args[0]
+        return Action.FromString(decrypt_sent_command(vehicle, sent_msg)).vehicleAction
+
+    async def test_set_outlets_wire_values(self) -> None:
+        for request, name in ((0, "OFF"), (1, "CABIN_AND_BED"), (2, "CABIN")):
+            with self.subTest(request=request):
+                va = await self._sent_vehicle_action(lambda v: v.set_outlets(request))
+                action = va.setOutletsOnOffAction
+                self.assertEqual(action.outlet_request, request)
+                self.assertEqual(
+                    action.outlet_request,
+                    getattr(type(action), f"OUTLET_REQUEST_{name}"),
+                )
+
+    async def test_set_power_feed_wire_values(self) -> None:
+        names = ("OFF", "FEED_1", "FEED_2", "FEED_1_AND_FEED_2")
+        for request, name in enumerate(names):
+            with self.subTest(request=request):
+                va = await self._sent_vehicle_action(
+                    lambda v: v.set_power_feed(request)
+                )
+                action = va.setPowerFeedOnOffAction
+                self.assertEqual(
+                    action.power_feed_request,
+                    getattr(type(action), f"POWER_FEED_REQUEST_{name}"),
+                )
+
+    async def test_set_powershare_wire_values(self) -> None:
+        for on in (False, True):
+            with self.subTest(on=on):
+                va = await self._sent_vehicle_action(
+                    lambda v: v.set_powershare_feature(on)
+                )
+                self.assertEqual(
+                    va.setPowershareFeatureAction.powershare_feature_request, int(on)
+                )
+                va = await self._sent_vehicle_action(
+                    lambda v: v.set_powershare_request(on)
+                )
+                self.assertEqual(
+                    va.setPowershareRequestAction.powershare_request, int(on)
+                )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from locale import getlocale
 from time import time
 from typing import TYPE_CHECKING, Any, Generic, List, TypeVar
@@ -16,9 +17,12 @@ from tesla_fleet_api.const import (
     VehicleDataEndpoint,
     WindowCommand,
 )
+from tesla_fleet_api.exceptions import VehicleOffline
 from tesla_fleet_api.tesla.vehicle.vehicle import Vehicle
 
 DEFAULT_LOCALE = (getlocale()[0] or "en-US").replace("_", "-")
+# A cloud wake typically takes 10-30s to reach "online".
+DEFAULT_WAKE_TIMEOUT = 60.0
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
@@ -29,7 +33,7 @@ FleetParentT = TypeVar("FleetParentT", bound="TeslaFleetApi")
 class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
     """Class describing the Tesla Fleet API vehicle endpoints and commands."""
 
-    def __init__(self, parent: FleetParentT, vin: str):
+    def __init__(self, parent: FleetParentT, vin: str) -> None:
         super().__init__(parent, vin)
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
@@ -745,9 +749,32 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
             {"endpoints": endpoint_payload},
         )
 
-    async def wake_up(self) -> dict[str, Any]:
-        """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption."""
-        return await self._request(Method.POST, f"api/1/vehicles/{self.vin}/wake_up")
+    # Polls the vehicle endpoint, not the wake endpoint, which is rate limited.
+    _wake_poll_interval: float = 3
+
+    async def wake_up(
+        self, wait: bool = False, timeout: float = DEFAULT_WAKE_TIMEOUT
+    ) -> dict[str, Any]:
+        """Wakes the vehicle from sleep, which is a state to minimize idle energy consumption.
+
+        The wake request returns before the vehicle is awake. With ``wait=True``
+        this polls ``vehicle()`` until its state is ``"online"`` and returns that
+        response, raising ``VehicleOffline`` if it is not within ``timeout``
+        seconds.
+        """
+        response = await self._request(
+            Method.POST, f"api/1/vehicles/{self.vin}/wake_up"
+        )
+        if not wait:
+            return response
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while response.get("response", {}).get("state") != "online":
+            if loop.time() + self._wake_poll_interval > deadline:
+                raise VehicleOffline()
+            await asyncio.sleep(self._wake_poll_interval)
+            response = await self.vehicle()
+        return response
 
     async def warranty_details(self, vin: str | None) -> dict[str, Any]:
         """Returns warranty details."""
@@ -767,6 +794,21 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         """Configures fleet telemetry."""
         return await self._request(
             Method.POST, "api/1/vehicles/fleet_telemetry_config", json=config
+        )
+
+    async def fleet_telemetry_config_jws(
+        self, vins: List[str], token: str
+    ) -> dict[str, Any]:
+        """Configures fleet telemetry with a Tesla.SS256-signed JWS token.
+
+        Build ``token`` with ``tesla_fleet_api.tesla.jws.sign_fleet_telemetry_config``
+        using the partner's registered command key, or call
+        ``VehicleSigned.fleet_telemetry_config_create`` to sign and send in one step.
+        """
+        return await self._request(
+            Method.POST,
+            "api/1/vehicles/fleet_telemetry_config_jws",
+            json={"vins": vins, "token": token},
         )
 
     async def fleet_telemetry_config_get(self) -> dict[str, Any]:
@@ -794,7 +836,7 @@ class VehicleFleet(Vehicle[FleetParentT], Generic[FleetParentT]):
         name: str | None = None,
     ) -> dict[str, Any]:
         """Add a schedule for vehicle charging."""
-        if not start_time and not end_time:
+        if start_time is None and end_time is None:
             raise ValueError("Either start_time or end_time or both must be provided")
         json_payload = {
             "days_of_week": days_of_week,

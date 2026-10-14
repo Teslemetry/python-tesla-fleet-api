@@ -185,10 +185,15 @@ asyncio.run(main())
 For more detailed examples, see [Bluetooth for Vehicles](docs/bluetooth_vehicles.md).
 
 `get_private_key(path)` loads an existing EC private key or creates a new
-unencrypted PEM key file. Newly created key files are created owner-readable
-and owner-writable only (`0600`) from the start, with no write-then-chmod
-window, and concurrent creators fall back to reading the file that won the
-create race.
+unencrypted PEM key file, and `get_rsa_private_key(path)` does the same for an
+RSA key. Newly created key files are created owner-readable and
+owner-writable only (`0600`) from the start, with no write-then-chmod window,
+and concurrent creators fall back to reading the file that won the create
+race. If an existing key file can't be read, isn't valid PEM, is
+password-encrypted, or is the wrong key type, both raise `PrivateKeyError`
+(a `LibraryError`, not a `TeslaFleetError` - it's a local key-file failure,
+not an upstream Fleet API error) with a `reason` of `"unreadable"`,
+`"malformed"`, `"encrypted"`, or `"wrong_type"`.
 
 `VehicleBluetooth` keeps a held BLE connection alive during idle periods by
 default with a passive GATT read about every 20 seconds. Pass
@@ -203,10 +208,14 @@ entered backend I/O and then failed or timed out is delivery-ambiguous and
 raises `BluetoothTimeout`/`BluetoothUnconfirmedCommand` instead. Mutating BLE
 commands use a confirmation ladder controlled by `confirmation` (`"ack"` by
 default) and `raise_unconfirmed` (`False` by default): an inconclusive lost
-acknowledgement resolves as best-effort success unless you opt in to
+acknowledgement normally resolves as best-effort success unless you opt in to
 `BluetoothUnconfirmedCommand`, while a command proven not to have applied raises
-`BluetoothCommandFailed`. See [Bluetooth for Vehicles](docs/bluetooth_vehicles.md)
-for the full ladder. Catch `TeslaFleetError` to handle Bluetooth transport
+`BluetoothCommandFailed`. Charge-port opening under `confirmation="verify"`
+requires physical latch/flap confirmation even after an acknowledgement. An
+unresolved result raises `BluetoothUnconfirmedCommand` regardless of
+`raise_unconfirmed`, preventing cloud replay. See
+[Bluetooth for Vehicles](docs/bluetooth_vehicles.md) for the full ladder.
+Catch `TeslaFleetError` to handle Bluetooth transport
 failures (including `bleak.exc.BleakError` and builtin `TimeoutError` from
 ESPHome proxies) and response-wait timeouts through the same library error
 hierarchy.
@@ -251,9 +260,28 @@ async def main():
 asyncio.run(main())
 ```
 
-The constructor is `Router(primary, secondary, *more_backends, health=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
+The constructor is `Router(primary, secondary, *more_backends, health=None, on_result=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
 
 By default the router attempts the primary and fails over on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
+
+You can also pass `on_result` — a sync or async callable `(exception, backend, method_name) -> bool` — to hook into every dispatched call's outcome, success or failure. On a backend exception during failover (every one except `BluetoothUnconfirmedCommand`) returning `True` lets failover continue to the next backend as normal, while `False` stops it and re-raises that exception immediately, so a command already known to fail on the next backend never gets sent there. On a successful call it's called the same way with `exception=None` and its return value ignored — the only hook available to observe a dispatch succeeding, e.g. to clear a repair a prior failure raised. For example, treating a BLE key rejection as terminal instead of falling over to the cloud, and clearing the repair once a command succeeds again:
+
+```python
+from tesla_fleet_api.exceptions import is_key_rejected
+
+def on_result(exc, backend, method_name):
+    if exc is None:
+        clear_repair(backend)  # a dispatched call just succeeded
+        return True
+    if is_key_rejected(exc):
+        raise_repair(backend)  # your own repair/notification logic
+        return False  # don't send this command to the cloud too
+    return True
+
+vehicle = VehicleRouter(primary, secondary, on_result=on_result)
+```
+
+`tesla_fleet_api.exceptions.is_key_rejected(exc)` reports whether a fault means the vehicle didn't recognize our signing key as paired/authorized (e.g. `NotOnWhitelistFault`), as opposed to any other signed-command fault.
 
 `EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
 
@@ -286,7 +314,7 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 ```
 
 Command log lines use `transport=bluetooth`, `fleet`, `teslemetry`, or `tessie`.
-Routers also emit `backend=<ClassName>` lines for each backend tried. See
+Routers also emit `backend=<ClassName>` lines for each backend tried, except a local Powerwall in an `EnergySiteRouter`, which logs `transport=lan`. See
 [Bluetooth for Vehicles](docs/bluetooth_vehicles.md#troubleshooting-enable-debug-logging)
 for examples and the signed-command naming details.
 REST responses that are valid JSON but not objects, such as `null`, lists, or

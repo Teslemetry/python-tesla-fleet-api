@@ -21,7 +21,7 @@ per-command status:
   recirculation mode - not reliably snapshot/verify/restore-able over BLE).
 """
 
-from tesla_fleet_api.const import AutoSeat
+from tesla_fleet_api.const import AutoSeat, Level
 from tesla_protocol.command.car_server_pb2 import (
     Action,
     ActionStatus,
@@ -209,7 +209,7 @@ class RemoteSeatCoolerRequestTests(MockedBleTransportTestCase):
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.remote_seat_cooler_request(0, 1)
+        await vehicle.remote_seat_cooler_request(1, 1)
 
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         cooler = vehicle_action.hvacSeatCoolerActions.hvacSeatCoolerAction[0]
@@ -221,6 +221,27 @@ class RemoteSeatCoolerRequestTests(MockedBleTransportTestCase):
             cooler.seat_cooler_level,
             HvacSeatCoolerActions.HvacSeatCoolerLevel_Low,
         )
+
+    async def test_position_2_is_front_right(self) -> None:
+        """REST ``seat_position`` is the proto enum value, so 2 is front right."""
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.remote_seat_cooler_request(2, 3)
+
+        vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        cooler = vehicle_action.hvacSeatCoolerActions.hvacSeatCoolerAction[0]
+        self.assertEqual(
+            cooler.seat_position,
+            HvacSeatCoolerActions.HvacSeatCoolerPosition_FrontRight,
+        )
+
+    async def test_unknown_position_raises_before_sending(self) -> None:
+        vehicle, send = self.make_vehicle()
+
+        with self.assertRaises(ValueError):
+            await vehicle.remote_seat_cooler_request(0, 1)
+        send.assert_not_awaited()
 
 
 class RemoteAutoSeatClimateRequestTests(MockedBleTransportTestCase):
@@ -272,15 +293,41 @@ class RemoteSteeringWheelHeatLevelRequestTests(MockedBleTransportTestCase):
     """Live-attempted; car rejected with ``cabin comfort remote settings not
     enabled`` (same gate as the seat heater group)."""
 
-    async def test_low_level_sends_stw_heat_low(self) -> None:
-        vehicle, send = self.make_vehicle()
-        send.return_value = infotainment_action_ok_reply()
+    async def test_each_level_sends_matching_stw_heat_level(self) -> None:
+        # Level/REST wire values 0, 1, 3; the proto enum is offset by its
+        # StwHeatLevel_Unknown = 0 and has no medium level.
+        cases = (
+            (Level.OFF, StwHeatLevel.StwHeatLevel_Off),
+            (Level.LOW, StwHeatLevel.StwHeatLevel_Low),
+            (Level.HIGH, StwHeatLevel.StwHeatLevel_High),
+            (0, StwHeatLevel.StwHeatLevel_Off),
+            (1, StwHeatLevel.StwHeatLevel_Low),
+            (3, StwHeatLevel.StwHeatLevel_High),
+        )
+        for level, expected in cases:
+            with self.subTest(level=level):
+                vehicle, send = self.make_vehicle()
+                send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.remote_steering_wheel_heat_level_request(1)
+                await vehicle.remote_steering_wheel_heat_level_request(level)
 
-        vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
-        stw = vehicle_action.stwHeatLevelAction
-        self.assertEqual(stw.stw_heat_level, StwHeatLevel.StwHeatLevel_Low)
+                vehicle_action = _decode_vehicle_action(
+                    vehicle, send.await_args.args[0]
+                )
+                stw = vehicle_action.stwHeatLevelAction
+                self.assertEqual(stw.stw_heat_level, expected)
+
+    async def test_unsupported_level_raises_value_error_without_sending(
+        self,
+    ) -> None:
+        for level in (Level.MEDIUM, 2, 4, -1):
+            with self.subTest(level=level):
+                vehicle, send = self.make_vehicle()
+
+                with self.assertRaises(ValueError):
+                    await vehicle.remote_steering_wheel_heat_level_request(level)
+
+                send.assert_not_awaited()
 
 
 class SetBioweaponModeTests(MockedBleTransportTestCase):

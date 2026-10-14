@@ -28,6 +28,12 @@ from tesla_fleet_api.const import (
     AuthorizedVerificationType,
 )
 from tesla_fleet_api.exceptions import InvalidResponse
+from tesla_fleet_api.teslemetry import (
+    AuthorizedClient,
+    AuthorizedClients,
+    parse_authorized_clients,
+)
+from tesla_fleet_api.teslemetry.energysite import _parse_authorized_clients
 from tesla_fleet_api.teslemetry.teslemetry import Teslemetry
 
 _UNSET = object()
@@ -66,7 +72,45 @@ def _make_site(json_body: object):
     return api.energySites.create(12345)
 
 
+class PublicParserImportTests(IsolatedAsyncioTestCase):
+    async def test_parser_is_importable_from_public_teslemetry_path(self) -> None:
+        payload = {
+            "response": {
+                "authorized_clients": [
+                    {"public_key": PUBLIC_KEY_B64, "state": 3},
+                ]
+            }
+        }
+
+        result = parse_authorized_clients(payload)
+
+        self.assertIsInstance(result, AuthorizedClients)
+        self.assertIsInstance(result.clients[0], AuthorizedClient)
+
+    async def test_private_alias_still_works_for_one_release(self) -> None:
+        payload = {"response": {"authorized_clients": []}}
+
+        self.assertEqual(
+            _parse_authorized_clients(payload), parse_authorized_clients(payload)
+        )
+
+
 class GetAuthorizedClientsTests(IsolatedAsyncioTestCase):
+    async def test_default_raw_false_behaviour_unchanged(self) -> None:
+        payload = {
+            "response": {
+                "authorized_clients": [
+                    {"public_key": PUBLIC_KEY_B64, "state": 3},
+                ]
+            }
+        }
+        site = _make_site(payload)
+
+        result = await site.find_authorized_clients()
+
+        self.assertEqual(len(result.clients), 1)
+        self.assertEqual(result.clients[0].public_key, PUBLIC_KEY_B64)
+
     async def test_normal_payload_round_trips(self) -> None:
         site = _make_site(
             {

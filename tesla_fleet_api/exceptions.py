@@ -15,7 +15,7 @@ class TeslaFleetError(BaseException):
 
     def __init__(
         self, data: dict[str, Any] | str | None = None, status: int | None = None
-    ):
+    ) -> None:
         LOGGER.debug(self.message)
         self.data = data
         self.status = status or self.status
@@ -29,11 +29,13 @@ class BluetoothTimeout(TeslaFleetError):
 
 
 class BluetoothUnconfirmedCommand(BluetoothTimeout):
-    """A mutating Bluetooth command has an unresolved delivery outcome.
+    """A mutating Bluetooth command has an unresolved outcome.
 
     The write either completed and its ack was lost, or it entered backend I/O
     and then failed/timed out in a way that cannot prove whether the vehicle
-    received it. The vehicle may have executed the command - lock/unlock have
+    received it. It can also have acknowledged the request without a required
+    physical state check confirming completion. The vehicle may have executed
+    the command - lock/unlock have
     both been observed to execute despite this exception. Treat the outcome as
     unknown, not failed: verify by reading state back when possible, and never
     blind-retry or re-issue the same command on another transport, since it may
@@ -48,8 +50,8 @@ class BluetoothUnconfirmedCommand(BluetoothTimeout):
     """
 
     message = (
-        "Bluetooth command timed out waiting for an ack after being written to "
-        "the vehicle; it may have executed anyway."
+        "Bluetooth command outcome could not be confirmed after submission; "
+        "it may have executed anyway."
     )
 
 
@@ -381,6 +383,23 @@ class InternalServerError(TeslaFleetError):
     status = 500
 
 
+class BadGateway(TeslaFleetError):
+    """The server, acting as a gateway, received an invalid response from an upstream server."""
+
+    message = (
+        "The server, acting as a gateway, received an invalid response from an "
+        "upstream server."
+    )
+    status = 502
+
+
+class EnergyGatewayUnreachable(BadGateway):  # Teslemetry specific
+    """The energy gateway is unreachable."""
+
+    message = "The energy gateway is unreachable."
+    key = "energy_gateway_unreachable"
+
+
 class ServiceUnavailable(TeslaFleetError):
     """Either an internal service or a vehicle did not respond (timeout)."""
 
@@ -423,6 +442,25 @@ class SigningDisabled(LibraryError):
             "broadcasts (the listen_* methods); any signed command or read "
             "needs a real private_key."
         )
+
+
+class PrivateKeyError(LibraryError):
+    """An existing private key file could not be loaded as a usable key.
+
+    Raised by ``Tesla.get_private_key``/``get_rsa_private_key`` only for a
+    known-existing key file's read/parse failure - key generation and the
+    O_EXCL create-race fallback keep raising their original exceptions.
+    ``reason`` is one of ``"unreadable"`` (I/O failure), ``"malformed"`` (not
+    valid PEM), ``"encrypted"`` (PEM requires a passphrase), or
+    ``"wrong_type"`` (loaded key is not the expected type). A local key-file
+    failure, not an upstream Fleet API error, so this subclasses
+    ``LibraryError`` rather than ``TeslaFleetError``.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        self.reason = reason
+        self.message = message
+        super().__init__(message)
 
 
 class SignedCommandRequired(TeslaFleetError):
@@ -1261,6 +1299,34 @@ WHITELIST_OPERATION_STATUS = [
 ]
 
 
+# Every fault a vehicle can return that means it did not recognize/accept our
+# signing key as authorized to issue commands, verified against each fault's
+# proto enum meaning (``MessageFault_E``/``SignedMessage_information_E`` in
+# tesla-protocol's vcsec/universal_message protos) rather than its name alone.
+# ``TeslaFleetMessageFaultKeychainIsFull`` is deliberately excluded: its proto
+# meaning is "no room to add another key", not "this key was rejected".
+KEY_REJECTED_FAULTS: tuple[type[TeslaFleetError], ...] = (
+    NotOnWhitelistFault,
+    CouldNotRetrieveKeyFault,
+    SignedMessageInformationFaultNotOnWhitelist,
+    SignedMessageInformationFaultCouldNotRetrieveKey,
+    TeslaFleetMessageFaultUnknownKeyId,
+    TeslaFleetMessageFaultInactiveKey,
+    TeslaFleetMessageFaultInvalidKeyHandle,
+)
+
+
+def is_key_rejected(exc: BaseException) -> bool:
+    """Whether ``exc`` means the vehicle rejected our signing key.
+
+    True for a fault meaning the vehicle does not recognize our key as
+    whitelisted/paired (or could not retrieve/validate it), false for every
+    other fault, including transport errors and faults about an unrelated
+    signed-command condition (e.g. a full keychain).
+    """
+    return isinstance(exc, KEY_REJECTED_FAULTS)
+
+
 async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
     """Raise an exception if the response status code is >=400."""
     # https://developer.tesla.com/docs/fleet-api#response-codes
@@ -1349,6 +1415,10 @@ async def raise_for_status(resp: aiohttp.ClientResponse) -> None:
         raise ClientClosedRequest(data)
     elif resp.status == 500:
         raise InternalServerError(data)
+    elif resp.status == 502:
+        if error == EnergyGatewayUnreachable.key:
+            raise EnergyGatewayUnreachable(data)
+        raise BadGateway(data)
     elif resp.status == 503:
         raise ServiceUnavailable(data)
     elif resp.status == 504:

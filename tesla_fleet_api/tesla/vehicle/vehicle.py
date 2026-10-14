@@ -25,7 +25,7 @@ class Vehicle(Generic[ParentT]):
     vin: str
     parent: ParentT
 
-    def __init__(self, parent: ParentT, vin: str):
+    def __init__(self, parent: ParentT, vin: str) -> None:
         self.vin = vin
         self.parent = parent
 

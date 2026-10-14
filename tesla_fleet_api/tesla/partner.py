@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 class Partner:
     """Class describing the Tesla Fleet API partner endpoints"""
 
-    def __init__(self, parent: "TeslaFleetApi"):
+    def __init__(self, parent: "TeslaFleetApi") -> None:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
 
     async def public_key(self, domain: str | None = None) -> dict[str, Any]:

@@ -19,6 +19,7 @@ from unittest import IsolatedAsyncioTestCase, mock
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
+from tesla_fleet_api.exceptions import PrivateKeyError
 from tesla_fleet_api.tesla.tesla import Tesla
 
 
@@ -715,3 +716,121 @@ class GetRsaPrivateKeyOptionalValidationTests(IsolatedAsyncioTestCase):
             read_back = await Tesla().get_rsa_private_key(path, key_size=1024)
 
             self.assertEqual(_rsa_pem(read_back), _rsa_pem(created))
+
+
+class PrivateKeyErrorTests(IsolatedAsyncioTestCase):
+    """An existing-but-unusable key file must raise ``PrivateKeyError`` with the right reason."""
+
+    async def test_ec_loader_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+            os.mkdir(path)
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_private_key(path)
+
+            self.assertEqual(ctx.exception.reason, "unreadable")
+            self.assertIsInstance(ctx.exception.__cause__, OSError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_ec_loader_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+            Path(path).write_bytes(b"not a pem file")
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_private_key(path)
+
+            self.assertEqual(ctx.exception.reason, "malformed")
+            self.assertIsInstance(ctx.exception.__cause__, ValueError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_ec_loader_encrypted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+            key = ec.generate_private_key(ec.SECP256R1())
+            pem = key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.BestAvailableEncryption(
+                    b"correct horse battery staple"
+                ),
+            )
+            Path(path).write_bytes(pem)
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_private_key(path)
+
+            self.assertEqual(ctx.exception.reason, "encrypted")
+            self.assertIsInstance(ctx.exception.__cause__, TypeError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_ec_loader_wrong_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "private_key.pem")
+            key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+            Path(path).write_bytes(_rsa_pem(key))
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_private_key(path)
+
+            self.assertEqual(ctx.exception.reason, "wrong_type")
+            self.assertIsNone(ctx.exception.__cause__)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_rsa_loader_unreadable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            os.mkdir(path)
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertEqual(ctx.exception.reason, "unreadable")
+            self.assertIsInstance(ctx.exception.__cause__, OSError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_rsa_loader_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            Path(path).write_bytes(b"not a pem file")
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertEqual(ctx.exception.reason, "malformed")
+            self.assertIsInstance(ctx.exception.__cause__, ValueError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_rsa_loader_encrypted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+            pem = key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.BestAvailableEncryption(
+                    b"correct horse battery staple"
+                ),
+            )
+            Path(path).write_bytes(pem)
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertEqual(ctx.exception.reason, "encrypted")
+            self.assertIsInstance(ctx.exception.__cause__, TypeError)
+            self.assertIn(path, ctx.exception.message)
+
+    async def test_rsa_loader_wrong_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = str(Path(tmp_dir) / "tedapi_rsa_private.pem")
+            key = ec.generate_private_key(ec.SECP256R1())
+            Path(path).write_bytes(_ec_pem(key))
+
+            with self.assertRaises(PrivateKeyError) as ctx:
+                await Tesla().get_rsa_private_key(path, key_size=1024)
+
+            self.assertEqual(ctx.exception.reason, "wrong_type")
+            self.assertIsNone(ctx.exception.__cause__)
+            self.assertIn(path, ctx.exception.message)

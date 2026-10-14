@@ -57,9 +57,9 @@ class ConnectRetryBudgetTests(IsolatedAsyncioTestCase):
         from bleak_retry_connector import MAX_CONNECT_ATTEMPTS
 
         self.assertLess(DEFAULT_CONNECT_ATTEMPTS, MAX_CONNECT_ATTEMPTS)
-        # Still allows one retry - a bare single attempt would give a
-        # genuinely transient failure (car waking, weak RF) no second try.
-        self.assertGreaterEqual(DEFAULT_CONNECT_ATTEMPTS, 2)
+        # Under Home Assistant each attempt re-picks the connection path, so
+        # an adapter plus two proxies needs three attempts to reach them all.
+        self.assertGreaterEqual(DEFAULT_CONNECT_ATTEMPTS, 3)
 
     async def test_connect_passes_reduced_default_to_establish_connection(
         self,

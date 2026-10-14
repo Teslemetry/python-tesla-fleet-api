@@ -5,8 +5,18 @@ message types directly for their deeply-nested arguments rather than a
 parallel flattened API - see ``commands.py`` docstrings.
 """
 
-from tesla_protocol.command.car_server_pb2 import Action, SetRateTariffRequest
-from tesla_protocol.command.universal_message_pb2 import Domain
+from tesla_protocol.command.car_server_pb2 import (
+    Action,
+    GetManagedChargingSitesResponse,
+    ManagedChargingSite,
+    Response,
+    SetRateTariffRequest,
+)
+from tesla_protocol.command.universal_message_pb2 import (
+    Destination,
+    Domain,
+    RoutableMessage,
+)
 
 from ble_mocked_transport import (
     MockedBleTransportTestCase,
@@ -63,16 +73,21 @@ class GetRateTariffTests(MockedBleTransportTestCase):
 
 
 class AddManagedChargingSiteTests(MockedBleTransportTestCase):
-    async def test_sends_public_key_and_coordinates(self) -> None:
+    async def test_sends_public_key_din_and_coordinates(self) -> None:
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        await vehicle.add_managed_charging_site("pubkey-bytes", 37.3230, -122.0322)
+        await vehicle.add_managed_charging_site(
+            "pubkey-bytes", "1232100-00-E-1234567890AB", 37.3230, -122.0322
+        )
 
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         site = vehicle_action.addManagedChargingSiteRequest.site
         self.assertEqual(site.public_key, "pubkey-bytes")
         self.assertTrue(site.manager_type.HasField("site_controller"))
+        self.assertEqual(
+            site.manager_type.site_controller.din, "1232100-00-E-1234567890AB"
+        )
         # LatLong lat/lon are 32-bit floats, so compare at reduced precision.
         self.assertAlmostEqual(site.lat_lon.latitude, 37.3230, places=4)
         self.assertAlmostEqual(site.lat_lon.longitude, -122.0322, places=4)
@@ -112,3 +127,35 @@ class SetDischargeLimitTests(MockedBleTransportTestCase):
 
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         self.assertEqual(vehicle_action.setDischargeLimitAction.discharge_limit, 50)
+
+
+class GetManagedChargingSitesDecodeTests(MockedBleTransportTestCase):
+    def _reply(self, sites: list[ManagedChargingSite]) -> RoutableMessage:
+        body = Response(
+            getManagedChargingSitesResponse=GetManagedChargingSitesResponse(sites=sites)
+        )
+        return RoutableMessage(
+            from_destination=Destination(domain=Domain.DOMAIN_INFOTAINMENT),
+            protobuf_message_as_bytes=body.SerializeToString(),
+        )
+
+    async def test_returns_decoded_sites(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = self._reply([ManagedChargingSite(public_key="k1")])
+
+        result = await vehicle.get_managed_charging_sites()
+
+        resp = result["response"]
+        self.assertTrue(resp["result"])
+        sites = resp["getManagedChargingSitesResponse"].sites
+        self.assertEqual([s.public_key for s in sites], ["k1"])
+
+    async def test_empty_list_is_distinguishable_from_undecoded(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = self._reply([])
+
+        result = await vehicle.get_managed_charging_sites()
+
+        resp = result["response"]
+        self.assertIn("getManagedChargingSitesResponse", resp)
+        self.assertEqual(len(resp["getManagedChargingSitesResponse"].sites), 0)

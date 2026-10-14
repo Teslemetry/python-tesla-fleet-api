@@ -137,8 +137,7 @@ class ClearPinToDriveAdminParityTests(MockedBleTransportTestCase):
     ``VehicleControlResetPinToDriveAdminAction``, which has no pin field, so
     ``pin`` is accepted (cross-transport signature parity) but not sent.
     Cloud's REST endpoint still takes ``pin`` in the body - that divergence
-    is real but expected (same pattern as ``set_scheduled_departure``'s dead
-    args - see CLAUDE.md).
+    is real but expected.
     """
 
     async def test_cloud_still_sends_pin_ble_ignores_it(self) -> None:
@@ -258,3 +257,32 @@ class NavigationWaypointsRequestParityTests(MockedBleTransportTestCase):
         self.assertEqual(
             action.navigationWaypointsRequest.waypoints, "some-waypoints-payload"
         )
+
+
+class AddChargeScheduleParityTests(MockedBleTransportTestCase):
+    """``add_charge_schedule`` must accept a midnight ``start_time`` of ``0``
+    on both transports.
+
+    Regression: both used a truthy ``not start_time`` check, so a schedule
+    starting at 00:00 with no end time was rejected as missing both times.
+    """
+
+    async def test_midnight_start_sent_on_both_transports(self) -> None:
+        cloud, request = _make_fleet_vehicle(self.VIN)
+        await cloud.add_charge_schedule(
+            days_of_week="monday", enabled=True, lat=0.0, lon=0.0, start_time=0
+        )
+        assert request.await_args is not None
+        cloud_json = request.await_args.kwargs["json"]
+        self.assertEqual(cloud_json["start_time"], 0)
+        self.assertTrue(cloud_json["start_enabled"])
+
+        ble, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+        await ble.add_charge_schedule(
+            days_of_week="monday", enabled=True, lat=0.0, lon=0.0, start_time=0
+        )
+        schedule = _sent_vehicle_action(ble, send).addChargeScheduleAction
+        self.assertEqual(schedule.days_of_week, 2)
+        self.assertEqual(schedule.start_time, 0)
+        self.assertTrue(schedule.start_enabled)
