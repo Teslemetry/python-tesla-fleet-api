@@ -19,6 +19,12 @@ SERVERS: dict[Region, str] = {
     "cn": "https://fleet-api.prd.cn.vn.cloud.tesla.cn",
 }
 
+TOKEN_URLS: dict[Region, str] = {
+    "na": "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+    "eu": "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+    "cn": "https://auth.tesla.cn/oauth2/v3/token",
+}
+
 
 def is_valid_region(value: str) -> TypeGuard[Region]:
     """Check if a string is a valid region and narrow its type."""

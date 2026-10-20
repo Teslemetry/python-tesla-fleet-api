@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import aiohttp
 
 from tesla_fleet_api import __version__ as VERSION
-from tesla_fleet_api.const import LOGGER, SERVERS, Method, Region, Scope
+from tesla_fleet_api.const import LOGGER, SERVERS, TOKEN_URLS, Method, Region, Scope
 from tesla_fleet_api.exceptions import (
     InvalidRegion,
     LibraryError,
@@ -267,7 +267,7 @@ class TeslaFleetApi(Tesla):
         }
 
         async with self.session.post(
-            "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+            TOKEN_URLS.get(self.region or "na", TOKEN_URLS["na"]),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             data=data,
         ) as resp:

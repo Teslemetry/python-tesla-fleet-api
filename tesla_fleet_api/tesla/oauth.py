@@ -4,7 +4,14 @@ from typing import Any
 
 import aiohttp
 
-from tesla_fleet_api.const import SERVERS, Method, Region, Scope, is_valid_region
+from tesla_fleet_api.const import (
+    SERVERS,
+    TOKEN_URLS,
+    Method,
+    Region,
+    Scope,
+    is_valid_region,
+)
 from tesla_fleet_api.tesla import TeslaFleetApi
 
 
@@ -68,7 +75,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
             self.server = SERVERS.get(self.region)
 
         async with self.session.post(
-            "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+            TOKEN_URLS.get(self.region or "na", TOKEN_URLS["na"]),
             data={
                 "grant_type": "authorization_code",
                 "client_id": self.client_id,
@@ -106,7 +113,7 @@ class TeslaFleetOAuth(TeslaFleetApi):
         if not self.refresh_token:
             raise ValueError("Refresh token is missing")
         async with self.session.post(
-            "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+            TOKEN_URLS.get(self.region or "na", TOKEN_URLS["na"]),
             data={
                 "grant_type": "refresh_token",
                 "client_id": self.client_id,
