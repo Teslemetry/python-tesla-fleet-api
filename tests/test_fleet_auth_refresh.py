@@ -3,15 +3,20 @@
 These tests assert what ``_request`` does today; they do not assume any
 auth-refresh / retry feature exists. If that feature is added later, extend
 these tests to cover the retry path rather than deleting them.
+
+``OAuthTokenEndpointTests`` covers the OAuth *token* endpoint, which has to
+follow the client's region: China is served by its own auth host
+(``auth.tesla.cn``), every other region by the shared global one.
 """
 
 from contextlib import asynccontextmanager
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
-from tesla_fleet_api.const import Method
+from tesla_fleet_api.const import Method, Scope
 from tesla_fleet_api.exceptions import MissingToken, NotFound, ResponseError
 from tesla_fleet_api.tesla.fleet import TeslaFleetApi
+from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 
 
 class _RequestTestApi(TeslaFleetApi):
@@ -114,3 +119,108 @@ class RequestBehaviorTests(IsolatedAsyncioTestCase):
         api = _make_api(response=resp)
         with self.assertRaises(NotFound):
             await api.request(Method.GET, "api/1/products")
+
+
+def _fake_token_response() -> MagicMock:
+    """A 200 response carrying an OAuth token payload."""
+    resp = MagicMock()
+    resp.ok = True
+    resp.status = 200
+    resp.json = AsyncMock(
+        return_value={
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "expires_in": 3600,
+        }
+    )
+    return resp
+
+
+def _make_post_session() -> MagicMock:
+    """A session whose ``post`` returns an async context manager yielding a token response."""
+    session = MagicMock()
+
+    @asynccontextmanager
+    async def _ctx(*args, **kwargs):
+        yield _fake_token_response()
+
+    session.post = MagicMock(side_effect=lambda *a, **k: _ctx(*a, **k))
+    return session
+
+
+class OAuthTokenEndpointTests(IsolatedAsyncioTestCase):
+    """The OAuth token endpoint must follow the client's region.
+
+    China is served by its own auth host (``auth.tesla.cn``); every other
+    region shares the global one (``fleet-auth.prd.vn.cloud.tesla.com``).
+    The *authorize* URL already switched host for China - the token URL did
+    not, so a China client redeemed its authorization code against the
+    global host and got its refresh token from the wrong region.
+    """
+
+    GLOBAL_TOKEN_URL = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token"
+    CN_TOKEN_URL = "https://auth.tesla.cn/oauth2/v3/token"
+
+    def _make_oauth(self, region: str) -> tuple[TeslaFleetOAuth, MagicMock]:
+        session = _make_post_session()
+        api = TeslaFleetOAuth(
+            session=session,
+            region=region,
+            client_id="client-id",
+            client_secret="client-secret",
+            redirect_uri="https://example.com/callback",
+            refresh_token="refresh-token",
+        )
+        return api, session
+
+    async def test_cn_exchanges_the_authorization_code_on_the_cn_host(self) -> None:
+        api, session = self._make_oauth("cn")
+
+        await api.get_refresh_token("cn_abc123")
+
+        self.assertEqual(session.post.call_args.args[0], self.CN_TOKEN_URL)
+
+    async def test_cn_refreshes_the_access_token_on_the_cn_host(self) -> None:
+        api, session = self._make_oauth("cn")
+
+        await api.refresh_access_token()
+
+        self.assertEqual(session.post.call_args.args[0], self.CN_TOKEN_URL)
+
+    async def test_na_exchanges_the_authorization_code_on_the_global_host(self) -> None:
+        api, session = self._make_oauth("na")
+
+        await api.get_refresh_token("na_abc123")
+
+        self.assertEqual(session.post.call_args.args[0], self.GLOBAL_TOKEN_URL)
+
+    async def test_na_refreshes_the_access_token_on_the_global_host(self) -> None:
+        api, session = self._make_oauth("na")
+
+        await api.refresh_access_token()
+
+        self.assertEqual(session.post.call_args.args[0], self.GLOBAL_TOKEN_URL)
+
+    async def test_cn_partner_login_uses_the_cn_host(self) -> None:
+        session = _make_post_session()
+        api = TeslaFleetApi(session=session, access_token="access-token", region="cn")
+
+        await api.partner_login("client-id", "client-secret")
+
+        self.assertEqual(session.post.call_args.args[0], self.CN_TOKEN_URL)
+
+    async def test_na_partner_login_uses_the_global_host(self) -> None:
+        session = _make_post_session()
+        api = TeslaFleetApi(session=session, access_token="access-token", region="na")
+
+        await api.partner_login("client-id", "client-secret")
+
+        self.assertEqual(session.post.call_args.args[0], self.GLOBAL_TOKEN_URL)
+
+    async def test_cn_authorize_url_already_uses_the_cn_host(self) -> None:
+        """Characterization: the authorize URL switched host for China, the token URL did not."""
+        api, _ = self._make_oauth("cn")
+
+        url = api.get_login_url([Scope.OPENID])
+
+        self.assertTrue(url.startswith("https://auth.tesla.cn/oauth2/v3/authorize"))
