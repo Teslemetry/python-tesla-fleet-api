@@ -25,6 +25,18 @@ def is_valid_region(value: str) -> TypeGuard[Region]:
     return value in SERVERS
 
 
+def auth_server(region: Region | None) -> str:
+    """The OAuth token endpoint for ``region``.
+
+    China is served by its own auth host; every other region - and an unset
+    region - shares the global one. The authorize endpoint follows the same
+    split (``auth.tesla.cn`` for China, ``auth.tesla.com`` elsewhere).
+    """
+    if region == "cn":
+        return "https://auth.tesla.cn/oauth2/v3/token"
+    return "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token"
+
+
 class IntEnum(int, Enum):
     """Integer Enum."""
 
