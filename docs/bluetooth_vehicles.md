@@ -502,6 +502,14 @@ async def main():
 asyncio.run(main())
 ```
 
+## Open/Close Rear Trunk (Bluetooth Only)
+
+`open_rear_trunk()` and `close_rear_trunk()` send an explicit open or close
+request, so the result does not depend on the trunk's current state.
+`actuate_trunk(Trunk.REAR)` toggles the trunk instead. A `close_rear_trunk()`
+acknowledgement means the vehicle accepted the request; check
+`closures_state()` or `listen_rear_trunk()` to confirm the trunk closed.
+
 ## Get Vehicle Data
 
 You can get data from a `VehicleBluetooth` instance using the individual state
