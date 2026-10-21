@@ -1365,6 +1365,26 @@ class VehicleBluetooth(
             )
         )
 
+    async def open_rear_trunk(self) -> dict[str, Any]:
+        """Opens the rear trunk; unlike actuate_trunk, never closes it."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearTrunk=ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN
+                )
+            )
+        )
+
+    async def close_rear_trunk(self) -> dict[str, Any]:
+        """Closes the rear trunk; unlike actuate_trunk, never opens it."""
+        return await self._sendVehicleSecurity(
+            UnsignedMessage(
+                closureMoveRequest=ClosureMoveRequest(
+                    rearTrunk=ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE
+                )
+            )
+        )
+
     async def query_display_name(self, max_attempts: int = 5) -> str | None:
         """Read the device name via GATT characteristic if available"""
         for i in range(max_attempts):

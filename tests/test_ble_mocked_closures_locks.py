@@ -97,7 +97,7 @@ class ChargePortDoorTests(MockedBleTransportTestCase):
 
 
 class IndividualDoorTests(MockedBleTransportTestCase):
-    """The 8 individual door commands - each sets exactly one ``ClosureMoveRequest`` field."""
+    """The 8 door and 2 rear trunk commands - each sets one ``ClosureMoveRequest`` field."""
 
     DOORS = [
         (
@@ -138,6 +138,16 @@ class IndividualDoorTests(MockedBleTransportTestCase):
         (
             "close_rear_passenger_door",
             "rearPassengerDoor",
+            ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE,
+        ),
+        (
+            "open_rear_trunk",
+            "rearTrunk",
+            ClosureMoveType_E.CLOSURE_MOVE_TYPE_OPEN,
+        ),
+        (
+            "close_rear_trunk",
+            "rearTrunk",
             ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE,
         ),
     ]
