@@ -1,0 +1,5 @@
+# CodeRabbit is opt-in per repository (org default: off). This repo opts in.
+reviews:
+  high_level_summary: false
+  auto_review:
+    enabled: true
