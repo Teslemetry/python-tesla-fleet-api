@@ -388,7 +388,28 @@ tariff lacks either `seasons` or `energy_charges`.
 
 Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
 
-These commands are unsigned and cloud-only. The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods on `EnergySite` raise `SignedCommandRequired` unconditionally - the gateway can accept that unsigned command without physically taking effect, so there is no cloud-only way to actuate it. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+By default these commands are unsigned. The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods need a signature: the gateway can accept the unsigned command without physically taking effect, so without a signing key they raise `SignedCommandRequired` before any request. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+
+### Client-signed device commands
+
+Once an RSA key is `VERIFIED` on the gateway (`add_authorized_client`, then the breaker toggle), pass it with the gateway DIN (the energy site's `gateway_id` in `products()`) to sign commands through the cloud:
+
+```python
+site = api.energySites.create(energy_site_id, private_key=rsa_key, din=gateway_id)
+await site.go_off_grid()
+```
+
+The site signs only commands that need a signature and posts them to the undocumented `POST /api/1/energy_sites/{id}/device_command`. Every other command keeps the unsigned path, because a command the gateway accepts unsigned is less likely to fail that way.
+
+| Method | With a signing key | Without a key |
+|---|---|---|
+| `set_island_mode`, `go_off_grid`, `reconnect_grid` | signed | raise `SignedCommandRequired` |
+| `get_backup_events`, `get_teg_config` (400 unsigned on observed gateways) | signed | unsigned |
+| every other device command | unsigned | unsigned |
+
+`None` means unsigned: there is no fallback to `api.rsa_private_key`. The signature expires after 30 seconds and has no counter, so the same bytes resent inside that window execute again; the library never retries a signed command. The reply is returned unchanged. A success-shaped reply does not prove the contactor moved: read `island_status` from `live_status()` after each step.
+
+On `Teslemetry`, the same signed commands go through Teslemetry's `device_command` route. Without a client key, `TeslemetryEnergySite.set_island_mode` goes to the `_server_signed_command` hook for Teslemetry to sign on its server; until that route signs, it raises `SignedCommandRequired`.
 
 Use `list_authorized_clients()` only as a secondary, best-effort cloud check
 while pairing a local key. The reliable verification is a successful signed
