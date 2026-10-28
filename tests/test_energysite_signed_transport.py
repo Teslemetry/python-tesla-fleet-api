@@ -307,25 +307,53 @@ class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
         self.assertEqual(request.mode, EnergyIslandMode.OFF_GRID)
         self.assertTrue(request.force)
 
-    async def test_set_island_mode_without_key_uses_server_signing_hook(self) -> None:
-        site, request_mock = _make_site(TeslemetryEnergySite, private_key=None)
-        assert isinstance(site, TeslemetryEnergySite)
-        hook = AsyncMock(return_value={"response": {}})
-        site._server_signed_command = hook  # type: ignore[method-assign]
-        await site.go_off_grid()
-        hook.assert_awaited_once_with("set_island_mode", {"mode": 6, "force": True})
-        request_mock.assert_not_called()
-
-    async def test_server_signing_hook_raises_until_teslemetry_signs(self) -> None:
-        site, request_mock = _make_site(TeslemetryEnergySite, private_key=None)
-        for call in (
-            lambda: site.set_island_mode(EnergyIslandMode.ON_GRID),
-            site.go_off_grid,
-            site.reconnect_grid,
+    async def test_reads_with_key_sign_through_super(self) -> None:
+        for name, request_field in (
+            ("get_backup_events", "get_backup_events_request"),
+            ("get_teg_config", "get_config_request"),
         ):
-            with self.assertRaises(SignedCommandRequired):
-                await call()
-        request_mock.assert_not_called()
+            with self.subTest(name=name):
+                site, request_mock = _make_site(TeslemetryEnergySite)
+                await getattr(site, name)()
+                path, body = _sent(request_mock)
+                self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/device_command")
+                message = _decode(base64.b64decode(body["routable_message"]))
+                _verify(message, DIN)
+                self.assertEqual(
+                    _envelope(message).teg.WhichOneof("message"), request_field
+                )
+
+    async def test_island_mode_without_key_uses_the_server_signed_route(self) -> None:
+        calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
+            ("go_off_grid", (), {"mode": 6, "force": True}),
+            ("reconnect_grid", (), {"mode": 1}),
+            (
+                "set_island_mode",
+                (EnergyIslandMode.ON_GRID, False),
+                {"mode": 1, "force": False},
+            ),
+        ]
+        for name, args, body in calls:
+            with self.subTest(name=name):
+                site, request_mock = _make_site(TeslemetryEnergySite, private_key=None)
+                await getattr(site, name)(*args)
+                request_mock.assert_awaited_once_with(
+                    Method.POST,
+                    f"api/1/energy_sites/{SITE_ID}/command/set_island_mode",
+                    json=body,
+                )
+
+    async def test_reads_without_key_use_the_server_signed_routes(self) -> None:
+        for name, route in (
+            ("get_backup_events", "backup_events"),
+            ("get_teg_config", "config"),
+        ):
+            with self.subTest(name=name):
+                site, request_mock = _make_site(TeslemetryEnergySite, private_key=None)
+                await getattr(site, name)()
+                request_mock.assert_awaited_once_with(
+                    Method.GET, f"api/1/energy_sites/{SITE_ID}/command/{route}"
+                )
 
     async def test_teslemetry_routes_stay_unsigned_with_a_key(self) -> None:
         site, request_mock = _make_site(TeslemetryEnergySite)

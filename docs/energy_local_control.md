@@ -250,16 +250,20 @@ and the `health` check).
 > Gateways have been observed accepting the **unsigned** cloud
 > `grpc_command` for `set_island_mode()` / `go_off_grid()` /
 > `reconnect_grid()` without physically operating the grid contactor. So a
-> cloud `EnergySite` built without a signing key raises
+> Fleet API `EnergySite` built without a signing key raises
 > `tesla_fleet_api.exceptions.SignedCommandRequired` for these three methods
 > instead of returning a false success. Built with `private_key` and `din`
 > (see [Client-signed device commands](fleet_api_energy_sites.md#client-signed-device-commands)),
 > it signs them and sends them through the cloud `device_command` endpoint.
+> A `TeslemetryEnergySite` without a key calls Teslemetry's route, which
+> signs with Teslemetry's key.
 >
 > Routing through `EnergySiteRouter` with an `aiopowerwall` local primary
 > sends a signed request over the LAN first. If the local primary fails and
 > `Router` fails over to the cloud secondary, a keyed cloud site sends the
-> signed command, and a site without a key raises `SignedCommandRequired`.
+> signed command. A Fleet API site without a key raises
+> `SignedCommandRequired`, and a Teslemetry site without a key calls
+> Teslemetry's signed route.
 > A command that failed mid-flight on the LAN may already have run, so the
 > cloud retry can run it twice; island mode is absolute, so a second run sets
 > the same mode. `aiopowerwall`'s own docs also

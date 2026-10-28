@@ -24,7 +24,6 @@ from tesla_fleet_api.exceptions import (
     AuthorizedClientPairingTimedOut,
     AuthorizedClientWaitExpired,
     InvalidResponse,
-    SignedCommandRequired,
     TeslaFleetError,
 )
 from tesla_fleet_api.tesla.energysite import (
@@ -338,8 +337,10 @@ class TeslemetryEnergySite(EnergySite):
 
     With a signing ``private_key`` (see :class:`EnergySite`), a command that
     needs a signature calls ``super()`` to sign it with that key and sends it
-    through Teslemetry's ``device_command`` route. Without a key, such a
-    command goes to :meth:`_server_signed_command`, for Teslemetry to sign.
+    through Teslemetry's ``device_command`` route. Without a key, it uses its
+    Teslemetry route, where Teslemetry signs it with its own key. That key
+    must be verified on the gateway, or the route answers 409
+    ``energy_site_not_paired`` and sends nothing.
     """
 
     async def _device_command(
@@ -361,20 +362,6 @@ class TeslemetryEnergySite(EnergySite):
             ),
         )
 
-    async def _server_signed_command(
-        self, route: str, data: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Send a command that needs a signature for Teslemetry to sign on the server.
-
-        This is the hook for a site without a client key. The target is
-        ``POST api/1/energy_sites/{id}/command/{route}`` with ``data`` as the
-        body. Today that route sends the unsigned ``grpc_command``, which the
-        gateway acknowledges without acting for these commands, so this raises
-        ``SignedCommandRequired`` before any request instead of returning a
-        false success. Send ``data`` to the route once Teslemetry signs there.
-        """
-        raise SignedCommandRequired
-
     async def set_island_mode(
         self,
         mode: EnergyIslandMode | int,
@@ -382,16 +369,46 @@ class TeslemetryEnergySite(EnergySite):
     ) -> dict[str, Any]:
         """Set the island mode on the energy gateway.
 
-        With a signing key this signs the command with that key; without one
-        it goes to :meth:`_server_signed_command`. See
-        :meth:`EnergySite.set_island_mode`.
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        See :meth:`EnergySite.set_island_mode`.
         """
         if self._signer is not None:
             return await super().set_island_mode(mode, force)
         data: dict[str, Any] = {"mode": int(mode)}
         if force is not None:
             data["force"] = force
-        return await self._server_signed_command("set_island_mode", data)
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/command/set_island_mode",
+            json=data,
+        )
+
+    async def get_backup_events(self) -> dict[str, Any]:
+        """Get backup events from the energy gateway.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        """
+        if self._signer is not None:
+            return await super().get_backup_events()
+        return await self._request(
+            Method.GET,
+            f"api/1/energy_sites/{self.energy_site_id}/command/backup_events",
+        )
+
+    async def get_teg_config(self) -> dict[str, Any]:
+        """Get Tesla Energy Gateway configuration from the TEG service.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        """
+        if self._signer is not None:
+            return await super().get_teg_config()
+        return await self._request(
+            Method.GET,
+            f"api/1/energy_sites/{self.energy_site_id}/command/config",
+        )
 
     async def add_authorized_client(
         self,

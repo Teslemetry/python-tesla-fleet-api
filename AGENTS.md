@@ -92,9 +92,10 @@ top-level workflow, never `workflow_call` — the trusted publisher is bound to
 - Failover can double-execute a non-idempotent command that failed mid-flight.
   `BluetoothUnconfirmedCommand` must propagate without replay.
 - `set_island_mode`/`go_off_grid`/`reconnect_grid` **must never send the unsigned
-  `grpc_command`** and keep raising `SignedCommandRequired` without a signing key:
-  the unsigned command is acknowledged but does not move the contactor. Only a
-  signed path (local, or cloud `device_command`) actuates; verify state after.
+  `grpc_command`**: it is acknowledged but does not move the contactor. Without a
+  signing key, Fleet `EnergySite` raises `SignedCommandRequired`, and
+  `TeslemetryEnergySite` calls Teslemetry's server-signed route. Only a signed
+  path actuates; verify state after.
 
 ## ObservationFunnel (`funnel.py`)
 

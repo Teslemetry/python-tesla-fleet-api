@@ -409,7 +409,7 @@ The site signs only commands that need a signature and posts them to the undocum
 
 `None` means unsigned: there is no fallback to `api.rsa_private_key`. The signature expires after 30 seconds and has no counter, so the same bytes resent inside that window execute again; the library never retries a signed command. The reply is returned unchanged. A success-shaped reply does not prove the contactor moved: read `island_status` from `live_status()` after each step.
 
-On `Teslemetry`, the same signed commands go through Teslemetry's `device_command` route. Without a client key, `TeslemetryEnergySite.set_island_mode` goes to the `_server_signed_command` hook for Teslemetry to sign on its server; until that route signs, it raises `SignedCommandRequired`.
+On `Teslemetry`, a client key works the same way: the commands that need a signature are signed with that key and go through Teslemetry's `device_command` route. Without a client key, `TeslemetryEnergySite` never raises `SignedCommandRequired` for them. It calls Teslemetry's routes instead (`POST command/set_island_mode`, `GET command/backup_events`, `GET command/config`), and Teslemetry signs with its own key. Teslemetry's key must be `VERIFIED` on the gateway, or those routes answer 409 `energy_site_not_paired` and send nothing.
 
 Use `list_authorized_clients()` only as a secondary, best-effort cloud check
 while pairing a local key. The reliable verification is a successful signed
