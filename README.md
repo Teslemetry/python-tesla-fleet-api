@@ -3,7 +3,29 @@
 > 多途经点为默认关闭的原始字符串实验入口，尚未验证中国区载荷格式与实车效果。
 > 安装、使用和限制见 [中国区 MCP 服务说明](docs/cn_mcp_server.md)。
 
-# Tesla Fleet API
+# Tesla Fleet API CN SDK + MCP Server
+
+## 上游来源与致谢
+
+本项目基于 [Teslemetry/python-tesla-fleet-api](https://github.com/Teslemetry/python-tesla-fleet-api)
+的分支进行二次开发，主要开展中国区适配与独立 MCP Server 集成，并非从零编写的 SDK。
+衷心感谢原作者 **Brett Adams**、Teslemetry 团队及所有上游贡献者的开源工作与持续维护。
+原项目的代码、作者署名与版权归属予以保留；本分支的改动不代表原作者或 Tesla 官方的认可、背书或支持承诺。
+
+## 用途、商用与风险说明
+
+本分支仅作为**个人技术学习、研究与接口适配实验**项目提供，不承诺生产或商用适用性。
+商业使用请遵守原项目的 [Apache-2.0 许可证](LICENSE)、Tesla API/开发者服务条款及适用的商业协议；
+如需商业服务、技术支持或另行授权，请[联系原作者与上游维护方](https://github.com/Teslemetry/python-tesla-fleet-api)，
+原项目公开联系邮箱为 [hello@teslemetry.com](mailto:hello@teslemetry.com)。
+
+本项目按现状提供，不提供任何明示或默示担保。使用者应自行评估并承担账号、凭证、隐私、
+车辆控制、财产损失、接口费用及服务中断等风险。在适用法律允许的范围内，原作者、上游贡献者与
+本分支维护者不承担因使用或无法使用本项目而产生的相关责任。不得将未经实车验证的实验功能视为可靠的车辆控制能力。
+
+上述用途说明不替代或撤销已有开源许可授予的权利，完整说明见 [来源、用途与风险声明](DISCLAIMER.md)。
+
+## 原 SDK 说明
 
 Tesla Fleet API is a Python library that provides an interface to interact with Tesla's Fleet API, including signed commands and encrypted local Bluetooth (BLE) communication. It also supports interactions with Teslemetry and Tessie services.
 

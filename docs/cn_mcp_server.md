@@ -1,5 +1,8 @@
 # 中国区 Tesla Fleet SDK + MCP Server
 
+本分支基于 Teslemetry / Brett Adams 的上游项目二次开发，仅作为个人技术学习与研究项目提供。
+使用前请阅读仓库的 [来源、用途与风险声明](../DISCLAIMER.md)；商用请遵守相关许可和协议并联系原作者。
+
 保留 `tesla_fleet_api` SDK 独立可用，新增可选的 `mcp_server` 服务层。
 Python ≥3.13；本期服务支持 macOS/Linux（使用 POSIX 文件权限与进程锁）。
 这是**单车主、单 Tesla 账号、单进程**服务，不是多租户平台。共享 MCP Bearer

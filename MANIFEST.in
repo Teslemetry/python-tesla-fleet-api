@@ -1,2 +1,3 @@
 include .env.example
 include docs/cn_mcp_server.md
+include DISCLAIMER.md
