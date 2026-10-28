@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/fleet_api_energy_sites.md) | English
+
 # Fleet API for Energy Sites
 
 This document provides detailed examples for using the Fleet API for energy sites.
@@ -398,7 +400,7 @@ readiness.
 
 `get_rsa_private_key(path)` loads an existing RSA private key for gateway
 client registration or creates a new unencrypted PEM key file; see the
-[README](../README.md#bluetooth-for-vehicles) for its create/load semantics
+[README](../README.en.md#bluetooth-for-vehicles) for its create/load semantics
 and the `PrivateKeyError` raised for an unusable existing key file.
 
 ### Available Commands

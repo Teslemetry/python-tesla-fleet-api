@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/fleet_api_vehicles.md) | English
+
 # Fleet API for Vehicles
 
 This document provides detailed examples for using the Fleet API for vehicles.

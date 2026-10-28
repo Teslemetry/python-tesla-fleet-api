@@ -1,5 +1,7 @@
 # 中国区 Tesla Fleet SDK + MCP Server
 
+[中文文档目录](zh-CN/README.md) · [中文排障与提示对照](zh-CN/troubleshooting.md) · [项目首页](../README.md)
+
 本分支基于 Teslemetry / Brett Adams 的上游项目二次开发，仅作为个人技术学习与研究项目提供。
 使用前请阅读仓库的 [来源、用途与风险声明](../DISCLAIMER.md)；商用请遵守相关许可和协议并联系原作者。
 

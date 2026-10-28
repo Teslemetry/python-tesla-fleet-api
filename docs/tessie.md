@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/tessie.md) | English
+
 # Tessie
 
 Tessie is a service that provides additional telemetry data for Tesla vehicles.

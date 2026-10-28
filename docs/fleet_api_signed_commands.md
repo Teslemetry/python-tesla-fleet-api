@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/fleet_api_signed_commands.md) | English
+
 # Fleet API with Signed Vehicle Commands
 
 This document provides detailed examples for using the Fleet API with signed vehicle commands.

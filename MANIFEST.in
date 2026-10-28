@@ -1,3 +1,5 @@
 include .env.example
 include docs/cn_mcp_server.md
 include DISCLAIMER.md
+include README.en.md
+recursive-include docs *.md

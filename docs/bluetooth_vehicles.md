@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/bluetooth_vehicles.md) | English
+
 # Bluetooth for Vehicles
 
 This document provides detailed examples for using Bluetooth for vehicles.
@@ -39,7 +41,7 @@ async def main():
 asyncio.run(main())
 ```
 
-See the [README](../README.md#bluetooth-for-vehicles) for
+See the [README](../README.en.md#bluetooth-for-vehicles) for
 `get_private_key(path)`'s create/load semantics and the `PrivateKeyError`
 raised for an unusable existing key file.
 

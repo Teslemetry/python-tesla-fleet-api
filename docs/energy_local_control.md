@@ -1,3 +1,5 @@
+[简体中文使用指南](zh-CN/energy_local_control.md) | English
+
 # Energy: Local Control (aiopowerwall + EnergySiteRouter)
 
 This library and the sibling [`aiopowerwall`](https://pypi.org/project/aiopowerwall/)
@@ -240,7 +242,7 @@ local-primary/cloud-fallback pattern `VehicleRouter` uses for vehicles. Calls
 that aiopowerwall does not implement locally yet, including `get_system_info()`
 and most energy-device gRPC commands, raise `NotImplementedError` from the
 local adapter and then fall through to the cloud backend. See [the README's
-Routing and Failover section](../README.md#routing-and-failover) for the
+Routing and Failover section](../README.en.md#routing-and-failover) for the
 general `Router` semantics (per-command failover, the double-execution caveat,
 and the `health` check).
 
@@ -310,7 +312,7 @@ local, owned_keys)`, which is still public for a caller with its own key set
 - [Fleet API for Energy Sites](fleet_api_energy_sites.md) - the cloud
   `EnergySite` command surface (`get_rsa_private_key`, the gRPC "Device
   Commands" section) on its own, without a local backend.
-- [Routing and Failover](../README.md#routing-and-failover) - the general
+- [Routing and Failover](../README.en.md#routing-and-failover) - the general
   `Router`/`EnergySiteRouter` dispatch and failover semantics.
 - `aiopowerwall`'s own README for local-only concerns: gateway pairing
   (breaker toggle / auto-verify), backup-reserve and SoC scaling, and
