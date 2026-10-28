@@ -425,3 +425,57 @@ class TonneauTests(IsolatedAsyncioTestCase):
         await VehicleRouter(ble, cloud).open_tonneau()
         self.assertEqual(ble.calls, 1)
         request.assert_awaited_once()
+
+
+class RearTrunkTests(IsolatedAsyncioTestCase):
+    """Rear trunk methods mirror the ``VehicleBluetooth`` names via ``closure``."""
+
+    async def _assert_rear_trunk(self, method: str, body: str) -> None:
+        vehicle, request = _make_vehicle()
+        result = await getattr(vehicle, method)()
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"api/1/vehicles/{VIN}/custom_command/closure",
+            json={"rearTrunk": body},
+        )
+        self.assertEqual(result, {"response": {"result": True}})
+
+    async def test_open_rear_trunk(self) -> None:
+        await self._assert_rear_trunk("open_rear_trunk", "open")
+
+    async def test_close_rear_trunk(self) -> None:
+        await self._assert_rear_trunk("close_rear_trunk", "close")
+
+    async def test_router_prefers_ble_and_falls_back_to_cloud(self) -> None:
+        from tesla_fleet_api.router import VehicleRouter
+
+        class _Ble:
+            vin = VIN
+
+            def __init__(self, fail: bool) -> None:
+                self.fail = fail
+                self.calls = 0
+
+            async def close_rear_trunk(self) -> dict[str, bool]:
+                self.calls += 1
+                if self.fail:
+                    raise ConnectionError("ble down")
+                return {"ble": True}
+
+        cloud, request = _make_vehicle()
+
+        ble = _Ble(fail=False)
+        self.assertEqual(
+            await VehicleRouter(ble, cloud).close_rear_trunk(), {"ble": True}
+        )
+        request.assert_not_awaited()
+
+        ble = _Ble(fail=True)
+        result = await VehicleRouter(ble, cloud).close_rear_trunk()
+        self.assertEqual(ble.calls, 1)
+        self.assertEqual(result, {"response": {"result": True}})
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"api/1/vehicles/{VIN}/custom_command/closure",
+            json={"rearTrunk": "close"},
+        )
