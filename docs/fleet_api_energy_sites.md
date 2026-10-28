@@ -416,6 +416,16 @@ and the `PrivateKeyError` raised for an unusable existing key file.
 | `get_backup_events()` | TEG | Backup event history (may timeout on some firmware) |
 | `schedule_backup_event()` | TEG | Schedule a manual backup event |
 | `cancel_backup_event()` | TEG | Cancel a scheduled backup event |
+| `dispatch_battery_power(power_watts, duration_seconds)` | TEG | Timed battery power setpoint: watts, positive discharges, negative charges; 1 to 86400 seconds |
+| `resume_battery_operation()` | TEG | Release a `dispatch_battery_power` setpoint |
+
+`dispatch_battery_power` holds the setpoint for `duration_seconds`, then the
+gateway returns to its configured operating mode by itself. Keep durations
+short and re-send to renew. The reply is an empty acknowledgement, not
+readback: read `live_status()` to see what the battery does. The gateway still
+applies its own backup reserve and grid limits. The method has the same name,
+arguments, units, sign and limits as aiopowerwall's local
+`dispatch_battery_power`, so `EnergySiteRouter` can send it on either path.
 
 ### Example
 

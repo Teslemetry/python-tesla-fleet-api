@@ -24,7 +24,11 @@ from tesla_fleet_api.exceptions import (
     InvalidResponse,
     TeslaFleetError,
 )
-from tesla_fleet_api.tesla.energysite import EnergySite, EnergySites
+from tesla_fleet_api.tesla.energysite import (
+    EnergySite,
+    EnergySites,
+    validate_dispatch_battery_power,
+)
 
 DEFAULT_PAIRING_TIMEOUT = 600.0
 DEFAULT_PAIRING_POLL_INTERVAL = 5.0
@@ -447,6 +451,34 @@ class TeslemetryEnergySite(EnergySite):
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command/remove_authorized_client",
             json={"public_key": public_key_b64},
+        )
+
+    async def dispatch_battery_power(
+        self, power_watts: float, duration_seconds: int
+    ) -> dict[str, Any]:
+        """Request a timed battery power setpoint via the Teslemetry custom
+        endpoint.
+
+        ``power_watts`` is battery power in watts: **positive discharges,
+        negative charges**. The gateway holds it for ``duration_seconds``
+        (1 to 86400). See :meth:`EnergySite.dispatch_battery_power`.
+        """
+        validate_dispatch_battery_power(power_watts, duration_seconds)
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/command/dispatch_battery_power",
+            json={
+                "power_watts": float(power_watts),
+                "duration_seconds": duration_seconds,
+            },
+        )
+
+    async def resume_battery_operation(self) -> dict[str, Any]:
+        """Release a :meth:`dispatch_battery_power` setpoint via the Teslemetry
+        custom endpoint."""
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/command/resume_battery_operation",
         )
 
     async def wait_until_paired(
