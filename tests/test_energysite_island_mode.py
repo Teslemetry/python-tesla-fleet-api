@@ -1,11 +1,11 @@
 """Tests for EnergySite.set_island_mode/go_off_grid/reconnect_grid.
 
-These cloud-only methods can only send an unsigned ``grpc_command`` -
-gateways have been observed acknowledging that request without physically
-operating the grid contactor. They must raise
+Without a signing key these methods could only send an unsigned
+``grpc_command`` - gateways have been observed acknowledging that request
+without physically operating the grid contactor. They must raise
 :class:`~tesla_fleet_api.exceptions.SignedCommandRequired` instead of
-shipping a silent no-op; the signed local control path
-(``add_authorized_client`` + ``EnergySiteRouter``) is unaffected.
+shipping a silent no-op. The signed paths are covered in
+``test_energysite_signed_transport.py``.
 """
 
 from __future__ import annotations

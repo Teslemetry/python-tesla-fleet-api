@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import math
 from typing import TYPE_CHECKING, Any
@@ -15,8 +16,11 @@ from tesla_fleet_api.const import (
     TeslaEnergyPeriod,
 )
 from tesla_fleet_api.exceptions import SignedCommandRequired
+from tesla_fleet_api.tesla.energy_signing import EnergyDeviceSigner
 
 if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
 # Upper bound on a ``dispatch_battery_power`` setpoint duration (one day),
@@ -43,13 +47,35 @@ def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -
 
 
 class EnergySite:
-    """Class describing the Tesla Fleet API partner endpoints"""
+    """Class describing the Tesla Fleet API partner endpoints
+
+    Pass ``private_key`` and ``din`` to send client-signed device commands
+    through the cloud ``device_command`` endpoint. Only commands that need a
+    signature use it; every other command keeps the unsigned path. The key
+    must be an RSA key that is ``VERIFIED`` on this gateway (see
+    ``add_authorized_client``), and ``din`` is the gateway DIN (the energy
+    site's ``gateway_id`` in ``products``). ``None`` means unsigned: unlike
+    vehicles, there is no fallback to the parent's key.
+    """
 
     energy_site_id: int
+    din: str | None
 
-    def __init__(self, parent: TeslaFleetApi, energy_site_id: int) -> None:
+    def __init__(
+        self,
+        parent: TeslaFleetApi,
+        energy_site_id: int,
+        private_key: rsa.RSAPrivateKey | None = None,
+        din: str | None = None,
+    ) -> None:
         self._request = parent._request  # pyright: ignore[reportPrivateUsage]
         self.energy_site_id = energy_site_id
+        self.din = din
+        self._signer: EnergyDeviceSigner | None = None
+        if private_key is not None:
+            if not din:
+                raise ValueError("A signing private_key requires the gateway din.")
+            self._signer = EnergyDeviceSigner(private_key)
 
     # Energy device gRPC commands based on research from
     # https://github.com/jasonacox/pypowerwall (MIT licensed)
@@ -74,6 +100,63 @@ class EnergySite:
                 },
             },
         )
+
+    def _device_command_body(
+        self,
+        routable_message: bytes,
+        target_id: str,
+        identifier_type: EnergyDeviceIdentifierType | int,
+    ) -> dict[str, Any]:
+        """Build the flat ``device_command`` body around a signed message."""
+        return {
+            "identifier_type": int(identifier_type),
+            "routable_message": base64.b64encode(routable_message).decode("ascii"),
+            "target_id": target_id,
+        }
+
+    async def _device_command(
+        self,
+        routable_message: bytes,
+        target_id: str,
+        identifier_type: EnergyDeviceIdentifierType
+        | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
+    ) -> dict[str, Any]:
+        """Send a signed ``RoutableMessage`` to the energy device.
+
+        Tesla requires the body wrapped in ``data`` and ``identifier_type`` as
+        an integer. The reply is returned unchanged: its shape has not been
+        captured live yet, so it is not decoded here.
+        """
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/device_command",
+            json={
+                "data": self._device_command_body(
+                    routable_message, target_id, identifier_type
+                )
+            },
+        )
+
+    async def _signed_command(
+        self,
+        category: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Sign a gRPC command with the constructor key and send it to the gateway.
+
+        Takes the same arguments as :meth:`_command`. Raises
+        ``SignedCommandRequired`` when the site has no signing key. A resend
+        of the same signed bytes inside the TTL executes again, so this never
+        retries.
+        """
+        signer, din = self._signer, self.din
+        if signer is None or din is None:
+            raise SignedCommandRequired
+        envelope = signer.envelope(din, category, command, params)
+        # RSA-4096 with SHA-512 takes about 10 ms; keep it off the event loop.
+        routable_message = await asyncio.to_thread(signer.sign, envelope, din)
+        return await self._device_command(routable_message, din)
 
     async def get_system_info(self) -> dict[str, Any]:
         """Get energy device system information including firmware version, device type, part number, serial number, and DIN."""
@@ -229,7 +312,13 @@ class EnergySite:
         )
 
     async def get_backup_events(self) -> dict[str, Any]:
-        """Get backup events from the energy gateway. May timeout on some firmware versions."""
+        """Get backup events from the energy gateway. May timeout on some firmware versions.
+
+        The unsigned request returned 400 on observed gateways, so a site
+        with a signing key sends it signed.
+        """
+        if self._signer is not None:
+            return await self._signed_command("teg", "get_backup_events_request")
         return await self._command("teg", "get_backup_events_request")
 
     async def schedule_backup_event(
@@ -268,7 +357,13 @@ class EnergySite:
         return await self._command("teg", "cancel_manual_backup_event_request")
 
     async def get_teg_config(self) -> dict[str, Any]:
-        """Get Tesla Energy Gateway configuration from the TEG service."""
+        """Get Tesla Energy Gateway configuration from the TEG service.
+
+        The unsigned request returned 400 on observed gateways, so a site
+        with a signing key sends it signed.
+        """
+        if self._signer is not None:
+            return await self._signed_command("teg", "get_config_request")
         return await self._command("teg", "get_config_request")
 
     async def dispatch_battery_power(
@@ -325,32 +420,37 @@ class EnergySite:
     ) -> dict[str, Any]:
         """Set the island mode on the energy gateway.
 
-        Always raises ``SignedCommandRequired``: this cloud method can only
-        send an unsigned ``grpc_command``, and gateways have been observed
-        accepting that request without physically operating the grid
-        contactor. For a signed local LAN control path, pair an RSA key with
-        ``add_authorized_client`` and compose an aiopowerwall local backend
-        with ``EnergySiteRouter``.
+        Signed only: gateways have been observed accepting the unsigned
+        ``grpc_command`` without physically operating the grid contactor.
+        With a signing key this sends ``teg.set_island_mode_request`` signed
+        through ``device_command``. Without one it raises
+        ``SignedCommandRequired`` before any request. For a signed local LAN
+        path, compose an aiopowerwall local backend with ``EnergySiteRouter``.
+
+        A success-shaped reply does not prove the contactor moved: confirm
+        ``island_status`` with a status read before relying on it.
 
         Args:
-            mode: Unused - the call raises before inspecting it. Kept for
-                  signature compatibility.
-            force: Unused - the call raises before inspecting it. Kept for
-                   signature compatibility.
+            mode: ``EnergyIslandMode.OFF_GRID`` (6) or ``ON_GRID`` (1).
+            force: Sent when not ``None``. Some gateways need ``True`` to
+                   open the contactor.
         """
-        raise SignedCommandRequired
+        params: dict[str, Any] = {"mode": int(mode)}
+        if force is not None:
+            params["force"] = force
+        return await self._signed_command("teg", "set_island_mode_request", params)
 
     async def go_off_grid(self) -> dict[str, Any]:
-        """Request off-grid mode through the cloud ``grpc_command`` path.
+        """Request off-grid mode, with ``force=True`` as aiopowerwall does.
 
-        Always raises ``SignedCommandRequired`` - see ``set_island_mode``.
+        Signed only - see ``set_island_mode``.
         """
-        return await self.set_island_mode(EnergyIslandMode.OFF_GRID)
+        return await self.set_island_mode(EnergyIslandMode.OFF_GRID, force=True)
 
     async def reconnect_grid(self) -> dict[str, Any]:
-        """Request on-grid mode through the cloud ``grpc_command`` path.
+        """Request on-grid mode.
 
-        Always raises ``SignedCommandRequired`` - see ``set_island_mode``.
+        Signed only - see ``set_island_mode``.
         """
         return await self.set_island_mode(EnergyIslandMode.ON_GRID)
 
@@ -497,7 +597,18 @@ class EnergySites(dict[int, EnergySite]):
     def __init__(self, parent: TeslaFleetApi) -> None:
         self._parent = parent
 
-    def create(self, energy_site_id: int) -> EnergySite:
-        """Create a specific energy site."""
-        self[energy_site_id] = self.Site(self._parent, energy_site_id)
+    def create(
+        self,
+        energy_site_id: int,
+        private_key: rsa.RSAPrivateKey | None = None,
+        din: str | None = None,
+    ) -> EnergySite:
+        """Create a specific energy site.
+
+        Pass ``private_key`` and ``din`` to enable client-signed device
+        commands; see :class:`EnergySite`.
+        """
+        self[energy_site_id] = self.Site(
+            self._parent, energy_site_id, private_key=private_key, din=din
+        )
         return self[energy_site_id]

@@ -469,15 +469,18 @@ class SignedCommandRequired(TeslaFleetError):
     Energy gateways have been observed acknowledging this class of unsigned
     ``grpc_command`` without physically operating the grid contactor - see
     ``EnergySite.set_island_mode``. Pair an RSA key with
-    ``EnergySite.add_authorized_client`` and issue the command through a
-    signed local LAN backend (composed via ``EnergySiteRouter``) instead.
+    ``EnergySite.add_authorized_client``, then either build the energy site
+    with that ``private_key`` and its ``din`` to sign it through the cloud, or
+    issue it through a signed local LAN backend (composed via
+    ``EnergySiteRouter``).
     """
 
     message = (
         "This command cannot actuate via the unsigned cloud API - gateways "
         "acknowledge it without operating the contactor. Pair a key with "
-        "add_authorized_client and issue it through a signed local control "
-        "path (EnergySiteRouter) instead."
+        "add_authorized_client, then create the energy site with that "
+        "private_key and its din, or use a signed local control path "
+        "(EnergySiteRouter)."
     )
 
 

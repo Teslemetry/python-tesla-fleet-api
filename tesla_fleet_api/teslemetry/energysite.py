@@ -8,7 +8,7 @@ import struct
 import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from tesla_fleet_api.const import (
     AuthorizationRole,
@@ -16,6 +16,8 @@ from tesla_fleet_api.const import (
     AuthorizedClientState,
     AuthorizedClientType,
     AuthorizedVerificationType,
+    EnergyDeviceIdentifierType,
+    EnergyIslandMode,
     Method,
 )
 from tesla_fleet_api.exceptions import (
@@ -29,6 +31,9 @@ from tesla_fleet_api.tesla.energysite import (
     EnergySites,
     validate_dispatch_battery_power,
 )
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import rsa
 
 DEFAULT_PAIRING_TIMEOUT = 600.0
 DEFAULT_PAIRING_POLL_INTERVAL = 5.0
@@ -328,7 +333,82 @@ def _parse_gateway_address(payload: Any) -> str | None:
 
 
 class TeslemetryEnergySite(EnergySite):
-    """Teslemetry specific energy site."""
+    """Teslemetry specific energy site.
+
+    With a signing ``private_key`` (see :class:`EnergySite`), a command that
+    needs a signature calls ``super()`` to sign it with that key and sends it
+    through Teslemetry's ``device_command`` route. Without a key, it uses its
+    Teslemetry route, where Teslemetry signs it with its own key. That key
+    must be verified on the gateway, or the route answers 409
+    ``energy_site_not_paired`` and sends nothing.
+    """
+
+    async def _device_command(
+        self,
+        routable_message: bytes,
+        target_id: str,
+        identifier_type: EnergyDeviceIdentifierType
+        | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
+    ) -> dict[str, Any]:
+        """Send a signed ``RoutableMessage`` through Teslemetry's ``device_command`` route.
+
+        Teslemetry takes the flat body and adds Tesla's ``data`` wrapper itself.
+        """
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/device_command",
+            json=self._device_command_body(
+                routable_message, target_id, identifier_type
+            ),
+        )
+
+    async def set_island_mode(
+        self,
+        mode: EnergyIslandMode | int,
+        force: bool | None = None,
+    ) -> dict[str, Any]:
+        """Set the island mode on the energy gateway.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        See :meth:`EnergySite.set_island_mode`.
+        """
+        if self._signer is not None:
+            return await super().set_island_mode(mode, force)
+        data: dict[str, Any] = {"mode": int(mode)}
+        if force is not None:
+            data["force"] = force
+        return await self._request(
+            Method.POST,
+            f"api/1/energy_sites/{self.energy_site_id}/command/set_island_mode",
+            json=data,
+        )
+
+    async def get_backup_events(self) -> dict[str, Any]:
+        """Get backup events from the energy gateway.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        """
+        if self._signer is not None:
+            return await super().get_backup_events()
+        return await self._request(
+            Method.GET,
+            f"api/1/energy_sites/{self.energy_site_id}/command/backup_events",
+        )
+
+    async def get_teg_config(self) -> dict[str, Any]:
+        """Get Tesla Energy Gateway configuration from the TEG service.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route, which signs it with Teslemetry's key.
+        """
+        if self._signer is not None:
+            return await super().get_teg_config()
+        return await self._request(
+            Method.GET,
+            f"api/1/energy_sites/{self.energy_site_id}/command/config",
+        )
 
     async def add_authorized_client(
         self,
@@ -612,8 +692,17 @@ class TeslemetryEnergySites(EnergySites):
 
     Site = TeslemetryEnergySite
 
-    def create(self, energy_site_id: int) -> TeslemetryEnergySite:
-        """Create a specific energy site."""
-        site = self.Site(self._parent, energy_site_id)
+    def create(
+        self,
+        energy_site_id: int,
+        private_key: rsa.RSAPrivateKey | None = None,
+        din: str | None = None,
+    ) -> TeslemetryEnergySite:
+        """Create a specific energy site.
+
+        Pass ``private_key`` and ``din`` to enable client-signed device
+        commands; see :class:`EnergySite`.
+        """
+        site = self.Site(self._parent, energy_site_id, private_key=private_key, din=din)
         self[energy_site_id] = site
         return site

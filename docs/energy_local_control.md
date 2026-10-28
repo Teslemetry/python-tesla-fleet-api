@@ -245,23 +245,28 @@ general `Router` semantics (per-command failover, the double-execution caveat,
 and the `health` check).
 
 > **Warning: island mode / off-grid actuation is not guaranteed, and the
-> cloud path cannot do it at all.**
+> unsigned cloud path cannot do it at all.**
 >
-> This repo's cloud `EnergySite.set_island_mode()` / `go_off_grid()` /
-> `reconnect_grid()` can only send an **unsigned** `grpc_command`, and
-> gateways have been observed accepting that command without physically
-> operating the grid contactor. Rather than ship that as a silent no-op with
-> an OK-looking response, these three methods unconditionally raise
-> `tesla_fleet_api.exceptions.SignedCommandRequired` - there is no cloud-only
-> way to actuate the contactor.
+> Gateways have been observed accepting the **unsigned** cloud
+> `grpc_command` for `set_island_mode()` / `go_off_grid()` /
+> `reconnect_grid()` without physically operating the grid contactor. So a
+> Fleet API `EnergySite` built without a signing key raises
+> `tesla_fleet_api.exceptions.SignedCommandRequired` for these three methods
+> instead of returning a false success. Built with `private_key` and `din`
+> (see [Client-signed device commands](fleet_api_energy_sites.md#client-signed-device-commands)),
+> it signs them and sends them through the cloud `device_command` endpoint.
+> A `TeslemetryEnergySite` without a key calls Teslemetry's route, which
+> signs with Teslemetry's key.
 >
-> Routing through `EnergySiteRouter` with an `aiopowerwall` local primary is
-> the intended way to actually operate the contactor, since it sends a
-> signed request over the LAN. If the local primary fails and `Router` fails
-> over to the cloud secondary, the call now raises `SignedCommandRequired`
-> from the cloud side instead of returning a false success - the router
-> semantics don't change (the local backend is still tried first), but a
-> total failure now surfaces as a clear error. `aiopowerwall`'s own docs also
+> Routing through `EnergySiteRouter` with an `aiopowerwall` local primary
+> sends a signed request over the LAN first. If the local primary fails and
+> `Router` fails over to the cloud secondary, a keyed cloud site sends the
+> signed command. A Fleet API site without a key raises
+> `SignedCommandRequired`, and a Teslemetry site without a key calls
+> Teslemetry's signed route.
+> A command that failed mid-flight on the LAN may already have run, so the
+> cloud retry can run it twice; island mode is absolute, so a second run sets
+> the same mode. `aiopowerwall`'s own docs also
 > carry an unresolved, firmware-dependent caveat for its local
 > `set_island_mode` - some gateways acknowledge it without acting on it, and
 > `trigger_islanding()` (the explicit black-start command) may be needed as
