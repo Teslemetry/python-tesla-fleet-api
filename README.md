@@ -27,6 +27,7 @@ Teslemetry 或 Tesla 官方的认可、背书及支持承诺。
 
 | 你想做什么 | 建议阅读 |
 |---|---|
+| 查看完整架构、功能清单和代码目录 | [项目架构说明](docs/zh-CN/architecture.md) |
 | 第一次使用，不理解 SDK、MCP、Token 等词 | [中文文档导航与术语表](docs/zh-CN/README.md) |
 | 接入中国区 Tesla 账号，启动 MCP 服务 | [中国区配置与 MCP 完整说明](docs/cn_mcp_server.md) |
 | 用 Python 查询车辆、电量、位置或唤醒车辆 | [车辆接口中文指南](docs/zh-CN/fleet_api_vehicles.md) |
