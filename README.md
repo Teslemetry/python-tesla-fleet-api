@@ -1,3 +1,8 @@
+> **CN fork / MCP 开发版**：保留独立 SDK，新增中国区 OAuth 与可选的独立 MCP Server。
+> 支持 Streamable HTTP / stdio、车辆白名单、默认只读、本机确认及持久化防重复提交。
+> 多途经点为默认关闭的原始字符串实验入口，尚未验证中国区载荷格式与实车效果。
+> 安装、使用和限制见 [中国区 MCP 服务说明](docs/cn_mcp_server.md)。
+
 # Tesla Fleet API
 
 Tesla Fleet API is a Python library that provides an interface to interact with Tesla's Fleet API, including signed commands and encrypted local Bluetooth (BLE) communication. It also supports interactions with Teslemetry and Tessie services.

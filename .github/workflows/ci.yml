@@ -16,11 +16,11 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --extra mcp
       - name: Ruff
-        run: uv run ruff check tesla_fleet_api tests
+        run: uv run --extra mcp ruff check tesla_fleet_api mcp_server tests
       - name: Pyright
-        run: uv run pyright tesla_fleet_api
+        run: uv run --extra mcp pyright tesla_fleet_api mcp_server
 
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -38,9 +38,9 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --locked --python ${{ matrix.python-version }}
+        run: uv sync --locked --extra mcp --python ${{ matrix.python-version }}
       - name: Pytest
-        run: uv run pytest tests -q
+        run: uv run --extra mcp pytest tests -q
 
   build:
     name: Build distribution

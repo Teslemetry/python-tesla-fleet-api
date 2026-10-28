@@ -1,6 +1,7 @@
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -41,13 +42,12 @@ class TeslaFleetOAuth(TeslaFleetApi):
         self.client_id = client_id
         self._client_secret = client_secret
         self.redirect_uri = redirect_uri
-        self._access_token = access_token
         self.refresh_token = refresh_token
         self.expires = expires
 
         super().__init__(
             session,
-            access_token="",
+            access_token=access_token,
             region=region,
         )
 
@@ -60,7 +60,16 @@ class TeslaFleetOAuth(TeslaFleetApi):
         else:
             domain = "auth.tesla.com"
 
-        return f"https://{domain}/oauth2/v3/authorize?response_type=code&client_id={self.client_id}&redirect_uri={self.redirect_uri}&scope={'+'.join(scopes)}&state={state}"
+        query = urlencode(
+            {
+                "response_type": "code",
+                "client_id": self.client_id,
+                "redirect_uri": self.redirect_uri,
+                "scope": " ".join(scopes),
+                "state": state,
+            }
+        )
+        return f"https://{domain}/oauth2/v3/authorize?{query}"
 
     async def get_refresh_token(self, code: str) -> None:
         """Get the refresh token."""
@@ -85,14 +94,31 @@ class TeslaFleetOAuth(TeslaFleetApi):
                 "redirect_uri": self.redirect_uri,
             },
         ) as resp:
-            if resp.ok:
-                data = await resp.json()
-                self.refresh_token = data.get("refresh_token")
-                self._access_token = data["access_token"]
-                self.expires = int(time.time()) + data["expires_in"]
-                region = code.split("_")[0].lower()
-                if is_valid_region(region):
-                    self.server = SERVERS.get(region)
+            if not resp.ok:
+                raise ValueError("OAuth code exchange failed")
+            data = await resp.json()
+            self._update_tokens(data)
+
+    def _update_tokens(
+        self, data: dict[str, Any], *, require_refresh: bool = False
+    ) -> None:
+        """Validate a success response before replacing any existing credentials."""
+        access = data.get("access_token")
+        refresh = data.get("refresh_token")
+        lifetime = data.get("expires_in")
+        if (
+            not isinstance(access, str)
+            or not access
+            or not isinstance(lifetime, int)
+            or isinstance(lifetime, bool)
+            or lifetime <= 0
+            or (refresh is not None and (not isinstance(refresh, str) or not refresh))
+            or (require_refresh and not refresh)
+        ):
+            raise ValueError("Invalid OAuth token response")
+        self._access_token = access
+        self.refresh_token = refresh
+        self.expires = int(time.time()) + lifetime
 
     async def access_token(self) -> str:
         """Get the access token."""
@@ -122,11 +148,9 @@ class TeslaFleetOAuth(TeslaFleetApi):
         ) as resp:
             data = await resp.json()
             if resp.ok:
-                self._access_token = data["access_token"]
-                self.refresh_token = data["refresh_token"]
-                self.expires = int(time.time()) + data["expires_in"]
+                self._update_tokens(data, require_refresh=True)
                 return {"refresh_token": self.refresh_token, "expires": self.expires}
-            raise ValueError(data)
+            raise ValueError("OAuth token refresh failed")
 
     async def _request(
         self,

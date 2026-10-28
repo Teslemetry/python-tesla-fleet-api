@@ -11,3 +11,11 @@ opensource.py
 *.pem
 .DS_Store
 build
+
+# Local CN MCP credentials, confirmations, and environments
+.tesla-mcp/
+.env
+.env.*
+!.env.example
+.venv/
+dist/

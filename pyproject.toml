@@ -27,14 +27,22 @@ dependencies = [
     "bleak-retry-connector>=3.9",
 ]
 
+[project.scripts]
+tesla-cn-mcp = "mcp_server.__main__:main"
+
 [project.urls]
 "Homepage" = "https://github.com/Teslemetry/python-tesla-fleet-api"
+
+[project.optional-dependencies]
+mcp = [
+    "mcp>=1.30,<2",
+]
 
 [dependency-groups]
 dev = ["pyright>=1.1.399", "pytest>=8.0", "ruff>=0.14"]
 
 [tool.setuptools.packages.find]
-include = ["tesla_fleet_api*"]
+include = ["tesla_fleet_api*", "mcp_server*"]
 
 [tool.setuptools.package-data]
 tesla_fleet_api = ["py.typed"]
