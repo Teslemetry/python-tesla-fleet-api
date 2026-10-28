@@ -635,6 +635,23 @@ async def main():
 asyncio.run(main())
 ```
 
+## Energy Site Battery Dispatch
+
+Teslemetry energy sites send `dispatch_battery_power(power_watts,
+duration_seconds)` and `resume_battery_operation()` through the Teslemetry
+custom routes `POST /api/1/energy_sites/{id}/command/dispatch_battery_power`
+and `POST /api/1/energy_sites/{id}/command/resume_battery_operation`.
+`power_watts` is battery power in watts: positive discharges, negative
+charges. `duration_seconds` is an integer from 1 to 86400. The library raises
+`ValueError` before any request on other values. See
+[Fleet API for Energy Sites](fleet_api_energy_sites.md#available-commands).
+
+```python
+energy_site = teslemetry.energySites.create(12345)
+await energy_site.dispatch_battery_power(power_watts=5000, duration_seconds=60)
+await energy_site.resume_battery_operation()
+```
+
 ## Migrate to OAuth
 
 The `migrate_to_oauth` method migrates from an access token to OAuth.

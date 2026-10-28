@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import math
 from typing import TYPE_CHECKING, Any
 
 from tesla_fleet_api.const import (
@@ -17,6 +18,28 @@ from tesla_fleet_api.exceptions import SignedCommandRequired
 
 if TYPE_CHECKING:
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
+
+# Upper bound on a ``dispatch_battery_power`` setpoint duration (one day),
+# matching aiopowerwall's local ``dispatch_battery_power``.
+MAX_DISPATCH_DURATION_SECONDS = 86400
+
+
+def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -> None:
+    """Raise ``ValueError`` on arguments aiopowerwall's local
+    ``dispatch_battery_power`` also rejects, so every backend fails the same way."""
+    if (
+        isinstance(power_watts, bool)
+        or not isinstance(power_watts, (int, float))  # pyright: ignore[reportUnnecessaryIsInstance]
+        or not math.isfinite(power_watts)
+    ):
+        raise ValueError("power_watts must be a finite number")
+    if type(duration_seconds) is not int or not (
+        1 <= duration_seconds <= MAX_DISPATCH_DURATION_SECONDS
+    ):
+        raise ValueError(
+            "duration_seconds must be an integer from 1 to "
+            f"{MAX_DISPATCH_DURATION_SECONDS}"
+        )
 
 
 class EnergySite:
@@ -247,6 +270,53 @@ class EnergySite:
     async def get_teg_config(self) -> dict[str, Any]:
         """Get Tesla Energy Gateway configuration from the TEG service."""
         return await self._command("teg", "get_config_request")
+
+    async def dispatch_battery_power(
+        self, power_watts: float, duration_seconds: int
+    ) -> dict[str, Any]:
+        """Request a timed battery power setpoint on the energy gateway.
+
+        Sends ``teg.dispatch_battery_power_request.real_power``.
+        ``power_watts`` is battery power in watts: **positive discharges,
+        negative charges**. The gateway holds the setpoint for
+        ``duration_seconds`` (1 to 86400) and then returns to its configured
+        operating mode by itself. A new call replaces an active setpoint.
+
+        Keep durations short and re-send to renew, so a caller that stops
+        cannot leave the battery on a stale setpoint. Call
+        :meth:`resume_battery_operation` to release early. The reply is an
+        empty acknowledgement, not readback; the gateway still applies its
+        own reserve and grid limits.
+
+        Same name, arguments, units, sign and limits as aiopowerwall's local
+        ``dispatch_battery_power``, so ``EnergySiteRouter`` can send it on
+        either path. Raises ``ValueError`` before any request on a
+        non-finite ``power_watts`` or an out-of-range ``duration_seconds``.
+        """
+        validate_dispatch_battery_power(power_watts, duration_seconds)
+        return await self._command(
+            "teg",
+            "dispatch_battery_power_request",
+            {
+                "real_power": {
+                    "power_watts": float(power_watts),
+                    "duration_seconds": duration_seconds,
+                }
+            },
+        )
+
+    async def resume_battery_operation(self) -> dict[str, Any]:
+        """Release a :meth:`dispatch_battery_power` setpoint.
+
+        Sends ``teg.dispatch_battery_power_request.resume_device_mode``; the
+        gateway goes back to its configured operating mode. The gateway also
+        acknowledges it when no setpoint is active.
+        """
+        return await self._command(
+            "teg",
+            "dispatch_battery_power_request",
+            {"resume_device_mode": {}},
+        )
 
     async def set_island_mode(
         self,
