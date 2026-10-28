@@ -128,6 +128,14 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
             json=data,
         )
 
+    async def open_rear_trunk(self) -> dict[str, Any]:
+        """Opens the rear trunk; unlike actuate_trunk, never closes it."""
+        return await self.closure(rear_trunk=ClosureState.OPEN)
+
+    async def close_rear_trunk(self) -> dict[str, Any]:
+        """Closes the rear trunk; unlike actuate_trunk, never opens it."""
+        return await self.closure(rear_trunk=ClosureState.CLOSE)
+
     async def open_tonneau(self) -> dict[str, Any]:
         """Opens the tonneau cover."""
         return await self.closure(tonneau=ClosureState.OPEN)
