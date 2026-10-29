@@ -645,11 +645,15 @@ and `POST /api/1/energy_sites/{id}/command/resume_battery_operation`.
 charges. `duration_seconds` is an integer from 1 to 86400. The library raises
 `ValueError` before any request on other values. If the site was created with
 a signing `private_key` and `din`, both methods sign the command with that key
-and go through Teslemetry's `device_command` route instead. See
-[Fleet API for Energy Sites](fleet_api_energy_sites.md#available-commands).
+and go through Teslemetry's `device_command` route instead. Without a key, the
+Teslemetry routes still send the command unsigned, and Tesla answers HTTP 400
+(seen live 2026-10-29), so dispatch needs a key until Teslemetry signs these
+routes. See
+[Fleet API for Energy Sites](fleet_api_energy_sites.md#client-signed-device-commands).
 
 ```python
-energy_site = teslemetry.energySites.create(12345)
+# rsa_key is VERIFIED on the gateway; gateway_id is the site's gateway DIN.
+energy_site = teslemetry.energySites.create(12345, private_key=rsa_key, din=gateway_id)
 await energy_site.dispatch_battery_power(power_watts=5000, duration_seconds=60)
 await energy_site.resume_battery_operation()
 ```
