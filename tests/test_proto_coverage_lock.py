@@ -63,13 +63,32 @@ TESLA_PROTOCOL_3_UNWRAPPED_VEHICLE_ACTION_FIELDS = frozenset(
     }
 )
 
+# Added by tesla-protocol 5.0.0; the floor bump does not wrap them, so each is
+# tracked as follow-up work. The two keep-on-port actions and the
+# accessory-port reader need a design for their shared mode enum and a live
+# vehicle check. (dropNominalSuccessResponses is outside the action oneof, so
+# the lock does not visit it.)
+TESLA_PROTOCOL_5_UNWRAPPED_VEHICLE_ACTION_FIELDS = frozenset(
+    {
+        "setKeepOnCabin12vPortAction",
+        "setKeepOnCabin48vPortAction",
+    }
+)
+
 KNOWN_UNWRAPPED_VEHICLE_ACTION_FIELDS = (
     ALTERNATE_PATH_VEHICLE_ACTION_FIELDS
     | STREAMING_SUBSCRIPTION_VEHICLE_ACTION_FIELDS
     | TESLA_PROTOCOL_3_UNWRAPPED_VEHICLE_ACTION_FIELDS
+    | TESLA_PROTOCOL_5_UNWRAPPED_VEHICLE_ACTION_FIELDS
 )
 
-KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS: frozenset[str] = frozenset()
+KNOWN_UNWRAPPED_GET_VEHICLE_DATA_FIELDS: frozenset[str] = frozenset(
+    {
+        # Added by tesla-protocol 5.0.0; reader is follow-up work with the
+        # keep-on-port actions above.
+        "getKeepOnAccessoryPortsState",
+    }
+)
 
 
 def _vehicle_action_fields():
