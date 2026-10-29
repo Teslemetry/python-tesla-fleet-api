@@ -468,6 +468,9 @@ class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
         for name, route in (
             ("get_networking_status", "networking_status"),
             ("list_authorized_clients", "authorized_clients"),
+            ("get_system_info", "system_info"),
+            ("raw_networking_status", "networking_status"),
+            ("get_signed_commands_public_key", "signed_commands_public_key"),
         ):
             with self.subTest(name=name):
                 site, request_mock = _make_site(TeslemetryEnergySite)
