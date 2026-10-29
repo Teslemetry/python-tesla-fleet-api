@@ -50,17 +50,8 @@ MAX_DISPATCH_DURATION_SECONDS = 86400
 
 
 def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -> None:
-    """Raise ``ValueError`` on arguments aiopowerwall's local
-    ``dispatch_battery_power`` also rejects, so every backend fails the same way."""
-    try:
-        finite = (
-            not isinstance(power_watts, bool)
-            and isinstance(power_watts, (int, float))  # pyright: ignore[reportUnnecessaryIsInstance]
-            and math.isfinite(power_watts)
-        )
-    except OverflowError:  # an int too large for a float
-        finite = False
-    if not finite:
+    """Raise ``ValueError`` on a non-finite power or an out-of-range duration."""
+    if not math.isfinite(power_watts):
         raise ValueError("power_watts must be a finite number")
     if type(duration_seconds) is not int or not (
         1 <= duration_seconds <= MAX_DISPATCH_DURATION_SECONDS
