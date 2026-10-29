@@ -23,6 +23,19 @@ if TYPE_CHECKING:
 
     from tesla_fleet_api.tesla.fleet import TeslaFleetApi
 
+# The only device commands Tesla's cloud accepts unsigned: the reads a gateway
+# answers before any key is paired. Unsigned, every other command was refused
+# with HTTP 400 live on a Powerwall 3 (2026-10-29), and signed, each one
+# reached the gateway. A site with a signing key signs everything else.
+UNSIGNED_DEVICE_COMMANDS = frozenset(
+    {
+        ("common", "get_system_info_request"),
+        ("common", "get_networking_status_request"),
+        ("authorization", "get_signed_commands_public_key_request"),
+        ("authorization", "list_authorized_clients_request"),
+    }
+)
+
 # Upper bound on a ``dispatch_battery_power`` setpoint duration (one day),
 # matching aiopowerwall's local ``dispatch_battery_power``.
 MAX_DISPATCH_DURATION_SECONDS = 86400
@@ -50,8 +63,10 @@ class EnergySite:
     """Class describing the Tesla Fleet API partner endpoints
 
     Pass ``private_key`` and ``din`` to send client-signed device commands
-    through the cloud ``device_command`` endpoint. Only commands that need a
-    signature use it; every other command keeps the unsigned path. The key
+    through the cloud ``device_command`` endpoint. With a key, every device
+    command is signed except the four pre-pairing reads in
+    ``UNSIGNED_DEVICE_COMMANDS``. Without a key, device commands are sent
+    unsigned, and Tesla's cloud refuses most of them with 400. The key
     must be an RSA key that is ``VERIFIED`` on this gateway (see
     ``add_authorized_client``), and ``din`` is the gateway DIN (the energy
     site's ``gateway_id`` in ``products``). ``None`` means unsigned: unlike
@@ -87,7 +102,28 @@ class EnergySite:
         identifier_type: EnergyDeviceIdentifierType
         | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
     ) -> dict[str, Any]:
-        """Send a gRPC command to the energy device gateway."""
+        """Send a gRPC command to the energy device gateway.
+
+        With a signing key, this signs every command except the ones in
+        ``UNSIGNED_DEVICE_COMMANDS``. Otherwise it sends the unsigned
+        ``grpc_command``.
+        """
+        if (
+            self._signer is not None
+            and (category, command) not in UNSIGNED_DEVICE_COMMANDS
+        ):
+            return await self._signed_command(category, command, params)
+        return await self._unsigned_command(category, command, params, identifier_type)
+
+    async def _unsigned_command(
+        self,
+        category: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+        identifier_type: EnergyDeviceIdentifierType
+        | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
+    ) -> dict[str, Any]:
+        """Send an unsigned ``grpc_command`` to the energy device gateway."""
         message: dict[str, Any] = {category: {command: params or {}}}
         return await self._request(
             Method.POST,
@@ -262,15 +298,18 @@ class EnergySite:
             public_key_b64 = base64.b64encode(public_key).decode("ascii")
         else:
             public_key_b64 = public_key
+        params: dict[str, Any] = {
+            "key_type": int(key_type),
+            "public_key": public_key_b64,
+            "authorized_client_type": int(authorized_client_type),
+            "description": description,
+        }
+        if self._signer is not None:
+            # The signed envelope is parsed against the proto, which names
+            # this field ``type``.
+            params["type"] = params.pop("authorized_client_type")
         return await self._command(
-            "authorization",
-            "add_authorized_client_request",
-            {
-                "key_type": int(key_type),
-                "public_key": public_key_b64,
-                "authorized_client_type": int(authorized_client_type),
-                "description": description,
-            },
+            "authorization", "add_authorized_client_request", params
         )
 
     async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
@@ -312,13 +351,7 @@ class EnergySite:
         )
 
     async def get_backup_events(self) -> dict[str, Any]:
-        """Get backup events from the energy gateway. May timeout on some firmware versions.
-
-        The unsigned request returned 400 on observed gateways, so a site
-        with a signing key sends it signed.
-        """
-        if self._signer is not None:
-            return await self._signed_command("teg", "get_backup_events_request")
+        """Get backup events from the energy gateway. May timeout on some firmware versions."""
         return await self._command("teg", "get_backup_events_request")
 
     async def schedule_backup_event(
@@ -357,13 +390,7 @@ class EnergySite:
         return await self._command("teg", "cancel_manual_backup_event_request")
 
     async def get_teg_config(self) -> dict[str, Any]:
-        """Get Tesla Energy Gateway configuration from the TEG service.
-
-        The unsigned request returned 400 on observed gateways, so a site
-        with a signing key sends it signed.
-        """
-        if self._signer is not None:
-            return await self._signed_command("teg", "get_config_request")
+        """Get Tesla Energy Gateway configuration from the TEG service."""
         return await self._command("teg", "get_config_request")
 
     async def dispatch_battery_power(
@@ -382,6 +409,9 @@ class EnergySite:
         :meth:`resume_battery_operation` to release early. The reply is an
         empty acknowledgement, not readback; the gateway still applies its
         own reserve and grid limits.
+
+        Tesla's cloud refuses this command unsigned (HTTP 400), so it acts
+        only on a site built with a signing key.
 
         Same name, arguments, units, sign and limits as aiopowerwall's local
         ``dispatch_battery_power``, so ``EnergySiteRouter`` can send it on
@@ -405,7 +435,9 @@ class EnergySite:
 
         Sends ``teg.dispatch_battery_power_request.resume_device_mode``; the
         gateway goes back to its configured operating mode. The gateway also
-        acknowledges it when no setpoint is active.
+        acknowledges it when no setpoint is active. Like
+        :meth:`dispatch_battery_power`, it acts only on a site with a signing
+        key.
         """
         return await self._command(
             "teg",

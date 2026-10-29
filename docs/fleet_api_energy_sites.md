@@ -388,7 +388,7 @@ tariff lacks either `seasons` or `energy_charges`.
 
 Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
 
-By default these commands are unsigned. The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods need a signature: the gateway can accept the unsigned command without physically taking effect, so without a signing key they raise `SignedCommandRequired` before any request. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+Without a signing key these commands are sent unsigned. Tesla's cloud accepts an unsigned command only for the four pre-pairing reads (`get_system_info`, `get_networking_status`, `get_signed_commands_public_key`, `list_authorized_clients`). It answered HTTP 400 to every other unsigned command tested on a live Powerwall 3 (2026-10-29), including `dispatch_battery_power`, `resume_battery_operation` and `schedule_backup_event`, so those need a signing key (see below). The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods never send the unsigned command: without a signing key they raise `SignedCommandRequired` before any request. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
 
 ### Client-signed device commands
 
@@ -399,17 +399,19 @@ site = api.energySites.create(energy_site_id, private_key=rsa_key, din=gateway_i
 await site.go_off_grid()
 ```
 
-The site signs only commands that need a signature and posts them to the undocumented `POST /api/1/energy_sites/{id}/device_command`. Every other command keeps the unsigned path, because a command the gateway accepts unsigned is less likely to fail that way.
+With a key, the site signs every device command except the four pre-pairing reads and posts it to the undocumented `POST /api/1/energy_sites/{id}/device_command`. Signed, every command tested on the live Powerwall 3 reached the gateway: `dispatch_battery_power` moved the battery, `resume_battery_operation` released it, and `schedule_backup_event`/`cancel_backup_event` added and removed the event.
 
 | Method | With a signing key | Without a key |
 |---|---|---|
+| `get_system_info`, `raw_networking_status`, `get_networking_status`, `get_signed_commands_public_key`, `list_authorized_clients` | unsigned | unsigned |
 | `set_island_mode`, `go_off_grid`, `reconnect_grid` | signed | raise `SignedCommandRequired` |
-| `get_backup_events`, `get_teg_config` (400 unsigned on observed gateways) | signed | unsigned |
-| every other device command | unsigned | unsigned |
+| every other device command | signed | unsigned (Tesla answers 400) |
+
+The fleet REST routes (`backup`, `storm_mode`, `operation`, `grid_import_export` and the other non-device-command methods) are not device commands and never sign.
 
 `None` means unsigned: there is no fallback to `api.rsa_private_key`. The signature expires after 30 seconds and has no counter, so the same bytes resent inside that window execute again; the library never retries a signed command. The reply is returned unchanged. A success-shaped reply does not prove the contactor moved: read `island_status` from `live_status()` after each step.
 
-On `Teslemetry`, a client key works the same way: the commands that need a signature are signed with that key and go through Teslemetry's `device_command` route. Without a client key, `TeslemetryEnergySite` never raises `SignedCommandRequired` for them. It calls Teslemetry's routes instead (`POST command/set_island_mode`, `GET command/backup_events`, `GET command/config`), and Teslemetry signs with its own key. Teslemetry's key must be `VERIFIED` on the gateway, or those routes answer 409 `energy_site_not_paired` and send nothing.
+On `Teslemetry`, a client key works the same way: every device command except the four pre-pairing reads is signed with that key and goes through Teslemetry's `device_command` route. `add_authorized_client()` with no `public_key` still calls Teslemetry's route, which registers Teslemetry's own key. Without a client key, `TeslemetryEnergySite` never raises `SignedCommandRequired`. It calls Teslemetry's routes instead (for example `POST command/set_island_mode`, `POST command/dispatch_battery_power`, `GET command/backup_events`, `GET command/config`), where Teslemetry signs with its own key. As of 2026-10-29 the `dispatch_battery_power`, `resume_battery_operation` and backup-event schedule/cancel routes still send unsigned and get Tesla's 400; a Teslemetry api change moves them to server signing. Teslemetry's key must be `VERIFIED` on the gateway, or a server-signed route answers 409 `energy_site_not_paired` and sends nothing.
 
 Use `list_authorized_clients()` only as a secondary, best-effort cloud check
 while pairing a local key. The reliable verification is a successful signed

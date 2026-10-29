@@ -1,9 +1,10 @@
 """Tests for the client-signed energy ``device_command`` transport.
 
-A site built with ``private_key`` and ``din`` signs only the commands that
-need a signature (``set_island_mode`` and the reads that return 400 unsigned)
-and posts them to ``device_command``. Every other command stays on the
-unsigned ``grpc_command`` path, and a site without a key behaves as before.
+A site built with ``private_key`` and ``din`` signs every device command except
+the four pre-pairing reads and posts it to ``device_command``: Tesla's cloud
+answered 400 to every other unsigned command on a live Powerwall 3. Those four
+stay on the unsigned ``grpc_command`` path, and a site without a key behaves as
+before.
 """
 
 from __future__ import annotations
@@ -86,6 +87,50 @@ def _envelope(
     envelope = transport_pb2.MessageEnvelope()
     envelope.ParseFromString(message.protobuf_message_as_bytes)
     return envelope
+
+
+# (method, args, category, request field) for every device command that is
+# signed when the site has a key.
+SIGNED_COMMANDS: list[tuple[str, tuple[Any, ...], str, str]] = [
+    ("wifi_scan", (), "common", "wifi_scan_request"),
+    ("get_device_cert", (), "common", "device_cert_request"),
+    ("get_cellular_info", (), "common", "get_cellular_info_request"),
+    ("check_for_update", (), "common", "check_for_update_request"),
+    ("check_for_update_urgency", (), "common", "check_for_update_urgency_request"),
+    ("check_internet", (), "common", "check_internet_request"),
+    ("set_local_site_config", (), "common", "set_local_site_config_request"),
+    (
+        "add_authorized_client",
+        (b"key",),
+        "authorization",
+        "add_authorized_client_request",
+    ),
+    (
+        "remove_authorized_client",
+        (b"key",),
+        "authorization",
+        "remove_authorized_client_request",
+    ),
+    ("get_backup_events", (), "teg", "get_backup_events_request"),
+    ("schedule_backup_event", (), "teg", "schedule_manual_backup_event_request"),
+    ("cancel_backup_event", (), "teg", "cancel_manual_backup_event_request"),
+    ("get_teg_config", (), "teg", "get_config_request"),
+    ("dispatch_battery_power", (-2000, 120), "teg", "dispatch_battery_power_request"),
+    ("resume_battery_operation", (), "teg", "dispatch_battery_power_request"),
+    ("set_island_mode", (EnergyIslandMode.ON_GRID,), "teg", "set_island_mode_request"),
+]
+
+# The pre-pairing reads Tesla's cloud accepts unsigned.
+UNSIGNED_COMMANDS: list[tuple[str, str, str]] = [
+    ("get_system_info", "common", "get_system_info_request"),
+    ("raw_networking_status", "common", "get_networking_status_request"),
+    (
+        "get_signed_commands_public_key",
+        "authorization",
+        "get_signed_commands_public_key_request",
+    ),
+    ("list_authorized_clients", "authorization", "list_authorized_clients_request"),
+]
 
 
 def _make_site(
@@ -245,47 +290,81 @@ class FleetSignedTransportTests(IsolatedAsyncioTestCase):
                 await call()
         request_mock.assert_not_called()
 
-    async def test_reads_that_fail_unsigned_go_signed_with_a_key(self) -> None:
-        for name, request_field in (
-            ("get_backup_events", "get_backup_events_request"),
-            ("get_teg_config", "get_config_request"),
-        ):
+    async def test_device_commands_go_signed_with_a_key(self) -> None:
+        for name, args, category, request_field in SIGNED_COMMANDS:
             with self.subTest(name=name):
                 site, request_mock = _make_site(EnergySite)
-                await getattr(site, name)()
+                await getattr(site, name)(*args)
                 path, body = _sent(request_mock)
                 self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/device_command")
                 message = _decode(base64.b64decode(body["data"]["routable_message"]))
                 _verify(message, DIN)
                 self.assertEqual(
-                    _envelope(message).teg.WhichOneof("message"), request_field
+                    getattr(_envelope(message), category).WhichOneof("message"),
+                    request_field,
                 )
 
-                site, request_mock = _make_site(EnergySite, private_key=None)
-                await getattr(site, name)()
-                path, body = _sent(request_mock)
-                self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/command")
-                self.assertEqual(
-                    body["command_properties"]["message"], {"teg": {request_field: {}}}
-                )
-
-    async def test_unsigned_commands_stay_unsigned_with_a_key(self) -> None:
-        calls: list[tuple[str, tuple[Any, ...]]] = [
-            ("get_system_info", ()),
-            ("list_authorized_clients", ()),
-            ("get_signed_commands_public_key", ()),
-            ("schedule_backup_event", ()),
-            ("cancel_backup_event", ()),
-            ("dispatch_battery_power", (5000, 60)),
-            ("resume_battery_operation", ()),
-        ]
-        for name, args in calls:
+    async def test_device_commands_without_a_key_stay_unsigned(self) -> None:
+        for name, args, category, request_field in SIGNED_COMMANDS:
+            if name == "set_island_mode":
+                continue
             with self.subTest(name=name):
-                site, request_mock = _make_site(EnergySite)
+                site, request_mock = _make_site(EnergySite, private_key=None)
                 await getattr(site, name)(*args)
                 path, body = _sent(request_mock)
                 self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/command")
                 self.assertEqual(body["command_type"], "grpc_command")
+                self.assertEqual(
+                    list(body["command_properties"]["message"][category]),
+                    [request_field],
+                )
+
+    async def test_dispatch_with_key_signs_the_setpoint(self) -> None:
+        site, request_mock = _make_site(EnergySite)
+        await site.dispatch_battery_power(-2000, 120)
+        message = _decode(
+            base64.b64decode(_sent(request_mock)[1]["data"]["routable_message"])
+        )
+        request = _envelope(message).teg.dispatch_battery_power_request
+        self.assertTrue(request.HasField("real_power"))
+        self.assertEqual(request.real_power.power_watts, -2000)
+        self.assertEqual(request.real_power.duration_seconds, 120)
+
+        request_mock.reset_mock()
+        await site.resume_battery_operation()
+        message = _decode(
+            base64.b64decode(_sent(request_mock)[1]["data"]["routable_message"])
+        )
+        request = _envelope(message).teg.dispatch_battery_power_request
+        self.assertTrue(request.HasField("resume_device_mode"))
+        self.assertFalse(request.HasField("real_power"))
+
+    async def test_signed_add_authorized_client_uses_proto_field_names(self) -> None:
+        site, request_mock = _make_site(EnergySite)
+        await site.add_authorized_client(b"key", description="HA")
+        message = _decode(
+            base64.b64decode(_sent(request_mock)[1]["data"]["routable_message"])
+        )
+        request = _envelope(message).authorization.add_authorized_client_request
+        self.assertEqual(request.public_key, b"key")
+        self.assertEqual(request.description, "HA")
+        self.assertEqual(
+            request.type,
+            authorization_types_pb2.AUTHORIZED_CLIENT_TYPE_CUSTOMER_MOBILE_APP,
+        )
+
+    async def test_pre_pairing_reads_stay_unsigned_with_a_key(self) -> None:
+        for name, category, request_field in UNSIGNED_COMMANDS:
+            with self.subTest(name=name):
+                site, request_mock = _make_site(EnergySite)
+                await getattr(site, name)()
+                path, body = _sent(request_mock)
+                self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/command")
+                self.assertEqual(body["command_type"], "grpc_command")
+                self.assertEqual(
+                    body["command_properties"]["message"],
+                    {category: {request_field: {}}},
+                )
 
 
 class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
@@ -307,20 +386,18 @@ class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
         self.assertEqual(request.mode, EnergyIslandMode.OFF_GRID)
         self.assertTrue(request.force)
 
-    async def test_reads_with_key_sign_through_super(self) -> None:
-        for name, request_field in (
-            ("get_backup_events", "get_backup_events_request"),
-            ("get_teg_config", "get_config_request"),
-        ):
+    async def test_device_commands_with_key_sign_through_super(self) -> None:
+        for name, args, category, request_field in SIGNED_COMMANDS:
             with self.subTest(name=name):
                 site, request_mock = _make_site(TeslemetryEnergySite)
-                await getattr(site, name)()
+                await getattr(site, name)(*args)
                 path, body = _sent(request_mock)
                 self.assertEqual(path, f"api/1/energy_sites/{SITE_ID}/device_command")
                 message = _decode(base64.b64decode(body["routable_message"]))
                 _verify(message, DIN)
                 self.assertEqual(
-                    _envelope(message).teg.WhichOneof("message"), request_field
+                    getattr(_envelope(message), category).WhichOneof("message"),
+                    request_field,
                 )
 
     async def test_island_mode_without_key_uses_the_server_signed_route(self) -> None:
@@ -355,13 +432,49 @@ class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
                     Method.GET, f"api/1/energy_sites/{SITE_ID}/command/{route}"
                 )
 
-    async def test_teslemetry_routes_stay_unsigned_with_a_key(self) -> None:
+    async def test_routes_without_key(self) -> None:
+        calls: list[tuple[str, tuple[Any, ...], str]] = [
+            ("dispatch_battery_power", (5000, 60), "dispatch_battery_power"),
+            ("resume_battery_operation", (), "resume_battery_operation"),
+            ("add_authorized_client", (), "add_authorized_client"),
+            ("remove_authorized_client", (b"key",), "remove_authorized_client"),
+        ]
+        for name, args, route in calls:
+            with self.subTest(name=name):
+                site, request_mock = _make_site(TeslemetryEnergySite, private_key=None)
+                await getattr(site, name)(*args)
+                request_mock.assert_awaited_once()
+                call = request_mock.await_args
+                assert call is not None
+                self.assertEqual(
+                    call.args,
+                    (Method.POST, f"api/1/energy_sites/{SITE_ID}/command/{route}"),
+                )
+
+    async def test_add_authorized_client_with_key_but_no_public_key_uses_route(
+        self,
+    ) -> None:
+        # Without a public key the route registers Teslemetry's own key, which
+        # the client key cannot sign for.
         site, request_mock = _make_site(TeslemetryEnergySite)
-        await site.dispatch_battery_power(5000, 60)
+        assert isinstance(site, TeslemetryEnergySite)
+        await site.add_authorized_client()
         path, _ = _sent(request_mock)
         self.assertEqual(
-            path, f"api/1/energy_sites/{SITE_ID}/command/dispatch_battery_power"
+            path, f"api/1/energy_sites/{SITE_ID}/command/add_authorized_client"
         )
+
+    async def test_pre_pairing_routes_stay_unsigned_with_a_key(self) -> None:
+        for name, route in (
+            ("get_networking_status", "networking_status"),
+            ("list_authorized_clients", "authorized_clients"),
+        ):
+            with self.subTest(name=name):
+                site, request_mock = _make_site(TeslemetryEnergySite)
+                await getattr(site, name)()
+                request_mock.assert_awaited_once_with(
+                    Method.GET, f"api/1/energy_sites/{SITE_ID}/command/{route}"
+                )
 
 
 class _LocalPowerwallSite:
