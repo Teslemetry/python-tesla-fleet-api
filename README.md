@@ -217,7 +217,7 @@ for the connection-event contract.
 
 ### Routing and Failover
 
-The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over on most errors. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
+The `Router` class composes an ordered list of two-or-more backends that share a common method surface and dispatches each method call down the chain, automatically failing over when a backend could not reach the device. `VehicleRouter` and `EnergySiteRouter` are thin entity-specific subclasses. A common setup is a local `VehicleBluetooth` primary with a cloud fallback (e.g. a `TeslemetryVehicle`), so commands go over Bluetooth when the vehicle is reachable and route to the cloud otherwise:
 
 ```python
 import asyncio
@@ -247,14 +247,19 @@ async def main():
 asyncio.run(main())
 ```
 
-The constructor is `Router(primary, secondary, *more_backends, health=None, on_result=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on any exception except `BluetoothUnconfirmedCommand`, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
+The constructor is `Router(primary, secondary, *more_backends, health=None, on_result=None)`; the two-argument form shown above is fully backward compatible, and any number of extra backends may follow to extend the chain. Each call is tried on the first backend that has the method and, on a failure that is safe to fail over, retried on the next backend that has it, returning the first success (raising the last error only if every applicable backend fails over). Non-callable attributes (e.g. `vin`) resolve to the first backend that has them.
 
-By default the router attempts the primary and fails over on any error, with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
+By default the router fails over only on failures in the backend's own path, listed in `tesla_fleet_api.router.FAILOVER_SAFE_ERRORS` and checked by `is_failover_safe(exc)`: the backend could not reach the device or got no answer (connection refused or reset, DNS, TLS, timeouts, `BleakError`, `BluetoothTransportError`, plain `BluetoothTimeout`, `VehicleOffline`), a transient server error (429, 500, 502, 503, 504, `EnergyGatewayUnreachable`), a failure of that backend's own key, token, subscription or size limit (for example a vehicle rejecting the BLE key, or `SignedCommandRequired`), `BluetoothCommandFailed`, or `NotImplementedError`. Any other exception, typically the device answering and rejecting the command, propagates without trying later backends, because the next backend reaches the same device and gets the same answer. `BluetoothUnconfirmedCommand` never fails over.
 
-You can also pass `on_result` — a sync or async callable `(exception, backend, method_name) -> bool` — to hook into every dispatched call's outcome, success or failure. On a backend exception during failover (every one except `BluetoothUnconfirmedCommand`) returning `True` lets failover continue to the next backend as normal, while `False` stops it and re-raises that exception immediately, so a command already known to fail on the next backend never gets sent there. On a successful call it's called the same way with `exception=None` and its return value ignored — the only hook available to observe a dispatch succeeding, e.g. to clear a repair a prior failure raised. For example, treating a BLE key rejection as terminal instead of falling over to the cloud, and clearing the repair once a command succeeds again:
+A backend library that tesla-fleet-api does not import can classify its own exceptions with a `failover_safe` class attribute: `True` marks a transport-level error safe to fail over, and `False` stops failover for an error that would otherwise match (for example an `OSError` subclass that means the device rejected the command). For example, aiopowerwall can set `failover_safe = True` on its connection error.
+
+The router attempts the primary with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
+
+You can also pass `on_result` — a sync or async callable `(exception, backend, method_name) -> bool` — to hook into every dispatched call's outcome, success or failure. On a backend exception during failover (every one except `BluetoothUnconfirmedCommand`) its return replaces the default policy: `True` continues to the next backend, and `False` stops and re-raises that exception immediately. Return `is_failover_safe(exception)` to keep the default policy while adding side effects. On a successful call it's called the same way with `exception=None` and its return value ignored — the only hook available to observe a dispatch succeeding, e.g. to clear a repair a prior failure raised. For example, treating a BLE key rejection as terminal instead of falling over to the cloud, and clearing the repair once a command succeeds again:
 
 ```python
 from tesla_fleet_api.exceptions import is_key_rejected
+from tesla_fleet_api.router import is_failover_safe
 
 def on_result(exc, backend, method_name):
     if exc is None:
@@ -263,7 +268,7 @@ def on_result(exc, backend, method_name):
     if is_key_rejected(exc):
         raise_repair(backend)  # your own repair/notification logic
         return False  # don't send this command to the cloud too
-    return True
+    return is_failover_safe(exc)  # keep the default policy
 
 vehicle = VehicleRouter(primary, secondary, on_result=on_result)
 ```
@@ -283,7 +288,7 @@ await router.operation(...)  # local first, cloud on failure
 
 Enable `DEBUG` logging for `tesla_fleet_api` to see which backend served a routed call and why failover happened.
 
-> **Warning:** Because a failed call is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. `BluetoothUnconfirmedCommand` is the exception: it propagates without failover because the BLE command may already have executed. When the primary is `VehicleBluetooth`, pass `confirmation="verify"` to resolve supported mutating command timeouts by state before they reach the router, and set `raise_unconfirmed=True` when callers must see still-ambiguous outcomes instead of the default best-effort success; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
+> **Warning:** Because a call that fails over is replayed on the next backend, a non-idempotent command (e.g. `honk_horn`, `actuate_trunk`, `door_unlock`, `charge_start`) that fails _mid-flight_ — after a backend may have already partially applied it — can be **double-executed** (or executed more than once across a longer chain) when it is retried on the next backend. This is a deliberate tradeoff of per-command failover. `BluetoothUnconfirmedCommand` is the exception: it propagates without failover because the BLE command may already have executed. When the primary is `VehicleBluetooth`, pass `confirmation="verify"` to resolve supported mutating command timeouts by state before they reach the router, and set `raise_unconfirmed=True` when callers must see still-ambiguous outcomes instead of the default best-effort success; callers needing exactly-once semantics for other commands should gate dispatch with an explicit `health` check or call the underlying backends directly.
 >
 > Dispatch is implemented via `__getattr__`, which does not proxy dunder methods, so `async with Router(...)` does **not** manage a backend's BLE connection lifecycle (`__aenter__`/`__aexit__`). Commands still auto-connect on send; for explicit connect/disconnect reach through `router.primary` (or `router.backends`).
 

@@ -1,6 +1,12 @@
 """Routing wrappers with per-command failover across backends."""
 
-from tesla_fleet_api.router.base import ResultHandler, HealthCheck, Router
+from tesla_fleet_api.router.base import (
+    FAILOVER_SAFE_ERRORS,
+    ResultHandler,
+    HealthCheck,
+    Router,
+    is_failover_safe,
+)
 from tesla_fleet_api.router.vehicle import VehicleRouter
 from tesla_fleet_api.router.energysite import (
     EnergySiteRouter,
@@ -17,6 +23,8 @@ __all__ = [
     "EnergySiteRouter",
     "HealthCheck",
     "ResultHandler",
+    "FAILOVER_SAFE_ERRORS",
+    "is_failover_safe",
     "LOCAL_LIVE_STATUS_KEYS",
     "LOCAL_SITE_INFO_KEYS",
     "merge_local_into_cloud",
