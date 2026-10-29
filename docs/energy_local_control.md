@@ -239,7 +239,14 @@ and fail over to the Teslemetry cloud otherwise - the same
 local-primary/cloud-fallback pattern `VehicleRouter` uses for vehicles. Calls
 that aiopowerwall does not implement locally yet, including `get_system_info()`
 and most energy-device gRPC commands, raise `NotImplementedError` from the
-local adapter and then fall through to the cloud backend. See [the README's
+local adapter and then fall through to the cloud backend. A local error
+fails over to the cloud only if `is_failover_safe()` accepts it: an `OSError`,
+`aiohttp.ClientConnectionError`, `NotImplementedError`, or an exception class
+with `failover_safe = True`. aiopowerwall's own exception classes subclass
+`Exception` directly, so they fail over only after aiopowerwall marks its
+connection errors `failover_safe = True`. A command the gateway answered and
+rejected is not sent to the cloud, because the cloud sends it to the same
+gateway. See [the README's
 Routing and Failover section](../README.md#routing-and-failover) for the
 general `Router` semantics (per-command failover, the double-execution caveat,
 and the `health` check).

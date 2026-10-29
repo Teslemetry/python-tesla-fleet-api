@@ -10,28 +10,126 @@ from typing import (
     Union,
 )
 
+import aiohttp
+import bleak.exc
+
 from tesla_fleet_api.const import LOGGER
-from tesla_fleet_api.exceptions import BluetoothUnconfirmedCommand, TeslaFleetError
+from tesla_fleet_api.exceptions import (
+    KEY_REJECTED_FAULTS,
+    BadGateway,
+    BluetoothCommandFailed,
+    BluetoothTimeout,
+    BluetoothTransportError,
+    BluetoothUnconfirmedCommand,
+    Forbidden,
+    GatewayTimeout,
+    InsufficientCredits,
+    InternalServerError,
+    InvalidScope,
+    InvalidToken,
+    LoginRequired,
+    MissingToken,
+    OAuthExpired,
+    OAuthInvalid,
+    PaymentRequired,
+    RateLimited,
+    ServiceUnavailable,
+    SessionInfoAuthenticationFault,
+    SignedCommandRequired,
+    SigningDisabled,
+    SubscriptionRequired,
+    TeslaFleetError,
+    TeslaFleetMessageFaultFieldExceedsMTU,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
+    VehicleOffline,
+    VehicleSubscriptionRequired,
+)
 
 PrimaryT = TypeVar("PrimaryT")
 SecondaryT = TypeVar("SecondaryT")
 
 # A health check may be a static bool, a sync callable returning bool, or an
 # async callable returning bool. When omitted the router attempts the primary
-# directly and fails over to the next backend on exception (no up-front probe).
+# directly and fails over to the next backend on a failover-safe exception (no
+# up-front probe).
 HealthCheck = Union[bool, Callable[[], bool], Callable[[], Awaitable[bool]]]
 
 # Called with (exception, backend, method_name) after every dispatched call.
 # On failure (any backend exception during per-command failover except
 # BluetoothUnconfirmedCommand) its return decides whether failover proceeds to
 # the next backend (True) or stops and re-raises that exception immediately
-# (False). On success it is called with exception=None and its return is
-# ignored - this is the only way to observe a *successful* dispatch (e.g. to
-# clear a repair raised by an earlier failure), since Router has no other
-# success hook.
+# (False), overriding the default ``is_failover_safe`` policy. On success it is
+# called with exception=None and its return is ignored - this is the only way to
+# observe a *successful* dispatch (e.g. to clear a repair raised by an earlier
+# failure), since Router has no other success hook.
 ResultHandler = Callable[
     [Union[BaseException, None], Any, str], Union[bool, Awaitable[bool]]
 ]
+
+
+# Failures that happened in one backend's own path before the device judged the
+# command, so the next backend - a different path to the same device - may
+# still succeed. Anything else (the device answered and rejected the command,
+# a bad argument, a library bug) is not failed over, because the next backend
+# reaches the same device and would get the same answer.
+FAILOVER_SAFE_ERRORS: tuple[type[BaseException], ...] = (
+    # The backend could not reach the device or got no answer: connection
+    # refused/reset, DNS, TLS, timeouts (``TimeoutError`` and
+    # ``ConnectionError`` are ``OSError`` subclasses).
+    OSError,
+    aiohttp.ClientConnectionError,
+    bleak.exc.BleakError,
+    BluetoothTransportError,
+    # A plain BluetoothTimeout is a read or an unanswered pre-write step;
+    # BluetoothUnconfirmedCommand never reaches this check.
+    BluetoothTimeout,
+    # A state check proved the command did not apply.
+    BluetoothCommandFailed,
+    # The cloud service or its link to the device did not answer.
+    VehicleOffline,
+    RateLimited,
+    InternalServerError,
+    BadGateway,
+    ServiceUnavailable,
+    GatewayTimeout,
+    # This backend's own credentials, session, account or path limits, which
+    # the next backend does not share. A vehicle rejecting a BLE key is the
+    # common case: the cloud signs with a different key.
+    *KEY_REJECTED_FAULTS,
+    SessionInfoAuthenticationFault,
+    SigningDisabled,
+    SignedCommandRequired,
+    TeslaFleetMessageFaultFieldExceedsMTU,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
+    InvalidToken,
+    MissingToken,
+    OAuthExpired,
+    OAuthInvalid,
+    LoginRequired,
+    PaymentRequired,
+    SubscriptionRequired,
+    VehicleSubscriptionRequired,
+    InsufficientCredits,
+    Forbidden,
+    InvalidScope,
+    # The backend does not implement the method; nothing was sent.
+    NotImplementedError,
+)
+
+
+def is_failover_safe(exc: BaseException) -> bool:
+    """Whether the router may retry a call that raised ``exc`` on the next backend.
+
+    An exception (or its class) with a ``failover_safe`` bool attribute decides
+    for itself. This lets a backend library that tesla-fleet-api cannot import
+    (e.g. aiopowerwall) mark its own transport errors ``failover_safe = True``,
+    or mark an error that would otherwise match ``False``. Every other
+    exception is safe only when it is an instance of ``FAILOVER_SAFE_ERRORS``.
+    """
+    marker = getattr(exc, "failover_safe", None)
+    if isinstance(marker, bool):
+        return marker
+    return isinstance(exc, FAILOVER_SAFE_ERRORS)
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -61,13 +159,15 @@ class Router(Generic[PrimaryT, SecondaryT]):
     backend that has them.
 
     Dispatch to a callable performs *per-command* failover: the backends that
-    expose the method are attempted in order, and if one raises any exception
-    other than ``BluetoothUnconfirmedCommand`` (a connection failure or a
-    provably pre-submission transport error such as notify setup or GATT
-    characteristic resolution failure), the same call is automatically retried
-    on the next backend that has it, with the same arguments. The error only
-    propagates when every applicable backend fails, in which case the last error
-    is raised. Each attempted backend emits a ``DEBUG`` log line with the routed
+    expose the method are attempted in order, and if one raises an exception
+    that :func:`is_failover_safe` accepts (the backend could not reach the
+    device or got no answer, a transient server error, or a failure of that
+    backend's own credentials or path - see ``FAILOVER_SAFE_ERRORS``), the same
+    call is automatically retried on the next backend that has it, with the same
+    arguments. Any other exception - typically the device answering and
+    rejecting the command, which the next backend would reach too - propagates
+    immediately without trying later backends. When every applicable backend
+    fails over, the last error is raised. Each attempted backend emits a ``DEBUG`` log line with the routed
     command name, backend class, and success/error result.
 
     .. warning::
@@ -84,11 +184,11 @@ class Router(Generic[PrimaryT, SecondaryT]):
         or call the underlying backends directly.
 
     ``BluetoothUnconfirmedCommand`` (a lost ack for a mutating BLE command
-    already written to the vehicle - see that exception's docstring) is the
-    one exception per-command failover deliberately does **not** replay: the
-    command may already have executed, so trying the next backend would risk
-    double-executing it. It propagates to the caller unchanged instead of
-    triggering failover, on any backend in the chain.
+    already written to the vehicle - see that exception's docstring) is never
+    replayed, not even by an ``on_result`` handler: the command may already
+    have executed, so trying the next backend would risk double-executing it.
+    It propagates to the caller unchanged instead of triggering failover, on
+    any backend in the chain.
 
     The health check may be provided as a ``bool``, a sync callable, or an async
     callable returning ``bool``. It gates **only the first backend** (the
@@ -106,9 +206,12 @@ class Router(Generic[PrimaryT, SecondaryT]):
     (a backend raising during per-command failover; ``BluetoothUnconfirmedCommand``
     excepted — it never reaches the handler) its return value, sync or async,
     decides whether failover continues to the next backend (``True``) or stops
-    and re-raises that exception immediately (``False``), which lets a caller
-    both suppress a failover it knows would also fail and run side effects (e.g.
-    raising a repair) at the point of failure. On success it is called with
+    and re-raises that exception immediately (``False``). It replaces the
+    default :func:`is_failover_safe` policy for that call, in both directions,
+    which lets a caller suppress a failover it knows would also fail, force one
+    the default would refuse, and run side effects (e.g. raising a repair) at
+    the point of failure. A handler that only adds side effects should return
+    ``is_failover_safe(exception)`` to keep the default policy. On success it is called with
     ``exception=None`` and its return value is ignored — e.g. to clear a repair
     raised by an earlier failure once a command goes through again. A handler
     that itself raises propagates as-is, uncaught. The handler only ever fires
@@ -204,7 +307,7 @@ class Router(Generic[PrimaryT, SecondaryT]):
                         e,
                     )
                     raise
-                except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - any failure -> next backend
+                except (Exception, TeslaFleetError) as e:  # noqa: BLE001 - classified below
                     last_exc = e
                     LOGGER.debug(
                         "command=%s %s result=error error=%s: %s",
@@ -213,9 +316,13 @@ class Router(Generic[PrimaryT, SecondaryT]):
                         type(e).__name__,
                         e,
                     )
-                    if self._on_result is not None and not await _maybe_await(
-                        self._on_result(e, backend, name)
-                    ):
+                    if self._on_result is not None:
+                        fail_over = await _maybe_await(
+                            self._on_result(e, backend, name)
+                        )
+                    else:
+                        fail_over = is_failover_safe(e)
+                    if not fail_over:
                         raise
                     continue
                 LOGGER.debug(

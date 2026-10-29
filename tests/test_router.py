@@ -8,15 +8,31 @@ backend instances so no real BLE hardware or network access is required.
 import asyncio
 from unittest import IsolatedAsyncioTestCase
 
+import aiohttp
+from bleak.exc import BleakError
+
 from tesla_fleet_api.exceptions import (
     BluetoothCommandFailed,
     BluetoothTimeout,
+    BluetoothTransportError,
     BluetoothUnconfirmedCommand,
+    DeviceUnexpectedResponse,
+    EnergyGatewayUnreachable,
+    InvalidCommand,
+    InvalidTeslemetryToken,
+    NotOnWhitelistFault,
+    RateLimited,
+    ServiceUnavailable,
+    SignedCommandRequired,
+    TeslaFleetMessageFaultInvalidCommand,
+    TeslaFleetMessageFaultResponseSizeExceedsMTU,
+    VehicleOffline,
 )
 from tesla_fleet_api.router import (
     EnergySiteRouter,
     Router,
     VehicleRouter,
+    is_failover_safe,
 )
 
 
@@ -371,6 +387,141 @@ class RouterResultHandlerTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(calls, [])
         self.assertEqual(fallback.shared_calls, 0)
+
+
+class _GatewayRejected(Exception):
+    """Stands in for a backend library's "the device rejected it" error."""
+
+
+class _GatewayUnreachable(Exception):
+    """Stands in for a backend library's transport error, marked by attribute."""
+
+    failover_safe = True
+
+
+class _RejectedOSError(OSError):
+    """An OSError subclass a backend marks as a device rejection."""
+
+    failover_safe = False
+
+
+class RouterFailoverPolicyTests(IsolatedAsyncioTestCase):
+    """The default policy fails over only on allowlisted path failures."""
+
+    SAFE = (
+        ConnectionError("refused"),
+        ConnectionResetError("reset"),
+        TimeoutError("timed out"),
+        aiohttp.ServerDisconnectedError(),
+        BleakError("connect failed"),
+        BluetoothTransportError(),
+        BluetoothTimeout(),
+        BluetoothCommandFailed(),
+        VehicleOffline(),
+        RateLimited(),
+        ServiceUnavailable(),
+        EnergyGatewayUnreachable(),
+        NotOnWhitelistFault(),
+        TeslaFleetMessageFaultResponseSizeExceedsMTU(),
+        SignedCommandRequired(),
+        InvalidTeslemetryToken(),
+        NotImplementedError("not on this backend"),
+        _GatewayUnreachable("local gateway unavailable"),
+    )
+    REJECTED = (
+        InvalidCommand(),
+        TeslaFleetMessageFaultInvalidCommand(),
+        DeviceUnexpectedResponse(),
+        ValueError("bad argument"),
+        _GatewayRejected("gateway rejected battery dispatch"),
+        _RejectedOSError("gateway rejected"),
+    )
+
+    async def test_transport_error_fails_over(self):
+        for exc in self.SAFE:
+            with self.subTest(exc=type(exc).__name__):
+                self.assertTrue(is_failover_safe(exc))
+                primary = _FakePrimary(exc=exc)
+                fallback = _FakeFallback()
+                router = EnergySiteRouter(primary, fallback)
+
+                result = await router.shared(1)
+
+                self.assertEqual(result, "fallback:1")
+                self.assertEqual(primary.shared_calls, 1)
+                self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_device_rejection_does_not_fail_over(self):
+        for exc in self.REJECTED:
+            with self.subTest(exc=type(exc).__name__):
+                self.assertFalse(is_failover_safe(exc))
+                primary = _FakePrimary(exc=exc)
+                fallback = _FakeFallback()
+                router = EnergySiteRouter(primary, fallback)
+
+                with self.assertRaises(type(exc)) as raised:
+                    await router.shared(1)
+
+                self.assertIs(raised.exception, exc)
+                self.assertEqual(primary.shared_calls, 1)
+                self.assertEqual(fallback.shared_calls, 0)
+
+    async def test_rejection_stops_chain_at_middle_backend(self):
+        first = _FakeBackend("first", fail=True)
+        middle = _FakeBackend("middle", exc=InvalidCommand())
+        last = _FakeBackend("last")
+        router = Router(first, middle, last)
+
+        with self.assertRaises(InvalidCommand):
+            await router.cmd(1)
+
+        self.assertEqual([first.calls, middle.calls, last.calls], [1, 1, 0])
+
+    async def test_handler_true_overrides_rejection(self):
+        primary = _FakePrimary(exc=_GatewayRejected("rejected"))
+        fallback = _FakeFallback()
+        router = VehicleRouter(
+            primary, fallback, on_result=lambda exc, backend, name: True
+        )
+
+        result = await router.shared(2)
+
+        self.assertEqual(result, "fallback:2")
+        self.assertEqual(fallback.shared_calls, 1)
+
+    async def test_handler_false_overrides_transport_error(self):
+        primary = _FakePrimary(exc=TimeoutError("timed out"))
+        fallback = _FakeFallback()
+        router = VehicleRouter(
+            primary, fallback, on_result=lambda exc, backend, name: False
+        )
+
+        with self.assertRaises(TimeoutError):
+            await router.shared(3)
+
+        self.assertEqual(fallback.shared_calls, 0)
+
+    async def test_handler_can_keep_default_policy(self):
+        seen: list[BaseException | None] = []
+
+        def on_result(exc, backend, name):
+            seen.append(exc)
+            return exc is None or is_failover_safe(exc)
+
+        rejected = _GatewayRejected("rejected")
+        router = VehicleRouter(
+            _FakePrimary(exc=rejected), _FakeFallback(), on_result=on_result
+        )
+        with self.assertRaises(_GatewayRejected):
+            await router.shared(4)
+
+        router = VehicleRouter(
+            _FakePrimary(fail=True), _FakeFallback(), on_result=on_result
+        )
+        self.assertEqual(await router.shared(5), "fallback:5")
+        self.assertIs(seen[0], rejected)
+        self.assertIsInstance(seen[1], ConnectionError)
+        self.assertIsNone(seen[2])
 
 
 class _FakeBackend:
