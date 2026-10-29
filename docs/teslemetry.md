@@ -643,7 +643,9 @@ custom routes `POST /api/1/energy_sites/{id}/command/dispatch_battery_power`
 and `POST /api/1/energy_sites/{id}/command/resume_battery_operation`.
 `power_watts` is battery power in watts: positive discharges, negative
 charges. `duration_seconds` is an integer from 1 to 86400. The library raises
-`ValueError` before any request on other values. See
+`ValueError` before any request on other values. If the site was created with
+a signing `private_key` and `din`, both methods sign the command with that key
+and go through Teslemetry's `device_command` route instead. See
 [Fleet API for Energy Sites](fleet_api_energy_sites.md#available-commands).
 
 ```python

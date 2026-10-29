@@ -335,11 +335,11 @@ def _parse_gateway_address(payload: Any) -> str | None:
 class TeslemetryEnergySite(EnergySite):
     """Teslemetry specific energy site.
 
-    With a signing ``private_key`` (see :class:`EnergySite`), a command that
-    needs a signature calls ``super()`` to sign it with that key and sends it
-    through Teslemetry's ``device_command`` route. Without a key, it uses its
-    Teslemetry route, where Teslemetry signs it with its own key. That key
-    must be verified on the gateway, or the route answers 409
+    With a signing ``private_key`` (see :class:`EnergySite`), every device
+    command except the four pre-pairing reads is signed with that key and
+    sent through Teslemetry's ``device_command`` route. Without a key, a
+    command uses its Teslemetry route, where Teslemetry signs it with its own
+    key. That key must be verified on the gateway, or the route answers 409
     ``energy_site_not_paired`` and sends nothing.
     """
 
@@ -421,7 +421,9 @@ class TeslemetryEnergySite(EnergySite):
         Teslemetry custom endpoint.
 
         All arguments are optional — if omitted, the Teslemetry server
-        pre-populates the request with its own key details.
+        pre-populates the request with its own key details. A site with a
+        signing key signs the request with that key instead, when
+        ``public_key`` is given.
 
         Args:
             public_key: The public key to register. Either raw DER bytes in
@@ -432,6 +434,15 @@ class TeslemetryEnergySite(EnergySite):
             key_type: The type of key being registered.
             authorized_client_type: The authorized client type.
         """
+        if self._signer is not None and public_key is not None:
+            kwargs: dict[str, Any] = {}
+            if description is not None:
+                kwargs["description"] = description
+            if key_type is not None:
+                kwargs["key_type"] = key_type
+            if authorized_client_type is not None:
+                kwargs["authorized_client_type"] = authorized_client_type
+            return await super().add_authorized_client(public_key, **kwargs)
         data: dict[str, Any] = {}
         if public_key is not None:
             if isinstance(public_key, bytes):
@@ -509,7 +520,8 @@ class TeslemetryEnergySite(EnergySite):
 
     async def remove_authorized_client(self, public_key: bytes | str) -> dict[str, Any]:
         """Remove an authorized client from the energy gateway via the
-        Teslemetry custom endpoint.
+        Teslemetry custom endpoint. A site with a signing key signs the
+        request with that key instead.
 
         Security note: unlike adding a client, removal requires no physical
         presence proof - an authenticated session is sufficient, including
@@ -523,6 +535,8 @@ class TeslemetryEnergySite(EnergySite):
                 so a listed record round-trips to removal with no
                 re-encoding.
         """
+        if self._signer is not None:
+            return await super().remove_authorized_client(public_key)
         if isinstance(public_key, bytes):
             public_key_b64 = base64.b64encode(public_key).decode("ascii")
         else:
@@ -536,13 +550,17 @@ class TeslemetryEnergySite(EnergySite):
     async def dispatch_battery_power(
         self, power_watts: float, duration_seconds: int
     ) -> dict[str, Any]:
-        """Request a timed battery power setpoint via the Teslemetry custom
-        endpoint.
+        """Request a timed battery power setpoint on the energy gateway.
 
         ``power_watts`` is battery power in watts: **positive discharges,
         negative charges**. The gateway holds it for ``duration_seconds``
         (1 to 86400). See :meth:`EnergySite.dispatch_battery_power`.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route.
         """
+        if self._signer is not None:
+            return await super().dispatch_battery_power(power_watts, duration_seconds)
         validate_dispatch_battery_power(power_watts, duration_seconds)
         return await self._request(
             Method.POST,
@@ -554,8 +572,13 @@ class TeslemetryEnergySite(EnergySite):
         )
 
     async def resume_battery_operation(self) -> dict[str, Any]:
-        """Release a :meth:`dispatch_battery_power` setpoint via the Teslemetry
-        custom endpoint."""
+        """Release a :meth:`dispatch_battery_power` setpoint.
+
+        With a signing key this signs the command with that key. Without one
+        it calls the Teslemetry route.
+        """
+        if self._signer is not None:
+            return await super().resume_battery_operation()
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command/resume_battery_operation",
