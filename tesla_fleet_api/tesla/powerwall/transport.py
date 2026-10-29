@@ -16,19 +16,16 @@ from __future__ import annotations
 import asyncio
 import gzip
 import logging
-import math
 import re
-import struct
-import time
-import uuid
 from contextlib import suppress
 from typing import Any, Final, cast
 
 import aiohttp
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from tesla_protocol.energy_device import signed_message_pb2
 
+from ..energy_signing import EnergyDeviceSigner
 from .exceptions import (
     PowerwallAuthenticationError,
     PowerwallConnectionError,
@@ -38,16 +35,6 @@ from .exceptions import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# v1r signature TLV tag identifiers — signed_message_pb2, enum Tag.
-_TAG_SIGNATURE_TYPE: Final = signed_message_pb2.TAG_SIGNATURE_TYPE
-_TAG_DOMAIN: Final = signed_message_pb2.TAG_DOMAIN
-_TAG_PERSONALIZATION: Final = signed_message_pb2.TAG_PERSONALIZATION
-_TAG_EXPIRES_AT: Final = signed_message_pb2.TAG_EXPIRES_AT
-_TAG_END: Final = signed_message_pb2.TAG_END
-
-_SIGNATURE_TYPE_RSA: Final = signed_message_pb2.SIGNATURE_TYPE_RSA
-_DOMAIN_ENERGY_DEVICE: Final = signed_message_pb2.DOMAIN_ENERGY_DEVICE
 
 # Signed messages must be consumed by the gateway within this window.
 _SIGNATURE_TTL_SECONDS: Final = 12
@@ -69,11 +56,6 @@ def _decompress(content: bytes) -> bytes:
         with suppress(OSError):
             return gzip.decompress(content)
     return content
-
-
-def _tlv(tag: int, value: bytes) -> bytes:
-    """Encode a single tag-length-value entry."""
-    return bytes([tag, len(value)]) + value
 
 
 def _customer_password(gateway_password: str) -> str:
@@ -113,12 +95,8 @@ class V1rTransport:
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._token: str | None = None
         self._token_lock = asyncio.Lock()
-        self._private_key = self._load_private_key(rsa_private_key_pem)
-        # PKCS1 DER of the public key — sent as the v1r KeyIdentity so the
-        # gateway can look up the registered key.
-        self._public_key_der: bytes = self._private_key.public_key().public_bytes(
-            serialization.Encoding.DER,
-            serialization.PublicFormat.PKCS1,
+        self._signer = EnergyDeviceSigner(
+            self._load_private_key(rsa_private_key_pem), ttl=_SIGNATURE_TTL_SECONDS
         )
 
     # ── Public API ──────────────────────────────────────────────────────────
@@ -349,47 +327,10 @@ class V1rTransport:
         except TimeoutError as err:
             raise PowerwallConnectionError("v1r POST timed out") from err
 
-    async def _build_signed_request(
-        self, envelope_bytes: bytes, din: str
-    ) -> bytes:
+    async def _build_signed_request(self, envelope_bytes: bytes, din: str) -> bytes:
         """Wrap `envelope_bytes` in a signed RoutableMessage and serialize it.
 
         Signing is offloaded to a thread because RSA-4096 with SHA-512 is
         ~10 ms of CPU work and would otherwise block the event loop.
         """
-        routable = signed_message_pb2.RoutableMessage()
-        routable.to_destination.domain = _DOMAIN_ENERGY_DEVICE
-        routable.protobuf_message_as_bytes = envelope_bytes
-        routable.uuid = uuid.uuid4().bytes
-
-        expires_at = math.ceil(time.time()) + _SIGNATURE_TTL_SECONDS
-        tlv_payload = self._build_tlv(din, expires_at, envelope_bytes)
-        signature = await asyncio.to_thread(self._sign, tlv_payload)
-
-        routable.signature_data.signer_identity.public_key = self._public_key_der
-        routable.signature_data.rsa_data.expires_at = expires_at
-        routable.signature_data.rsa_data.signature = signature
-
-        serialized: bytes = routable.SerializeToString()
-        return serialized
-
-    @staticmethod
-    def _build_tlv(din: str, expires_at: int, inner: bytes) -> bytes:
-        return b"".join(
-            (
-                _tlv(_TAG_SIGNATURE_TYPE, bytes([_SIGNATURE_TYPE_RSA])),
-                _tlv(_TAG_DOMAIN, bytes([_DOMAIN_ENERGY_DEVICE])),
-                _tlv(_TAG_PERSONALIZATION, din.encode("ascii")),
-                _tlv(_TAG_EXPIRES_AT, struct.pack(">I", expires_at)),
-                bytes([_TAG_END]),
-                inner,
-            )
-        )
-
-    def _sign(self, tlv_payload: bytes) -> bytes:
-        signature: bytes = self._private_key.sign(
-            data=tlv_payload,
-            padding=padding.PKCS1v15(),
-            algorithm=hashes.SHA512(),
-        )
-        return signature
+        return await asyncio.to_thread(self._signer.sign, envelope_bytes, din)
