@@ -388,7 +388,7 @@ tariff lacks either `seasons` or `energy_charges`.
 
 Energy gateways (Powerwalls, etc.) support gRPC commands sent via `POST /api/1/energy_sites/{id}/command`. These are undocumented Tesla API endpoints that communicate directly with the gateway hardware. All device command methods require the `energy_cmds` scope.
 
-Without a signing key these commands are sent unsigned. Tesla's cloud accepts an unsigned command only for the four pre-pairing reads (`get_system_info`, `get_networking_status`, `get_signed_commands_public_key`, `list_authorized_clients`). It answered HTTP 400 to every other unsigned command tested on a live Powerwall 3 (2026-10-29), including `dispatch_battery_power`, `resume_battery_operation` and `schedule_backup_event`, so those need a signing key (see below). The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods never send the unsigned command: without a signing key they raise `SignedCommandRequired` before any request. For registering a key and pairing it with a signed local LAN control path via the sibling `aiopowerwall` library, see [Energy: Local Control](energy_local_control.md).
+Without a signing key these commands are sent unsigned. Tesla's cloud accepts an unsigned command only for the four pre-pairing reads (`get_system_info`, `get_networking_status`, `get_signed_commands_public_key`, `list_authorized_clients`). It answered HTTP 400 to every other unsigned command tested on a live Powerwall 3 (2026-10-29), including `dispatch_battery_power`, `resume_battery_operation` and `schedule_backup_event`, so those need a signing key (see below). The actuating `set_island_mode`/`go_off_grid`/`reconnect_grid` methods never send the unsigned command: without a signing key they raise `SignedCommandRequired` before any request. For registering a key and pairing it with a signed local LAN control path via `tesla_fleet_api.tesla.powerwall`, see [Energy: Local Control](energy_local_control.md).
 
 ### Client-signed device commands
 
@@ -452,7 +452,7 @@ gateway refuses (it does not clamp) a request above its power limit, seen at
 10,000 W, which can be below the combined battery rating. On the signed path
 that refusal raises `DeviceUnexpectedResponse` with code 11 (OUT_OF_RANGE).
 The method has the same name,
-arguments, units, sign and limits as aiopowerwall's local
+arguments, units, sign and limits as `PowerwallClient`'s local
 `dispatch_battery_power`, so `EnergySiteRouter` can send it on either path.
 
 ### Example

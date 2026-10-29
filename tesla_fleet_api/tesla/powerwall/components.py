@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from .models import ComponentsPayload, ConfigPayload, StatusPayload
 
@@ -31,13 +31,16 @@ def _path(data: Any, *keys: str | int) -> Any:
     """Walk nested mappings and lists; return None if a step is missing."""
     for key in keys:
         if isinstance(key, int):
-            if not isinstance(data, list) or not 0 <= key < len(data):
+            if not isinstance(data, list):
                 return None
-            data = data[key]
+            items = cast(list[Any], data)
+            if not 0 <= key < len(items):
+                return None
+            data = items[key]
         else:
             if not isinstance(data, Mapping):
                 return None
-            data = data.get(key)
+            data = cast(Mapping[str, Any], data).get(key)
     return data
 
 
@@ -46,14 +49,18 @@ def component(
 ) -> Mapping[str, Any] | None:
     """Return the ``kind`` component at ``slot``, or None if absent."""
     item = _path(components, "components", kind, slot)
-    return item if isinstance(item, Mapping) else None
+    return cast(Mapping[str, Any], item) if isinstance(item, Mapping) else None
 
 
 def _signal(item: Mapping[str, Any] | None, name: str) -> SignalValue | None:
     if item is None:
         return None
-    for signal in item.get("signals") or ():
-        if not isinstance(signal, Mapping) or signal.get("name") != name:
+    signals: Any = item.get("signals") or ()
+    for signal in signals:
+        if not isinstance(signal, Mapping):
+            continue
+        signal = cast(Mapping[str, Any], signal)
+        if signal.get("name") != name:
             continue
         for field in ("value", "textValue", "boolValue"):
             value = signal.get(field)
@@ -156,8 +163,9 @@ def _status_battery_dins(status: StatusPayload) -> list[str]:
         return []
     return [
         din
-        for block in blocks
-        if isinstance(block, Mapping) and (din := _din(block)) is not None
+        for block in cast(list[Any], blocks)
+        if isinstance(block, Mapping)
+        and (din := _din(cast(Mapping[str, Any], block))) is not None
     ]
 
 
@@ -166,8 +174,8 @@ def _bms_slots(components: ComponentsPayload) -> list[int]:
     items = _path(components, "components", "bms")
     if not isinstance(items, list):
         return []
-    slots = []
-    for slot in range(len(items)):
+    slots: list[int] = []
+    for slot in range(len(cast(list[Any], items))):
         full = component_float(components, "bms", "BMS_nominalFullPackEnergy", slot)
         if full is not None and full > 0:
             slots.append(slot)
@@ -196,7 +204,7 @@ def _ghost_filtered_bms_slots(
         return slots
     aggregate_kwh = aggregate_wh / 1000
 
-    ghosts = []
+    ghosts: list[int] = []
     for slot in slots:
         if component_serial(components, slot):
             continue
@@ -277,7 +285,9 @@ def battery_units(
     Units are ordered by block: each Powerwall, then its expansions.
     """
     blocks: list[Mapping[str, Any]] = [
-        b for b in (config.get("battery_blocks") or []) if isinstance(b, Mapping)
+        cast(Mapping[str, Any], b)
+        for b in cast(list[Any], config.get("battery_blocks") or [])
+        if isinstance(b, Mapping)
     ]
     known = {_din(b) for b in blocks}
     for status_din in _status_battery_dins(status):
@@ -291,8 +301,9 @@ def battery_units(
     expansion_dins_by_block = [
         [
             din
-            for expansion in (block.get("battery_expansions") or [])
-            if isinstance(expansion, Mapping) and (din := _din(expansion))
+            for expansion in cast(list[Any], block.get("battery_expansions") or [])
+            if isinstance(expansion, Mapping)
+            and (din := _din(cast(Mapping[str, Any], expansion)))
         ]
         for block in blocks
     ]

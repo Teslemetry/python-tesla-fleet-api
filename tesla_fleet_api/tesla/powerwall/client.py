@@ -25,7 +25,7 @@ import json
 import logging
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from types import TracebackType
 from typing import Any, Final, cast
 
@@ -138,7 +138,7 @@ def _lookup(data: Any, *keys: str) -> Any:
     for key in keys:
         if not isinstance(data, Mapping):
             return None
-        data = data.get(key)
+        data = cast(Mapping[str, Any], data).get(key)
     return data
 
 
@@ -293,7 +293,7 @@ class PowerwallClient:
             raise PowerwallProtocolError(
                 f"Unexpected SoE payload: {data!r}"
             )
-        return float(data["percentage"])
+        return float(cast(Mapping[str, Any], data)["percentage"])
 
     async def get_battery_soe(self) -> float:
         """Return the **user-facing** state-of-charge percentage (0-100).
@@ -314,7 +314,7 @@ class PowerwallClient:
             raise PowerwallProtocolError(
                 f"Unexpected grid_status payload: {data!r}"
             )
-        return str(data["grid_status"])
+        return str(cast(Mapping[str, Any], data)["grid_status"])
 
     # ── TEDAPI v1r reads ────────────────────────────────────────────────────
 
@@ -462,7 +462,7 @@ class PowerwallClient:
 
         Raises :class:`ValueError` if ``mode`` is not a non-empty string.
         """
-        if not isinstance(mode, str) or not mode:
+        if not isinstance(mode, str) or not mode:  # pyright: ignore[reportUnnecessaryIsInstance]
             raise ValueError("mode must be a non-empty string")
         await self.write_config({"strategy.TOU_mode": mode})
 
@@ -685,7 +685,7 @@ class PowerwallClient:
 
         Verified on Powerwall 3 firmware 26.26.4.
         """
-        if isinstance(power_watts, bool) or not isinstance(
+        if isinstance(power_watts, bool) or not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
             power_watts, (int, float)
         ):
             raise ValueError("power_watts must be a finite number")
@@ -868,7 +868,7 @@ class PowerwallClient:
         "not implemented" (code 12), as Powerwall 3 firmware 26.26.4 does, and
         :class:`PowerwallCommandError` for any other refusal.
         """
-        if not isinstance(csms_base_url, str) or not csms_base_url:
+        if not isinstance(csms_base_url, str) or not csms_base_url:  # pyright: ignore[reportUnnecessaryIsInstance]
             raise ValueError("csms_base_url must be a non-empty string")
         din = await self.connect()
 
@@ -1028,7 +1028,7 @@ class PowerwallClient:
         )
         site_info = config.get("site_info")
         saved_reserve = (
-            site_info.get("backup_reserve_percent")
+            cast(Mapping[str, Any], site_info).get("backup_reserve_percent")
             if isinstance(site_info, Mapping)
             else None
         )
@@ -1302,8 +1302,9 @@ class PowerwallClient:
             raise PowerwallProtocolError("config.json is not an object")
         # Older firmwares occasionally omit `battery_blocks`; downstream
         # code in HA expects it to exist.
-        data.setdefault("battery_blocks", [])
-        return data
+        config = cast(dict[str, Any], data)
+        config.setdefault("battery_blocks", [])
+        return config
 
     async def _fetch_firmware(self) -> FirmwareDetails:
         din = await self.connect()
@@ -1368,7 +1369,7 @@ class PowerwallClient:
             raise PowerwallProtocolError(
                 f"{what} payload is not an object: {type(data).__name__}"
             )
-        return data
+        return cast(dict[str, Any], data)
 
     # ── Internals: FileStore + TEG ──────────────────────────────────────────
 
@@ -1418,7 +1419,7 @@ class PowerwallClient:
         message_cls: Any,
         request_field: str,
         response_field: str,
-        populate: Any,
+        populate: Callable[[Any], None],
         allow_missing_response: bool = False,
     ) -> transport_pb2.MessageEnvelope:
         """Issue a ``MessageEnvelope.<category>`` command and return the response.
@@ -1566,7 +1567,7 @@ class PowerwallClient:
             if not isinstance(existing, dict):
                 existing = {}
                 target[key] = existing
-            target = existing
+            target = cast(dict[str, Any], existing)
         target[keys[-1]] = value
 
 
@@ -1658,8 +1659,12 @@ def current_power(status: StatusPayload) -> dict[str, float | None]:
         return {}
     return {
         str(m.get("location", "")).upper(): m.get("realPowerW")
-        for m in meters
-        if isinstance(m, Mapping) and m.get("location") is not None
+        for m in (
+            cast(Mapping[str, Any], item)
+            for item in cast(list[Any], meters)
+            if isinstance(item, Mapping)
+        )
+        if m.get("location") is not None
     }
 
 

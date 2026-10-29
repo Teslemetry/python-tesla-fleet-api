@@ -36,7 +36,7 @@ Design notes:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from .authorized_clients import AuthorizedClients, parse_authorized_clients
 from .client import PowerwallClient, battery_level, raw_to_scaled_reserve
@@ -82,7 +82,7 @@ def _instant_power(meters: Mapping[str, Any], location: str) -> float | None:
     entry = meters.get(location)
     if not isinstance(entry, Mapping):
         return None
-    value = entry.get("instant_power")
+    value = cast(Mapping[str, Any], entry).get("instant_power")
     if not isinstance(value, (int, float)):
         return None
     return float(value)
@@ -93,10 +93,10 @@ def _system_status_field(status: Mapping[str, Any], field: str) -> float | None:
     control = status.get("control")
     if not isinstance(control, Mapping):
         return None
-    system_status = control.get("systemStatus")
+    system_status = cast(Mapping[str, Any], control).get("systemStatus")
     if not isinstance(system_status, Mapping):
         return None
-    value = system_status.get(field)
+    value = cast(Mapping[str, Any], system_status).get(field)
     if not isinstance(value, (int, float)):
         return None
     return float(value)
@@ -331,7 +331,7 @@ class PowerwallEnergySite:
         site_info = config.get("site_info")
         if isinstance(site_info, Mapping) and "backup_reserve_percent" in site_info:
             result["backup_reserve_percent"] = raw_to_scaled_reserve(
-                site_info["backup_reserve_percent"]
+                cast(Mapping[str, Any], site_info)["backup_reserve_percent"]
             )
         if "default_real_mode" in config:
             result["default_real_mode"] = config["default_real_mode"]

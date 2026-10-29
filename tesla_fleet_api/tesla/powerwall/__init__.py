@@ -74,8 +74,6 @@ from .models import (
     StatusPayload,
 )
 
-__version__ = "0.10.0"
-
 __all__ = [
     "DEFAULT_GATEWAY_HOST",
     "GRID_EXPORT_RULES",
@@ -113,7 +111,6 @@ __all__ = [
     "PowerwallRateLimitError",
     "SignalValue",
     "StatusPayload",
-    "__version__",
     "backup_time_remaining",
     "battery_level",
     "battery_level_raw",

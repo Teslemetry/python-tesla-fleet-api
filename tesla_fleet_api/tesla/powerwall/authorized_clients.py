@@ -136,7 +136,9 @@ def _parse_client(entry: dict[str, Any]) -> AuthorizedClient:
     return AuthorizedClient(
         public_key=entry.get("public_key"),
         state=_normalize_state(entry.get("state")),
-        roles=[_normalize_role(role) for role in roles] if isinstance(roles, list) else None,
+        roles=[_normalize_role(role) for role in cast(list[Any], roles)]
+        if isinstance(roles, list)
+        else None,
         verification=_normalize_verification(entry.get("verification")),
         raw=entry,
     )
@@ -149,7 +151,11 @@ def parse_authorized_clients(payload: dict[str, Any]) -> AuthorizedClients:
     ``{"response": {...}}`` envelope).
     """
     entries = payload.get("clients", [])
-    clients = [_parse_client(entry) for entry in entries if isinstance(entry, dict)]
+    clients = [
+        _parse_client(cast(dict[str, Any], entry))
+        for entry in entries
+        if isinstance(entry, dict)
+    ]
     return AuthorizedClients(clients=clients, raw=payload)
 
 

@@ -22,7 +22,7 @@ import struct
 import time
 import uuid
 from contextlib import suppress
-from typing import Any, Final
+from typing import Any, Final, cast
 
 import aiohttp
 from cryptography.hazmat.primitives import hashes, serialization
@@ -167,7 +167,7 @@ class V1rTransport:
         except TimeoutError as err:
             raise PowerwallConnectionError("Login timed out") from err
 
-        token = data.get("token") if isinstance(data, dict) else None
+        token = cast(dict[str, Any], data).get("token") if isinstance(data, dict) else None
         if not isinstance(token, str) or not token:
             raise PowerwallProtocolError("Login response missing 'token'")
         self._token = token
