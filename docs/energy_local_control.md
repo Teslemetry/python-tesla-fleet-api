@@ -1,30 +1,33 @@
-# Energy: Local Control (aiopowerwall + EnergySiteRouter)
+# Energy: Local Control (Powerwall LAN + EnergySiteRouter)
 
-This library and the sibling [`aiopowerwall`](https://pypi.org/project/aiopowerwall/)
-library are designed to be used together to give an energy gateway (Powerwall
-2/3) both a local, signed LAN control path and a cloud fallback:
+The cloud energy-site classes and the `tesla_fleet_api.tesla.powerwall`
+sub-package (moved here from
+[`aiopowerwall`](https://pypi.org/project/aiopowerwall/)) are designed to be
+used together to give an energy gateway (Powerwall 2/3) both a local, signed
+LAN control path and a cloud fallback:
 
-- **This repo holds the keypair lifecycle.** `Tesla.get_rsa_private_key`
+- **The cloud classes hold the keypair lifecycle.** `Tesla.get_rsa_private_key`
   generates or loads and persists the RSA key, `rsa_public_der_pkcs1` derives
   the public key bytes for registration, and
   `EnergySite.add_authorized_client` registers its public half with the
-  gateway over the cloud. `aiopowerwall` deliberately does **not** implement
-  registration - it only consumes an already-paired key.
-- **aiopowerwall holds the local, RSA-signed transport.** Its
-  `PowerwallEnergySite` adapter implements the local subset of this repo's
+  gateway over the cloud. `tesla_fleet_api.tesla.powerwall` deliberately does
+  **not** implement registration - it only consumes an already-paired key.
+- **`tesla_fleet_api.tesla.powerwall` holds the local, RSA-signed transport.**
+  Its `PowerwallEnergySite` adapter implements the local subset of the
   `EnergySite` surface with matching names, signatures, and `dict[str, Any]`
-  return shapes, without importing this package - it is duck-typed by design
-  so it drops straight into `EnergySiteRouter`.
+  return shapes. It is duck-typed by design (it does not subclass
+  `EnergySite`), so it drops straight into `EnergySiteRouter`.
 
-`aiopowerwall` is not a dependency of this project; nothing here imports it.
-You add it to your own application alongside `tesla-fleet-api`.
+`PowerwallClient` and `PowerwallEnergySite` are also exported from
+`tesla_fleet_api.tesla`. The `aiopowerwall` package is not a dependency of this
+project.
 
 ## 1. Generate or load the RSA private key
 
 `get_rsa_private_key(path)` (available on `Tesla` and everything that
 inherits it - `TeslaFleetApi`, `Teslemetry`, `Tessie`) loads an existing RSA
 private key or creates a new 4096-bit unencrypted PEM key file. This is the
-key you will register with the gateway and later hand to `aiopowerwall`.
+key you will register with the gateway and later hand to `PowerwallClient`.
 
 Creating a new key uses a plain `sys.executable -c` subprocess so RSA generation
 does not block the asyncio event loop. The subprocess runs its own script as
@@ -79,9 +82,9 @@ async def register_key(session: aiohttp.ClientSession, energy_site_id: int):
     return api, energy_site
 ```
 
-## 3. Hand the paired key to aiopowerwall
+## 3. Hand the paired key to PowerwallClient
 
-`aiopowerwall`'s `PowerwallClient` consumes the *same* PEM file directly - it
+`PowerwallClient` consumes the *same* PEM file directly - it
 does not need anything else from this library at this point. `local_energysite`
 then exposes the locally implemented `EnergySite`-compatible calls
 (`live_status()`, `operation()`, `backup()`, `set_island_mode()`,
@@ -90,8 +93,7 @@ directly to the gateway over the LAN:
 
 ```python
 import aiohttp
-from aiopowerwall import PowerwallClient
-from aiopowerwall.energysite import PowerwallEnergySite
+from tesla_fleet_api.tesla.powerwall import PowerwallClient, PowerwallEnergySite
 
 async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEnergySite:
     with open("tedapi_rsa_private.pem", "rb") as f:
@@ -121,7 +123,7 @@ separate events, and there is a window
 between them where the key exists but is not yet usable. The typed Teslemetry
 helper below uses the gateway's authorized-client state as its primary signal.
 Where local network access is available, a successful signed read through
-`aiopowerwall` can additionally confirm that the key is usable; the gateway
+`PowerwallEnergySite` can additionally confirm that the key is usable; the gateway
 would reject that read before verification.
 
 `get_system_info()`/`get_status()`-style reads are the natural choice for
@@ -155,14 +157,16 @@ reference for building a custom confirmation flow (e.g. against the base
 Fleet API, which has no typed `find_authorized_clients()`).
 
 Before verification, every signed request rejects with
-`aiopowerwall.PowerwallAuthenticationError` (the gateway's "unknown key id"
+`tesla_fleet_api.tesla.powerwall.PowerwallAuthenticationError` (the gateway's "unknown key id"
 or "authorization not verified" fault) - **that failure is expected and not
 a bug**; treat it as "not yet, keep retrying" and back off between attempts:
 
 ```python
 import asyncio
-from aiopowerwall import PowerwallAuthenticationError
-from aiopowerwall.energysite import PowerwallEnergySite
+from tesla_fleet_api.tesla.powerwall import (
+    PowerwallAuthenticationError,
+    PowerwallEnergySite,
+)
 
 async def wait_until_verified(
     local_energysite: PowerwallEnergySite,
@@ -237,14 +241,15 @@ asyncio.run(main())
 Locally implemented commands go over the LAN when the gateway is reachable,
 and fail over to the Teslemetry cloud otherwise - the same
 local-primary/cloud-fallback pattern `VehicleRouter` uses for vehicles. Calls
-that aiopowerwall does not implement locally yet, including `get_system_info()`
+that `PowerwallEnergySite` does not implement locally yet, including `get_system_info()`
 and most energy-device gRPC commands, raise `NotImplementedError` from the
 local adapter and then fall through to the cloud backend. A local error
 fails over to the cloud only if `is_failover_safe()` accepts it: an `OSError`,
 `aiohttp.ClientConnectionError`, `NotImplementedError`, or an exception class
-with `failover_safe = True`. aiopowerwall's own exception classes subclass
-`Exception` directly, so they fail over only after aiopowerwall marks its
-connection errors `failover_safe = True`. A command the gateway answered and
+with `failover_safe = True`. The Powerwall exception classes subclass
+`Exception` directly, not `TeslaFleetError`; `PowerwallConnectionError`,
+`PowerwallRateLimitError` and `PowerwallAuthenticationError` set
+`failover_safe = True`, so they fail over. A command the gateway answered and
 rejected is not sent to the cloud, because the cloud sends it to the same
 gateway. See [the README's
 Routing and Failover section](../README.md#routing-and-failover) for the
@@ -265,7 +270,7 @@ and the `health` check).
 > A `TeslemetryEnergySite` without a key calls Teslemetry's route, which
 > signs with Teslemetry's key.
 >
-> Routing through `EnergySiteRouter` with an `aiopowerwall` local primary
+> Routing through `EnergySiteRouter` with a `PowerwallEnergySite` local primary
 > sends a signed request over the LAN first. If the local primary fails and
 > `Router` fails over to the cloud secondary, a keyed cloud site sends the
 > signed command. A Fleet API site without a key raises
@@ -273,11 +278,10 @@ and the `health` check).
 > Teslemetry's signed route.
 > A command that failed mid-flight on the LAN may already have run, so the
 > cloud retry can run it twice; island mode is absolute, so a second run sets
-> the same mode. `aiopowerwall`'s own docs also
-> carry an unresolved, firmware-dependent caveat for its local
-> `set_island_mode` - some gateways acknowledge it without acting on it, and
-> `trigger_islanding()` (the explicit black-start command) may be needed as
-> a fallback.
+> the same mode. The local `PowerwallClient.set_island_mode` also has an
+> unresolved, firmware-dependent caveat - some gateways acknowledge it
+> without acting on it, and `trigger_islanding()` (the explicit black-start
+> command) may be needed as a fallback.
 >
 > Even on the signed local path, a success-shaped response does not prove
 > the contactor moved. Always confirm the actual outcome with a signed local
@@ -324,6 +328,7 @@ local, owned_keys)`, which is still public for a caller with its own key set
   Commands" section) on its own, without a local backend.
 - [Routing and Failover](../README.md#routing-and-failover) - the general
   `Router`/`EnergySiteRouter` dispatch and failover semantics.
-- `aiopowerwall`'s own README for local-only concerns: gateway pairing
+- The [`aiopowerwall` README](https://github.com/Teslemetry/aiopowerwall) (the
+  project `tesla_fleet_api.tesla.powerwall` came from) for local-only concerns: gateway pairing
   (breaker toggle / auto-verify), backup-reserve and SoC scaling, and
   multi-Powerwall leader/follower behavior.

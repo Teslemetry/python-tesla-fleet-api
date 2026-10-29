@@ -6,6 +6,7 @@ from tesla_fleet_api.tesla.oauth import TeslaFleetOAuth
 from tesla_fleet_api.tesla.charging import Charging
 from tesla_fleet_api.tesla.energysite import EnergySites, EnergySite
 from tesla_fleet_api.tesla.partner import Partner
+from tesla_fleet_api.tesla.powerwall import PowerwallClient, PowerwallEnergySite
 from tesla_fleet_api.router import (
     Router,
     VehicleRouter,
@@ -34,6 +35,8 @@ __all__ = [
     "EnergySites",
     "EnergySite",
     "EnergySiteRouter",
+    "PowerwallClient",
+    "PowerwallEnergySite",
     "Partner",
     "User",
     "Vehicles",

@@ -14,7 +14,8 @@ uv run pytest tests
 ```
 
 Tests use `unittest.IsolatedAsyncioTestCase` collected by pytest (no
-`pytest-asyncio`). BLE command tests build on `MockedBleTransportTestCase`
+`pytest-asyncio`), except `tests/powerwall/`, whose plain `async def` tests run
+through its `conftest.py`. BLE command tests build on `MockedBleTransportTestCase`
 (`tests/ble_mocked_transport.py`), which needs no real BLE/GATT connection.
 
 ## API References
@@ -56,7 +57,8 @@ top-level workflow, never `workflow_call` — the trusted publisher is bound to
   is a `Literal`. camelCase for attributes that mirror API structure
   (`energySites`, `createFleet`); snake_case for endpoint methods.
 - **All exceptions inherit `TeslaFleetError(BaseException)`, not `Exception`**,
-  on purpose. `except Exception` does not catch them.
+  on purpose. `except Exception` does not catch them. The exception is
+  `tesla/powerwall/exceptions.py`, which keeps `Exception` (moved from aiopowerwall).
 - BLE transport catch sites must catch both `bleak.exc.BleakError` and builtin
   `TimeoutError` (bleak-esphome raises a bare `TimeoutError`).
 - `exceptions.is_key_rejected` is a positive allowlist verified against each

@@ -2,6 +2,7 @@ test.py
 test*.py
 !tests/
 !tests/test_*.py
+!tests/powerwall/test_*.py
 register.py
 *.pyc
 __pycache__

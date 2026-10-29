@@ -115,7 +115,7 @@ asyncio.run(main())
 For more detailed examples, see [Fleet API for Energy Sites](docs/fleet_api_energy_sites.md).
 
 To pair an energy gateway's RSA key over the cloud and compose the resulting
-signed local LAN control (via the sibling `aiopowerwall` library) with a
+signed local LAN control (via `tesla_fleet_api.tesla.powerwall`) with a
 cloud fallback through `EnergySiteRouter`, see [Energy: Local
 Control](docs/energy_local_control.md).
 
@@ -251,7 +251,7 @@ The constructor is `Router(primary, secondary, *more_backends, health=None, on_r
 
 By default the router fails over only on failures in the backend's own path, listed in `tesla_fleet_api.router.FAILOVER_SAFE_ERRORS` and checked by `is_failover_safe(exc)`: the backend could not reach the device or got no answer (connection refused or reset, DNS, TLS, timeouts, `BleakError`, `BluetoothTransportError`, plain `BluetoothTimeout`, `VehicleOffline`), a transient server error (429, 500, 502, 503, 504, `EnergyGatewayUnreachable`), a failure of that backend's own key, token, subscription or size limit (for example a vehicle rejecting the BLE key, or `SignedCommandRequired`), `BluetoothCommandFailed`, or `NotImplementedError`. Any other exception, typically the device answering and rejecting the command, propagates without trying later backends, because the next backend reaches the same device and gets the same answer. `BluetoothUnconfirmedCommand` never fails over.
 
-A backend library that tesla-fleet-api does not import can classify its own exceptions with a `failover_safe` class attribute: `True` marks a transport-level error safe to fail over, and `False` stops failover for an error that would otherwise match (for example an `OSError` subclass that means the device rejected the command). For example, aiopowerwall can set `failover_safe = True` on its connection error.
+A backend library that tesla-fleet-api does not import can classify its own exceptions with a `failover_safe` class attribute: `True` marks a transport-level error safe to fail over, and `False` stops failover for an error that would otherwise match (for example an `OSError` subclass that means the device rejected the command). The local Powerwall exceptions in `tesla_fleet_api.tesla.powerwall` use it too: `PowerwallConnectionError`, `PowerwallRateLimitError` and `PowerwallAuthenticationError` set `failover_safe = True`.
 
 The router attempts the primary with no up-front probe. You can also pass an explicit `health` check — a `bool`, a sync callable, or an async callable returning `bool` — to decide up front whether to route to the primary or skip straight to the rest of the chain. The health check gates **only the primary** (the first backend); later backends are reached purely through per-command failover.
 
@@ -275,7 +275,7 @@ vehicle = VehicleRouter(primary, secondary, on_result=on_result)
 
 `tesla_fleet_api.exceptions.is_key_rejected(exc)` reports whether a fault means the vehicle didn't recognize our signing key as paired/authorized (e.g. `NotOnWhitelistFault`), as opposed to any other signed-command fault.
 
-`EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. aiopowerwall's `PowerwallEnergySite`, no dependency added) with a cloud `TeslemetryEnergySite` fallback:
+`EnergySiteRouter` follows the same pattern for energy sites, pairing a duck-typed local `EnergySite`-shaped object (e.g. `PowerwallEnergySite` from `tesla_fleet_api.tesla.powerwall`) with a cloud `TeslemetryEnergySite` fallback:
 
 ```python
 from tesla_fleet_api.router import EnergySiteRouter
