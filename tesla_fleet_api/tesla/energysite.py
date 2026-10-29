@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import math
 from typing import TYPE_CHECKING, Any
+
+from google.protobuf.message import DecodeError
+from tesla_protocol.energy_device import transport_pb2
 
 from tesla_fleet_api.const import (
     AuthorizedClientKeyType,
@@ -15,7 +19,11 @@ from tesla_fleet_api.const import (
     Method,
     TeslaEnergyPeriod,
 )
-from tesla_fleet_api.exceptions import SignedCommandRequired
+from tesla_fleet_api.exceptions import (
+    DeviceUnexpectedResponse,
+    InvalidCommand,
+    SignedCommandRequired,
+)
 from tesla_fleet_api.tesla.energy_signing import EnergyDeviceSigner
 
 if TYPE_CHECKING:
@@ -44,11 +52,15 @@ MAX_DISPATCH_DURATION_SECONDS = 86400
 def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -> None:
     """Raise ``ValueError`` on arguments aiopowerwall's local
     ``dispatch_battery_power`` also rejects, so every backend fails the same way."""
-    if (
-        isinstance(power_watts, bool)
-        or not isinstance(power_watts, (int, float))  # pyright: ignore[reportUnnecessaryIsInstance]
-        or not math.isfinite(power_watts)
-    ):
+    try:
+        finite = (
+            not isinstance(power_watts, bool)
+            and isinstance(power_watts, (int, float))  # pyright: ignore[reportUnnecessaryIsInstance]
+            and math.isfinite(power_watts)
+        )
+    except OverflowError:  # an int too large for a float
+        finite = False
+    if not finite:
         raise ValueError("power_watts must be a finite number")
     if type(duration_seconds) is not int or not (
         1 <= duration_seconds <= MAX_DISPATCH_DURATION_SECONDS
@@ -57,6 +69,40 @@ def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -
             "duration_seconds must be an integer from 1 to "
             f"{MAX_DISPATCH_DURATION_SECONDS}"
         )
+
+
+# google.rpc.Code UNIMPLEMENTED: the gateway firmware has no handler.
+_UNIMPLEMENTED = 12
+
+
+def _raise_on_error_response(result: dict[str, Any]) -> None:
+    """Raise if a ``device_command`` reply holds ``common.error_response``.
+
+    The gateway refuses a command inside an HTTP 200 reply, for example code
+    11 (OUT_OF_RANGE) on a dispatch above its power limit. Code 12 raises
+    ``InvalidCommand``; any other code raises ``DeviceUnexpectedResponse``.
+    Both carry ``{"code", "message"}`` as ``data``. A reply without
+    decodable envelope bytes is left alone.
+    """
+    response = result.get("response")
+    if not isinstance(response, dict):
+        return
+    encoded = response.get("message_envelope_as_bytes")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not isinstance(encoded, str):
+        return
+    envelope = transport_pb2.MessageEnvelope()
+    try:
+        envelope.ParseFromString(base64.b64decode(encoded, validate=True))
+    except (binascii.Error, DecodeError):
+        return
+    # error_response sits outside CommonMessages' ``message`` oneof.
+    if not envelope.common.HasField("error_response"):
+        return
+    status = envelope.common.error_response.status
+    data: dict[str, Any] = {"code": status.code, "message": status.message}
+    if status.code == _UNIMPLEMENTED:
+        raise InvalidCommand(data)
+    raise DeviceUnexpectedResponse(data)
 
 
 class EnergySite:
@@ -160,8 +206,8 @@ class EnergySite:
         """Send a signed ``RoutableMessage`` to the energy device.
 
         Tesla requires the body wrapped in ``data`` and ``identifier_type`` as
-        an integer. The reply is returned unchanged: its shape has not been
-        captured live yet, so it is not decoded here.
+        an integer. The reply is returned unchanged; :meth:`_signed_command`
+        checks it for a gateway error.
         """
         return await self._request(
             Method.POST,
@@ -184,7 +230,8 @@ class EnergySite:
         Takes the same arguments as :meth:`_command`. Raises
         ``SignedCommandRequired`` when the site has no signing key. A resend
         of the same signed bytes inside the TTL executes again, so this never
-        retries.
+        retries. Raises as :func:`_raise_on_error_response` does when the
+        gateway refuses the command.
         """
         signer, din = self._signer, self.din
         if signer is None or din is None:
@@ -192,7 +239,9 @@ class EnergySite:
         envelope = signer.envelope(din, category, command, params)
         # RSA-4096 with SHA-512 takes about 10 ms; keep it off the event loop.
         routable_message = await asyncio.to_thread(signer.sign, envelope, din)
-        return await self._device_command(routable_message, din)
+        result = await self._device_command(routable_message, din)
+        _raise_on_error_response(result)
+        return result
 
     async def get_system_info(self) -> dict[str, Any]:
         """Get energy device system information including firmware version, device type, part number, serial number, and DIN."""
@@ -407,8 +456,11 @@ class EnergySite:
         Keep durations short and re-send to renew, so a caller that stops
         cannot leave the battery on a stale setpoint. Call
         :meth:`resume_battery_operation` to release early. The reply is an
-        empty acknowledgement, not readback; the gateway still applies its
-        own reserve and grid limits.
+        empty acknowledgement, not readback. A setpoint was seen to discharge
+        below the backup reserve and to export with export set to
+        ``pv_only``/``never``. The gateway refuses (it does not clamp) a
+        request above its power limit, seen at 10,000 W: the signed path
+        raises ``DeviceUnexpectedResponse`` with code 11.
 
         Tesla's cloud refuses this command unsigned (HTTP 400), so it acts
         only on a site built with a signing key.

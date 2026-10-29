@@ -29,6 +29,7 @@ INVALID_ARGS: list[tuple[Any, Any]] = [
     (math.nan, 60),
     (math.inf, 60),
     (-math.inf, 60),
+    (10**1000, 60),
     (True, 60),
     ("5000", 60),
     (None, 60),

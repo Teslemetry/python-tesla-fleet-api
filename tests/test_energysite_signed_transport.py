@@ -25,7 +25,11 @@ from tesla_protocol.energy_device import (
 )
 
 from tesla_fleet_api.const import EnergyIslandMode, Method
-from tesla_fleet_api.exceptions import SignedCommandRequired
+from tesla_fleet_api.exceptions import (
+    DeviceUnexpectedResponse,
+    InvalidCommand,
+    SignedCommandRequired,
+)
 from tesla_fleet_api.router import EnergySiteRouter
 from tesla_fleet_api.tesla.energy_signing import (
     ENERGY_SIGNATURE_TTL_SECONDS,
@@ -478,6 +482,60 @@ class TeslemetrySignedTransportTests(IsolatedAsyncioTestCase):
                 request_mock.assert_awaited_once_with(
                     Method.GET, f"api/1/energy_sites/{SITE_ID}/command/{route}"
                 )
+
+
+def _reply(envelope: transport_pb2.MessageEnvelope) -> dict[str, Any]:
+    """A ``device_command`` reply, shaped as captured live on 2026-10-29."""
+    return {
+        "response": {
+            "request_id": "546681d7ff2f1fd5c72a543415a8fe1f",
+            "message_envelope_as_bytes": base64.b64encode(
+                envelope.SerializeToString()
+            ).decode("ascii"),
+        }
+    }
+
+
+def _error_reply(code: int, message: str) -> dict[str, Any]:
+    envelope = transport_pb2.MessageEnvelope()
+    envelope.common.error_response.status.code = code
+    envelope.common.error_response.status.message = message
+    return _reply(envelope)
+
+
+class SignedReplyDecodeTests(IsolatedAsyncioTestCase):
+    async def test_out_of_range_refusal_raises(self) -> None:
+        for cls in (EnergySite, TeslemetryEnergySite):
+            with self.subTest(cls=cls.__name__):
+                site, request_mock = _make_site(cls)
+                request_mock.return_value = _error_reply(
+                    11, "power 11000.000000 exceeds discharge limit 10000"
+                )
+                with self.assertRaises(DeviceUnexpectedResponse) as ctx:
+                    await site.dispatch_battery_power(11000, 30)
+                self.assertEqual(
+                    ctx.exception.data,
+                    {
+                        "code": 11,
+                        "message": "power 11000.000000 exceeds discharge limit 10000",
+                    },
+                )
+
+    async def test_unimplemented_raises_invalid_command(self) -> None:
+        site, request_mock = _make_site(EnergySite)
+        request_mock.return_value = _error_reply(12, "")
+        with self.assertRaises(InvalidCommand) as ctx:
+            await site.get_teg_config()
+        self.assertEqual(ctx.exception.data, {"code": 12, "message": ""})
+
+    async def test_ack_is_returned_unchanged(self) -> None:
+        site, request_mock = _make_site(EnergySite)
+        envelope = transport_pb2.MessageEnvelope()
+        envelope.teg.dispatch_battery_power_response.SetInParent()
+        reply = _reply(envelope)
+        self.assertEqual(reply["response"]["message_envelope_as_bytes"], "KgOyAgA=")
+        request_mock.return_value = reply
+        self.assertIs(await site.dispatch_battery_power(-2000, 120), reply)
 
 
 class _LocalPowerwallSite:

@@ -409,7 +409,7 @@ With a key, the site signs every device command except the four pre-pairing read
 
 The fleet REST routes (`backup`, `storm_mode`, `operation`, `grid_import_export` and the other non-device-command methods) are not device commands and never sign.
 
-`None` means unsigned: there is no fallback to `api.rsa_private_key`. The signature expires after 30 seconds and has no counter, so the same bytes resent inside that window execute again; the library never retries a signed command. The reply is returned unchanged. A success-shaped reply does not prove the contactor moved: read `island_status` from `live_status()` after each step.
+`None` means unsigned: there is no fallback to `api.rsa_private_key`. The signature expires after 30 seconds and has no counter, so the same bytes resent inside that window execute again; the library never retries a signed command. The reply is returned unchanged unless the gateway refused the command with `common.error_response` inside the HTTP 200: code 12 (UNIMPLEMENTED) then raises `InvalidCommand`, and any other code raises `DeviceUnexpectedResponse`. Both carry `{"code", "message"}` as `data`. A success-shaped reply does not prove the contactor moved: read `island_status` from `live_status()` after each step.
 
 On `Teslemetry`, a client key works the same way: every device command except the four pre-pairing reads is signed with that key and goes through Teslemetry's `device_command` route. `add_authorized_client()` with no `public_key` still calls Teslemetry's route, which registers Teslemetry's own key. Without a client key, `TeslemetryEnergySite` never raises `SignedCommandRequired`. It calls Teslemetry's routes instead (for example `POST command/set_island_mode`, `POST command/dispatch_battery_power`, `GET command/backup_events`, `GET command/config`), where Teslemetry signs with its own key. As of 2026-10-29 the `dispatch_battery_power`, `resume_battery_operation` and backup-event schedule/cancel routes still send unsigned and get Tesla's 400; a Teslemetry api change moves them to server signing. Teslemetry's key must be `VERIFIED` on the gateway, or a server-signed route answers 409 `energy_site_not_paired` and sends nothing.
 
@@ -445,8 +445,13 @@ and the `PrivateKeyError` raised for an unusable existing key file.
 `dispatch_battery_power` holds the setpoint for `duration_seconds`, then the
 gateway returns to its configured operating mode by itself. Keep durations
 short and re-send to renew. The reply is an empty acknowledgement, not
-readback: read `live_status()` to see what the battery does. The gateway still
-applies its own backup reserve and grid limits. The method has the same name,
+readback: read `live_status()` to see what the battery does. A setpoint was
+seen to discharge below the backup reserve and to export with export set to
+`pv_only`/`never` (Powerwall 2, Backup Gateway 1, firmware 26.34.0). The
+gateway refuses (it does not clamp) a request above its power limit, seen at
+10,000 W, which can be below the combined battery rating. On the signed path
+that refusal raises `DeviceUnexpectedResponse` with code 11 (OUT_OF_RANGE).
+The method has the same name,
 arguments, units, sign and limits as aiopowerwall's local
 `dispatch_battery_power`, so `EnergySiteRouter` can send it on either path.
 
