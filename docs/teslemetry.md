@@ -635,6 +635,41 @@ async def main():
 asyncio.run(main())
 ```
 
+## Energy Site Device Commands
+
+Without a signing key, Teslemetry energy sites send each energy device command to its own Teslemetry
+custom route under `/api/1/energy_sites/{id}/command/`. They never send the
+Fleet API `grpc_command` body, which Teslemetry rejects. Teslemetry returns the
+gateway reply already unwrapped, as `{"response": {...}}`, not Tesla's raw
+envelope. `get_cellular_info()`, `check_for_update()`,
+`check_for_update_urgency()`, `check_internet()`, `get_backup_events()` and
+`get_teg_config()` are signed by Teslemetry, so Teslemetry's key must be
+verified on the gateway; otherwise the route returns 409
+`energy_site_not_paired`. If the site was created with a signing `private_key`
+and `din`, every method below except the pre-pairing reads
+`get_system_info()`, `raw_networking_status()` and
+`get_signed_commands_public_key()` signs with that key and goes through
+Teslemetry's `device_command` route instead. The pre-pairing reads always use
+their route. See
+[Fleet API for Energy Sites](fleet_api_energy_sites.md#client-signed-device-commands).
+
+| Method | Route |
+|--------|-------|
+| `get_system_info()` | `GET .../command/system_info` |
+| `raw_networking_status()` | `GET .../command/networking_status` |
+| `wifi_scan()` | `GET .../command/wifi_scan` |
+| `get_device_cert()` | `GET .../command/device_cert` |
+| `get_cellular_info()` | `GET .../command/cellular_info` |
+| `check_for_update()` | `GET .../command/check_for_update` |
+| `check_for_update_urgency()` | `GET .../command/check_for_update_urgency` |
+| `check_internet()` | `GET .../command/check_internet` |
+| `set_local_site_config(params)` | `POST .../command/set_local_site_config` |
+| `get_signed_commands_public_key()` | `GET .../command/signed_commands_public_key` |
+| `get_backup_events()` | `GET .../command/backup_events` |
+| `schedule_backup_event(...)` | `POST .../command/schedule_backup_event` |
+| `cancel_backup_event()` | `POST .../command/cancel_backup_event` |
+| `get_teg_config()` | `GET .../command/config` |
+
 ## Energy Site Battery Dispatch
 
 Teslemetry energy sites send `dispatch_battery_power(power_watts,
