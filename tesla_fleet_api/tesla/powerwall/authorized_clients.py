@@ -6,7 +6,7 @@ types, and member values of
 ``AuthorizedClients`` (and the ``AuthorizedClientState`` /
 ``AuthorizationRole`` / ``AuthorizedVerificationType`` enums in
 ``tesla_fleet_api.const``) so a caller can treat a local
-:meth:`~aiopowerwall.energysite.PowerwallEnergySite.find_authorized_clients`
+:meth:`~tesla_fleet_api.tesla.powerwall.energysite.PowerwallEnergySite.find_authorized_clients`
 result and a cloud ``TeslemetryEnergySite.find_authorized_clients()`` result
 identically, with no local-vs-cloud conversion. **This module never imports
 `tesla_fleet_api`** — parity is verified by
@@ -124,7 +124,7 @@ class AuthorizedClient:
 @dataclass(frozen=True, slots=True)
 class AuthorizedClients:
     """Parsed result of
-    :meth:`~aiopowerwall.energysite.PowerwallEnergySite.find_authorized_clients`.
+    :meth:`~tesla_fleet_api.tesla.powerwall.energysite.PowerwallEnergySite.find_authorized_clients`.
     """
 
     clients: list[AuthorizedClient]

@@ -8,7 +8,7 @@ private key bytes are passed in here.
 
 This module owns nothing user-visible above the wire format: HTTP plumbing,
 request signing, fault decoding, bearer-token lifecycle. The high-level
-:mod:`aiopowerwall.client` builds on top of it.
+:mod:`tesla_fleet_api.tesla.powerwall.client` builds on top of it.
 """
 
 from __future__ import annotations

@@ -81,7 +81,7 @@ class AuthorizedClient(TypedDict, total=False):
     common prefix stripped (e.g. ``"VERIFIED"``), falling back to the raw
     int for a value newer than this package's `tesla-protocol` pin knows
     the name of. See
-    :meth:`~aiopowerwall.energysite.PowerwallEnergySite.find_authorized_clients`
+    :meth:`~tesla_fleet_api.tesla.powerwall.energysite.PowerwallEnergySite.find_authorized_clients`
     for a typed, tesla-fleet-api-aligned alternative.
     """
 

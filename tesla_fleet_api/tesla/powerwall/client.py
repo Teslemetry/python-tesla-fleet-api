@@ -2,7 +2,7 @@
 
 Typical use::
 
-    from aiopowerwall import PowerwallClient, battery_level
+    from tesla_fleet_api.tesla.powerwall import PowerwallClient, battery_level
 
     async with PowerwallClient(
         host="192.168.91.1",

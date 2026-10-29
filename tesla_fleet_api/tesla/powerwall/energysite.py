@@ -1,6 +1,6 @@
 """Tesla Fleet API ``EnergySite``-compatible adapter over a local Powerwall.
 
-:class:`PowerwallEnergySite` wraps a :class:`~aiopowerwall.client.PowerwallClient`
+:class:`PowerwallEnergySite` wraps a :class:`~tesla_fleet_api.tesla.powerwall.client.PowerwallClient`
 and presents the same *duck-typed* surface as the cloud ``EnergySite`` /
 ``TeslemetryEnergySite`` classes from ``tesla_fleet_api`` — the same method
 names, signatures, and ``dict[str, Any]`` return shapes — **without importing
@@ -272,10 +272,10 @@ class PowerwallEnergySite:
 
         ``percentage_charged``, ``energy_left`` and ``total_pack_energy`` all
         come from the one :meth:`PowerwallClient.get_status` read: the
-        user-facing SoC via :func:`~aiopowerwall.client.battery_level`, and
+        user-facing SoC via :func:`~tesla_fleet_api.tesla.powerwall.client.battery_level`, and
         the Wh figures directly from ``control.systemStatus`` — the same
         ``nominalEnergyRemainingWh`` / ``nominalFullPackEnergyWh`` fields that
-        back :func:`~aiopowerwall.client.battery_level_raw`.
+        back :func:`~tesla_fleet_api.tesla.powerwall.client.battery_level_raw`.
 
         Gaps: some cloud keys have no local v1r equivalent and are returned as
         ``None`` rather than guessed — ``backup_capable``,
@@ -322,7 +322,7 @@ class PowerwallEnergySite:
         (deliberately absent — see the module docstring), this exposes only
         the two fields that already have a faithful cloud mapping:
         ``backup_reserve_percent`` (scaled via
-        :func:`~aiopowerwall.client.raw_to_scaled_reserve`) and
+        :func:`~tesla_fleet_api.tesla.powerwall.client.raw_to_scaled_reserve`) and
         ``default_real_mode``. A key is omitted, never guessed, when its
         source is absent from the local config document.
         """
@@ -360,8 +360,8 @@ class PowerwallEnergySite:
 
         Mirrors
         ``tesla_fleet_api.teslemetry.energysite.TeslemetryEnergySite.find_authorized_clients``'s
-        shape field-for-field (:class:`~aiopowerwall.authorized_clients.AuthorizedClients`,
-        :class:`~aiopowerwall.authorized_clients.AuthorizedClient`) so a caller
+        shape field-for-field (:class:`~tesla_fleet_api.tesla.powerwall.authorized_clients.AuthorizedClients`,
+        :class:`~tesla_fleet_api.tesla.powerwall.authorized_clients.AuthorizedClient`) so a caller
         needs no local-vs-cloud conversion. Use :meth:`list_authorized_clients`
         for the unparsed raw form.
         """
@@ -456,7 +456,7 @@ class PowerwallEnergySite:
 
     # Energy-device gRPC commands (common / authorization / TEG). These talk to
     # the gateway and are prime candidates to wire up over v1r later, but are
-    # not implemented in aiopowerwall yet.
+    # not implemented locally yet.
 
     async def get_system_info(self) -> dict[str, Any]:
         """TODO: wire up over v1r (firmware/serial/DIN are available via

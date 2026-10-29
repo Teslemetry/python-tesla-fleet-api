@@ -1,10 +1,10 @@
-"""Typed exceptions raised by aiopowerwall."""
+"""Typed exceptions raised by the Powerwall LAN client."""
 
 from __future__ import annotations
 
 
 class PowerwallError(Exception):
-    """Base class for all aiopowerwall errors."""
+    """Base class for all Powerwall LAN client errors."""
 
 
 class PowerwallConnectionError(PowerwallError):
