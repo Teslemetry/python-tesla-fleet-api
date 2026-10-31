@@ -22,7 +22,7 @@ dependencies = [
     "aiolimiter>=1",
     "cryptography>=43",
     "protobuf>=6.33.5",
-    "tesla-protocol>=5.0.0",
+    "tesla-protocol>=5.0.0,<6",
     "bleak>=0.22",
     "bleak-retry-connector>=3.9",
 ]
