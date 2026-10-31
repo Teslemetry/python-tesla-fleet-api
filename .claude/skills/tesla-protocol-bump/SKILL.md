@@ -24,7 +24,8 @@ Home Assistant core installs this library under its own `protobuf` pin.
 
 ## 2. Bump the floors
 
-1. In `pyproject.toml`, raise `tesla-protocol>=` to the target version.
+1. In `pyproject.toml`, raise `tesla-protocol>=` to the target version, and raise
+   the `<` cap only after porting to that major version.
 2. Set the `protobuf>=` floor in `pyproject.toml` to match what that
    `tesla-protocol` version requires (and not above the Home Assistant pin).
 3. Run `uv lock`. CI uses `uv sync --locked`.

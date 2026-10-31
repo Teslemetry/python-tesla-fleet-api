@@ -769,7 +769,7 @@ requires-dist = [
     { name = "bleak-retry-connector", specifier = ">=3.9" },
     { name = "cryptography", specifier = ">=43" },
     { name = "protobuf", specifier = ">=6.33.5" },
-    { name = "tesla-protocol", specifier = ">=5.0.0" },
+    { name = "tesla-protocol", specifier = ">=5.0.0,<6" },
 ]
 
 [package.metadata.requires-dev]
