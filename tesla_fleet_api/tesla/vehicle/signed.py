@@ -54,7 +54,7 @@ class VehicleSigned(  # pyright: ignore[reportIncompatibleMethodOverride]
         requires: str,
         expects_data: bool = True,
         *,
-        confirm_broadcast: Callable[[Any], bool] | None = None,
+        confirm_broadcast: Callable[[Any], bool | None] | None = None,
     ) -> RoutableMessage:
         """Serialize a message and send to the signed command endpoint."""
         # requires, expects_data, and confirm_broadcast are unused: Fleet API

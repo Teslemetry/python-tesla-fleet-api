@@ -17,7 +17,11 @@ ambiguous case), and the second, when present, answers the prover read.
 
 from __future__ import annotations
 
-from tesla_fleet_api.exceptions import BluetoothCommandFailed, BluetoothTimeout
+from tesla_fleet_api.exceptions import (
+    BluetoothCommandFailed,
+    BluetoothTimeout,
+    BluetoothUnconfirmedCommand,
+)
 from tesla_protocol.command.vehicle_pb2 import (
     ChargeState,
     ClimateState,
@@ -75,7 +79,10 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
             await vehicle.door_lock()
         self.assertEqual(send.await_count, 2)
 
-    async def test_unlock_verified_executed(self) -> None:
+    async def test_unlocked_read_does_not_confirm_unlock(self) -> None:
+        # UNLOCKED is the proto3 zero value: a read that leaves the lock field
+        # out decodes to it, so it proves nothing and the unlock stays
+        # unconfirmed instead of being reported as done.
         vehicle, send = self.make_vehicle(verify_commands=True)
         send.side_effect = [
             BluetoothTimeout(),
@@ -86,9 +93,37 @@ class VcsecVerificationTests(MockedBleTransportTestCase):
             ),
         ]
 
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await vehicle.door_unlock()
+        self.assertEqual(send.await_count, 2)
+
+    async def test_unlocked_read_with_best_effort_is_not_command_failed(
+        self,
+    ) -> None:
+        vehicle, send = self.make_vehicle(verify_commands=True, raise_unconfirmed=False)
+        send.side_effect = [
+            BluetoothTimeout(),
+            vcsec_vehicle_status_reply(VehicleStatus()),
+        ]
+
         result = await vehicle.door_unlock()
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+
+    async def test_locked_read_fails_unlock(self) -> None:
+        for state in (
+            VehicleLockState_E.VEHICLELOCKSTATE_LOCKED,
+            VehicleLockState_E.VEHICLELOCKSTATE_INTERNAL_LOCKED,
+        ):
+            with self.subTest(state=state):
+                vehicle, send = self.make_vehicle(verify_commands=True)
+                send.side_effect = [
+                    BluetoothTimeout(),
+                    vcsec_vehicle_status_reply(VehicleStatus(vehicleLockState=state)),
+                ]
+
+                with self.assertRaises(BluetoothCommandFailed):
+                    await vehicle.door_unlock()
 
     async def test_unverifiable_vcsec_command_reraises_without_read(self) -> None:
         """Port closing has no absolute prover, so its timeout triggers no state read."""
