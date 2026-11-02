@@ -593,8 +593,9 @@ class TeslemetryVehicle(VehicleFleet["Teslemetry"]):
     ) -> dict[str, Any]:
         """Navigates to coordinates with a named destination string.
 
-        ``order`` is the Tesla remote-nav order integer: 1 replaces the
-        trip, 2 prepends a stop, and 3 appends a stop. Named to match the
+        ``order`` is the Tesla remote-nav order integer
+        (``RemoteNavTripOrder_E``): 0 replaces the trip, 1 prepends a stop,
+        and 2 appends a stop. Named to match the
         BLE ``Commands.navigation_gps_destination_request`` sibling so
         ``VehicleRouter`` failover can find this method by attribute name.
         """

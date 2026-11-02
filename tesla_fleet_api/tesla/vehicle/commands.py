@@ -1549,9 +1549,10 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     ) -> dict[str, Any]:
         """Start navigation to coordinates.
 
-        ``order`` is the Tesla/protobuf remote-nav order integer: 1 replaces
-        the trip, 2 prepends a stop, and 3 appends a stop. Defaults to 0
-        (``REMOTE_NAV_TRIP_ORDER_UNKNOWN``) when omitted, matching the cloud path.
+        ``order`` is the Tesla/protobuf remote-nav order integer
+        (``RemoteNavTripOrder_E``): 0 replaces the trip, 1 prepends a stop,
+        and 2 appends a stop. Defaults to 0 (replace) when omitted, matching
+        the cloud path.
         """
         return await self._sendInfotainment(
             Action(
@@ -2774,8 +2775,9 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
     ) -> dict[str, Any]:
         """Navigate to coordinates with a named destination string.
 
-        ``order`` is the Tesla/protobuf remote-nav order integer: 1 replaces
-        the trip, 2 prepends a stop, and 3 appends a stop.
+        ``order`` is the Tesla/protobuf remote-nav order integer
+        (``RemoteNavTripOrder_E``): 0 replaces the trip, 1 prepends a stop,
+        and 2 appends a stop.
         """
         return await self._sendInfotainment(
             Action(

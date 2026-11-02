@@ -163,7 +163,7 @@ class NavigationGpsRequestParityTests(MockedBleTransportTestCase):
 
     Regression: cloud's ``order`` was optional (omitted -> ``null`` on the
     wire) while BLE's was a required int - a signature mismatch. Both now
-    default to ``0`` (``REMOTE_NAV_TRIP_ORDER_UNKNOWN``) when omitted.
+    default to ``0`` (``RemoteNavTripOrderReplace``) when omitted.
     """
 
     async def test_omitted_order_defaults_to_zero_on_both_transports(self) -> None:

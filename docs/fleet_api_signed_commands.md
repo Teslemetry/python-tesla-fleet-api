@@ -267,9 +267,9 @@ Signed commands include the navigation and dashcam command methods:
 - `dashcam_save_clip()`
 
 For the GPS navigation methods, `order` is the Tesla/protobuf remote-nav order
-integer: `1` replaces the trip, `2` prepends a stop, and `3` appends a stop.
-`navigation_gps_request`'s `order` defaults to `0`
-(`REMOTE_NAV_TRIP_ORDER_UNKNOWN`) when omitted, matching the BLE path.
+integer (`RemoteNavTripOrder_E`): `0` replaces the trip, `1` prepends a stop,
+and `2` appends a stop. `navigation_gps_request`'s `order` defaults to `0`
+(replace) when omitted, matching the BLE path.
 
 ## Honk Horn
 

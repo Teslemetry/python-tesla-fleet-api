@@ -14,6 +14,7 @@ from tesla_protocol.energy_device import (
     common_api_pb2,
     filestore_api_pb2,
     graphql_api_pb2,
+    local_auth_api_pb2,
     signed_message_pb2,
     teg_api_pb2,
     transport_pb2,
@@ -56,7 +57,11 @@ def test_transport_pb2_symbols() -> None:
     envelope_fields = _field_names(transport_pb2.MessageEnvelope.DESCRIPTOR)
     assert {"delivery_channel", "teg", "authorization"} <= envelope_fields
     assert transport_pb2.DELIVERY_CHANNEL_LOCAL_HTTPS == 1
-    assert transport_pb2.LOCAL_PARTICIPANT_INSTALLER == 1
+
+
+def test_local_auth_api_pb2_symbols() -> None:
+    # tesla-protocol 6.0.0 moved LocalParticipant here from transport.proto.
+    assert local_auth_api_pb2.LOCAL_PARTICIPANT_INSTALLER == 1
 
 
 def test_graphql_api_pb2_symbols() -> None:
@@ -133,13 +138,11 @@ def test_authorization_api_pb2_messages_request() -> None:
 
 
 def test_teg_api_pb2_backup_event_scheduling_fields() -> None:
-    """``PowerwallClient.get_backup_events`` depends on this exact (mis)spelling.
+    """``PowerwallClient.get_backup_events`` depends on these field names.
 
-    See ``AGENTS.md`` — ``teg_api_pb2.BackupEvent`` field 3 is published as
-    ``sheduling_info`` (sic); ``ManualBackupEvent`` field 1 is the correctly
-    spelled ``scheduling_info``. If this test starts failing on
-    ``sheduling_info``, check whether upstream fixed the typo before widening
-    the ``tesla-protocol`` pin further.
+    ``teg_api_pb2.BackupEvent`` field 3 is ``scheduling_info`` since
+    tesla-protocol 6.0.0 (earlier releases spelled it ``sheduling_info``);
+    ``ManualBackupEvent`` field 1 has always been ``scheduling_info``.
     """
     msgs = teg_api_pb2.TEGMessages()
     assert {
@@ -157,7 +160,7 @@ def test_teg_api_pb2_backup_event_scheduling_fields() -> None:
     )
 
     backup_event_fields = _field_names(teg_api_pb2.BackupEvent.DESCRIPTOR)
-    assert {"id", "name", "sheduling_info"} <= backup_event_fields
+    assert {"id", "name", "scheduling_info"} <= backup_event_fields
 
     manual_backup_event_fields = _field_names(teg_api_pb2.ManualBackupEvent.DESCRIPTOR)
     assert {"scheduling_info"} <= manual_backup_event_fields

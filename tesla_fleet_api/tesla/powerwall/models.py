@@ -51,8 +51,9 @@ class ControllableDeviceProgram(TypedDict):
 
     ``priority`` and ``contactor_state`` are the enum name with its prefix
     stripped (e.g. ``"CUSTOMER_DEFAULT"``, ``"OPEN"``), or the raw int for a
-    value this package does not recognize. Schedule times are epoch seconds,
-    or ``None`` when unset.
+    value this package does not recognize. Schedule times are the boundary
+    timestamp in epoch seconds, or ``None`` when the boundary is unset or is
+    not a timestamp.
     """
 
     key: dict[str, Any]

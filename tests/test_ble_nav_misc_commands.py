@@ -24,8 +24,7 @@ enum class - ``EnumTypeWrapper`` isn't callable, so every live call raised
 
 from tesla_protocol.command.car_server_pb2 import (
     Action,
-    NavigationGpsDestinationRequest,
-    NavigationGpsRequest,
+    RemoteNavTripOrder_E,
 )
 from tesla_protocol.command.universal_message_pb2 import Domain
 
@@ -35,10 +34,8 @@ from ble_mocked_transport import (
     infotainment_action_ok_reply,
 )
 
-REPLACE_GPS = NavigationGpsRequest.RemoteNavTripOrder.REMOTE_NAV_TRIP_ORDER_REPLACE
-REPLACE_GPS_DEST = (
-    NavigationGpsDestinationRequest.RemoteNavTripOrder.REMOTE_NAV_TRIP_ORDER_REPLACE
-)
+# Append (2), not replace (0): a non-default value proves ``order`` passes through.
+APPEND = RemoteNavTripOrder_E.RemoteNavTripOrderAppend
 
 
 def _decode_vehicle_action(vehicle, sent_msg):
@@ -71,14 +68,14 @@ class NavigationGpsRequestTests(MockedBleTransportTestCase):
         vehicle, send = self.make_vehicle()
         send.return_value = infotainment_action_ok_reply()
 
-        result = await vehicle.navigation_gps_request(37.3230, -122.0322, REPLACE_GPS)
+        result = await vehicle.navigation_gps_request(37.3230, -122.0322, APPEND)
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
         vehicle_action = _decode_vehicle_action(vehicle, send.await_args.args[0])
         gps = vehicle_action.navigationGpsRequest
         self.assertAlmostEqual(gps.lat, 37.3230)
         self.assertAlmostEqual(gps.lon, -122.0322)
-        self.assertEqual(gps.order, REPLACE_GPS)
+        self.assertEqual(gps.order, APPEND)
 
 
 class NavigationScRequestTests(MockedBleTransportTestCase):
@@ -114,7 +111,7 @@ class NavigationGpsDestinationRequestTests(MockedBleTransportTestCase):
         send.return_value = infotainment_action_ok_reply()
 
         result = await vehicle.navigation_gps_destination_request(
-            37.4419, -122.1430, "Palo Alto, CA", REPLACE_GPS_DEST
+            37.4419, -122.1430, "Palo Alto, CA", APPEND
         )
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
@@ -123,7 +120,7 @@ class NavigationGpsDestinationRequestTests(MockedBleTransportTestCase):
         self.assertAlmostEqual(dest.lat, 37.4419)
         self.assertAlmostEqual(dest.lon, -122.1430)
         self.assertEqual(dest.destination, "Palo Alto, CA")
-        self.assertEqual(dest.order, REPLACE_GPS_DEST)
+        self.assertEqual(dest.order, APPEND)
 
 
 class DashcamSaveClipTests(MockedBleTransportTestCase):

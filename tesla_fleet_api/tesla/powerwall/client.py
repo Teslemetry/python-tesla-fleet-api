@@ -36,6 +36,7 @@ from tesla_protocol.energy_device import (
     authorization_types_pb2,
     filestore_api_pb2,
     graphql_api_pb2,
+    local_auth_api_pb2,
     teg_api_pb2,
     transport_pb2,
 )
@@ -820,9 +821,11 @@ class PowerwallClient:
         Sends ``get_controllable_device_programs_request`` for ``device_ids``
         (every device when ``None``) and returns the ``active_programs`` and
         ``inactive_programs`` lists as plain dicts. An unrecognized
-        ``priority`` or ``contactor_state`` is returned as the raw int, and an
-        unset ``start`` / ``end`` / ``expiry`` is ``None``. A site with no
-        controllable devices returns two empty lists.
+        ``priority`` or ``contactor_state`` is returned as the raw int.
+        ``start`` / ``end`` / ``expiry`` are the boundary's ``timestamp`` in
+        epoch seconds, or ``None`` when the boundary is unset or is not a
+        timestamp (a static, islanding-state or state-of-energy condition).
+        A site with no controllable devices returns two empty lists.
         """
         din = await self.connect()
 
@@ -853,7 +856,14 @@ class PowerwallClient:
         schedule = program.schedule
 
         def seconds(field: str) -> int | None:
-            return getattr(schedule, field).seconds if schedule.HasField(field) else None
+            # Each boundary is a ControllableDeviceProgram_Schedule_Boundary
+            # (tesla-protocol 6.0.0); only its ``timestamp`` is a time.
+            if not schedule.HasField(field):
+                return None
+            boundary = getattr(schedule, field)
+            if not boundary.HasField("timestamp"):
+                return None
+            return boundary.timestamp.seconds
 
         return {
             "key": {
@@ -1126,11 +1136,9 @@ class PowerwallClient:
             {
                 "id": evt.id,
                 "name": evt.name,
-                # `sheduling_info` (sic) — teg_api_pb2.BackupEvent field 3 is
-                # published under that misspelling in tesla-protocol 1.3.1.
-                "start_time": evt.sheduling_info.start_time.seconds,
-                "duration_seconds": evt.sheduling_info.duration_seconds,
-                "priority": evt.sheduling_info.priority,
+                "start_time": evt.scheduling_info.start_time.seconds,
+                "duration_seconds": evt.scheduling_info.duration_seconds,
+                "priority": evt.scheduling_info.priority,
             }
             for evt in events_resp.backup_events
         ]
@@ -1373,7 +1381,7 @@ class PowerwallClient:
         """
         envelope = transport_pb2.MessageEnvelope()
         envelope.delivery_channel = transport_pb2.DELIVERY_CHANNEL_LOCAL_HTTPS
-        envelope.sender.local = transport_pb2.LOCAL_PARTICIPANT_INSTALLER
+        envelope.sender.local = local_auth_api_pb2.LOCAL_PARTICIPANT_INSTALLER
         envelope.recipient.din = din
         return envelope
 

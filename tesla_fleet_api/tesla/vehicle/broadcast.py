@@ -128,7 +128,7 @@ class BroadcastListeners:
     def listen_ui_desire(self, callback: Callable[[UIDesire_E], None]) -> Unsubscribe:
         """Listen for the vehicle's UI desire state."""
         return self._register(
-            self._status_listeners, lambda status: callback(status.uiDesire)
+            self._status_listeners, lambda status: callback(status.UIDesire)
         )
 
     def listen_tonneau_percent_open(
