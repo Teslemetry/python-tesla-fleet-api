@@ -354,7 +354,16 @@ def _log_command_error(name: str, transport: str, exc: BaseException) -> None:
 
 
 class Session(Generic[CommandParentT]):
-    """A connect to a domain"""
+    """A connect to a domain.
+
+    The vehicle's public key is trusted once, at first contact, then pinned
+    for the life of the session, as in Tesla's Go SDK. ECDH is symmetric, so
+    anyone who has seen the client's public key can tag a ``SessionInfo``
+    naming a key of their own: a tag proves nothing about a key derived from
+    the same reply. ``trusted_keys`` is the only way a reply reaches key
+    material, so once pinned a reply is verified with the stored keys, and
+    nothing clears the pin. A re-keyed vehicle needs a new instance.
+    """
 
     _response_counter_cache_size = 256
 
@@ -397,6 +406,28 @@ class Session(Generic[CommandParentT]):
         ).digest()
         return shared_key, hmac_key, session_info_key
 
+    def trusted_keys(self, vehicle_public_key: bytes) -> tuple[bytes, bytes, bytes]:
+        """Return the keys to verify a reply naming ``vehicle_public_key`` with.
+
+        At first contact they are derived from that key (trust on first use).
+        From then on the stored keys are returned and never derived again; a
+        reply naming any other key raises ``SessionInfoAuthenticationFault``.
+        """
+        if (
+            self.publicKey is None
+            or self.sharedKey is None
+            or self.hmac is None
+            or self.session_info_key is None
+        ):
+            return self.keys_for(vehicle_public_key)
+        if not hmac.compare_digest(self.publicKey, vehicle_public_key):
+            raise SessionInfoAuthenticationFault(
+                "Session info reply names a vehicle public key that has changed "
+                "since first contact; discarded. If the vehicle was really "
+                "re-keyed, build a new instance to trust it."
+            )
+        return self.sharedKey, self.hmac, self.session_info_key
+
     def commit(
         self,
         session_info: SessionInfo,
@@ -409,8 +440,14 @@ class Session(Generic[CommandParentT]):
         The anti-replay counter never rolls back within the same epoch, and a
         clock time that regresses within the same epoch marks the reply as
         stale/replayed - returns False without mutating any state so the
-        caller can discard it.
+        caller can discard it. Keys are adopted at first contact only; a
+        different public key after that raises without changing any state.
         """
+        shared_key, hmac_key, session_info_key = (
+            (shared_key, hmac_key, session_info_key)
+            if self.publicKey is None
+            else self.trusted_keys(session_info.publicKey)
+        )
         same_epoch = self.epoch is not None and self.epoch == session_info.epoch
         if (
             same_epoch
@@ -581,8 +618,8 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
 
         A ``SessionInfo`` is untrusted wire data until its ``session_info_tag``
         is verified: the tag is an HMAC over the exact bytes received, keyed
-        by a key derived from the *candidate* vehicle public key carried
-        inside that same ``SessionInfo``, and bound to this request's
+        by the session's stored key (``Session.trusted_keys``; only at first
+        contact is it derived from the public key in the reply), and bound to this request's
         ``request_uuid`` as a challenge - so a captured older reply can't be
         replayed against a newer request. Only once that tag checks out do we
         act on anything the message claims, including its own whitelist
@@ -622,7 +659,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
                 "Session info reply has no public key."
             )
 
-        shared_key, hmac_key, session_info_key = session.keys_for(info.publicKey)
+        shared_key, hmac_key, session_info_key = session.trusted_keys(info.publicKey)
 
         tag = msg.signature_data.session_info_tag.tag
         if not tag:
