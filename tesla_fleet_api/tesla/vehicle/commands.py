@@ -544,7 +544,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         requires: str,
         expects_data: bool = True,
         *,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> RoutableMessage:
         """Transmit the message to the vehicle.
 
@@ -666,7 +666,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         command: bytes,
         attempt: int = 0,
         expects_data: bool = True,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint.
 
@@ -1048,7 +1048,7 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
         self,
         command: UnsignedMessage,
         *,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> dict[str, Any]:
         """Sign and send an actuation to the Vehicle Security computer.
 

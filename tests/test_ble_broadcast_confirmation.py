@@ -36,6 +36,7 @@ from tesla_protocol.command.vcsec_pb2 import (
     FromVCSECMessage,
     OperationStatus_E,
     VehicleLockState_E,
+    VehicleSleepStatus_E,
     VehicleStatus,
 )
 
@@ -78,6 +79,19 @@ def _locked_broadcast() -> RoutableMessage:
 
 def _unlocked_broadcast() -> RoutableMessage:
     return _status_broadcast(VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED)
+
+
+def _sleep_only_broadcast() -> RoutableMessage:
+    """A status broadcast that carries no lock field at all."""
+    body = FromVCSECMessage(
+        vehicleStatus=VehicleStatus(
+            vehicleSleepStatus=VehicleSleepStatus_E.VEHICLE_SLEEP_STATUS_ASLEEP
+        )
+    )
+    return RoutableMessage(
+        from_destination=Destination(domain=DOMAIN),
+        protobuf_message_as_bytes=body.SerializeToString(),
+    )
 
 
 def _addressed_ok_ack(vehicle: VehicleBluetooth[Any]) -> RoutableMessage:
@@ -169,13 +183,40 @@ class BroadcastConfirmsBeforeAckTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"response": {"result": True, "reason": ""}})
 
-    async def test_broadcast_confirms_unlock(self) -> None:
+    async def test_unlocked_broadcast_never_confirms_unlock(self) -> None:
+        # UNLOCKED is the proto3 zero value, so it is never on the wire: a
+        # status with no lock field, like a sleep-only broadcast, decodes to
+        # it. A broadcast can therefore never prove an unlock ran; only the
+        # addressed ack can.
+        vehicle = _make_vehicle(raise_unconfirmed=True)
+        vehicle._actuation_timeout = 0.05
+
+        task = asyncio.ensure_future(vehicle.door_unlock())
+        await _wait_until_watching(vehicle, DOMAIN)
+        vehicle._on_message(_unlocked_broadcast())
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await asyncio.wait_for(task, timeout=1.0)
+
+    async def test_sleep_only_broadcast_never_confirms_unlock(self) -> None:
+        vehicle = _make_vehicle(raise_unconfirmed=True)
+        vehicle._actuation_timeout = 0.05
+
+        task = asyncio.ensure_future(vehicle.door_unlock())
+        await _wait_until_watching(vehicle, DOMAIN)
+        vehicle._on_message(_sleep_only_broadcast())
+
+        with self.assertRaises(BluetoothUnconfirmedCommand):
+            await asyncio.wait_for(task, timeout=1.0)
+
+    async def test_ack_still_confirms_unlock(self) -> None:
         vehicle = _make_vehicle()
         vehicle._actuation_timeout = 5.0
 
         task = asyncio.ensure_future(vehicle.door_unlock())
         await _wait_until_watching(vehicle, DOMAIN)
         vehicle._on_message(_unlocked_broadcast())
+        vehicle._on_message(_addressed_ok_ack(vehicle))
 
         result = await asyncio.wait_for(task, timeout=0.5)
 
@@ -255,6 +296,19 @@ class MismatchedBroadcastTests(IsolatedAsyncioTestCase):
         task = asyncio.ensure_future(vehicle.door_lock())
         await _wait_until_watching(vehicle, DOMAIN)
         vehicle._on_message(_unlocked_broadcast())
+
+        with self.assertRaises(BluetoothCommandFailed):
+            await asyncio.wait_for(task, timeout=1.0)
+
+    async def test_locked_broadcast_standing_at_window_end_fails_unlock(
+        self,
+    ) -> None:
+        vehicle = _make_vehicle(raise_unconfirmed=True)
+        vehicle._actuation_timeout = 0.05
+
+        task = asyncio.ensure_future(vehicle.door_unlock())
+        await _wait_until_watching(vehicle, DOMAIN)
+        vehicle._on_message(_locked_broadcast())
 
         with self.assertRaises(BluetoothCommandFailed):
             await asyncio.wait_for(task, timeout=1.0)

@@ -287,11 +287,13 @@ class ReassemblingBuffer:
 # whose outcome can be derived from its own arguments is confirmed by reading
 # the mapped state instead of falling through to the ambiguous unconfirmed
 # outcome. A verify "plan" pairs the state reader to call with a predicate that
-# checks the observed state against the requested value. Commands absent from
+# checks the observed state against the requested value: ``True`` proves the
+# command ran, ``False`` proves it did not, and ``None`` means the state proves
+# nothing either way, which leaves the outcome unresolved. Commands absent from
 # these tables - true toggles, relative steps, and ack-only actions whose
 # outcome cannot be derived from the request - have no plan and fall through to
 # ``raise_unconfirmed``.
-VerifyPlan = tuple[str, Callable[[Any], bool]]
+VerifyPlan = tuple[str, Callable[[Any], bool | None]]
 
 
 def _charge_port_connected(state: ChargeState) -> bool | None:
@@ -323,7 +325,13 @@ def _decode_vcsec_status(msg: RoutableMessage) -> VehicleStatus | None:
 
 
 def _vcsec_verify_plan(command: UnsignedMessage) -> VerifyPlan | None:
-    """Derive a VCSEC verify plan (read ``vehicle_state``) from a lost actuation."""
+    """Derive a VCSEC verify plan (read ``vehicle_state``) from a lost actuation.
+
+    ``VEHICLELOCKSTATE_UNLOCKED`` is the proto3 zero value, so it is never on
+    the wire: a status that leaves the lock field out, such as a sleep-only
+    broadcast, decodes to it. A status can therefore never confirm an unlock,
+    which needs its addressed ack; it can only rule one out.
+    """
     if command.WhichOneof("sub_message") != "RKEAction":
         return None
     if command.RKEAction == RKEAction_E.RKE_ACTION_LOCK:
@@ -331,9 +339,17 @@ def _vcsec_verify_plan(command: UnsignedMessage) -> VerifyPlan | None:
             lambda s: s.vehicleLockState == VehicleLockState_E.VEHICLELOCKSTATE_LOCKED
         )
     if command.RKEAction == RKEAction_E.RKE_ACTION_UNLOCK:
-        return "vehicle_state", (
-            lambda s: s.vehicleLockState == VehicleLockState_E.VEHICLELOCKSTATE_UNLOCKED
-        )
+        return "vehicle_state", _unlock_ruled_out
+    return None
+
+
+def _unlock_ruled_out(status: VehicleStatus) -> bool | None:
+    """``False`` if the status shows the car locked, else ``None`` (no proof)."""
+    if status.vehicleLockState in (
+        VehicleLockState_E.VEHICLELOCKSTATE_LOCKED,
+        VehicleLockState_E.VEHICLELOCKSTATE_INTERNAL_LOCKED,
+    ):
+        return False
     return None
 
 
@@ -482,8 +498,11 @@ class VehicleBluetooth(
       keeps emitting unsolicited VCSEC status broadcasts on the same
       notification subscription even when it emits no addressed ack for the
       actuation, so a broadcast already showing the requested state confirms
-      success without waiting out the ack timeout. A broadcast that shows a
-      different state does not fail fast - it may simply predate the vehicle
+      success without waiting out the ack timeout. An unlock is the
+      exception: its requested state is the proto3 zero value, which a status
+      without a lock field also decodes to, so a broadcast can only rule an
+      unlock out (by showing the car locked), never confirm it. A broadcast
+      that shows a different state does not fail fast - it may simply predate the vehicle
       finishing the actuation, and a later broadcast in the same window could
       still confirm success - but if the whole window elapses with such a
       mismatch as the last word and nothing else confirming, that is
@@ -1024,7 +1043,7 @@ class VehicleBluetooth(
         *,
         timeout: float | None = None,
         optimistic: bool = False,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> RoutableMessage:
         """Serialize a message and send to the vehicle and wait for a response.
 
@@ -1244,7 +1263,7 @@ class VehicleBluetooth(
     def _arm_broadcast_confirmation(
         self,
         domain: Domain,
-        confirm_broadcast: Callable[[VehicleStatus], bool],
+        confirm_broadcast: Callable[[VehicleStatus], bool | None],
         mismatches: list[VehicleStatus],
         write_complete: Callable[[], bool],
     ) -> tuple[asyncio.Future[RoutableMessage], _BroadcastWatcher]:
@@ -1268,9 +1287,10 @@ class VehicleBluetooth(
             status = _decode_vcsec_status(broadcast)
             if status is None:
                 return
-            if confirm_broadcast(status):
+            executed = confirm_broadcast(status)
+            if executed:
                 future.set_result(broadcast)
-            elif write_complete():
+            elif executed is False and write_complete():
                 mismatches.append(status)
 
         self._broadcast_watchers[domain] = on_broadcast
@@ -1435,7 +1455,7 @@ class VehicleBluetooth(
         command: bytes,
         attempt: int = 0,
         expects_data: bool = True,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> dict[str, Any]:
         """Serialize a message and send to the signed command endpoint."""
         await self.connect_if_needed()
@@ -1665,7 +1685,7 @@ class VehicleBluetooth(
         self,
         command: UnsignedMessage,
         *,
-        confirm_broadcast: Callable[[VehicleStatus], bool] | None = None,
+        confirm_broadcast: Callable[[VehicleStatus], bool | None] | None = None,
     ) -> dict[str, Any]:
         """Send a VCSEC actuation.
 
@@ -1683,8 +1703,9 @@ class VehicleBluetooth(
         ack - live-verified, the vehicle keeps broadcasting status on the same
         subscription even when it emits no addressed ack, so a broadcast
         showing the requested end state confirms success before the ack
-        timeout is ever reached. If the window instead elapses with a
-        mismatching broadcast as the last word (see
+        timeout is ever reached (a lock only: a status can rule an unlock out
+        but never confirm it, see ``_vcsec_verify_plan``). If the window
+        instead elapses with a mismatching broadcast as the last word (see
         ``_await_response_or_broadcast``) or, with ``confirmation="verify"``, a
         post-timeout read that contradicts the request, that is proven
         non-application and raises ``BluetoothCommandFailed`` - not the
@@ -1866,10 +1887,10 @@ class VehicleBluetooth(
         """Confirm a timed-out mutation by state.
 
         Returns the confirmed success result, or ``None`` if verification
-        could not even be attempted - no plan for this command, or the prover
-        read itself failed (an INFO-domain prover needs the vehicle awake; a
-        ``TeslaFleetError`` from a sleeping car is not woken just to verify).
-        ``None`` leaves the caller to resolve the outcome via
+        could not even be attempted - no plan for this command, the prover
+        read itself failed, or the state it read proves nothing either way
+        (an INFO-domain prover needs the vehicle awake; a ``TeslaFleetError``
+        from a sleeping car is not woken just to verify). ``None`` leaves the caller to resolve the outcome via
         ``raise_unconfirmed``. A verify mismatch - the read completed and does
         not show the requested value - is unambiguous proof the command did
         not apply, so it raises ``BluetoothCommandFailed`` instead of the
@@ -1884,7 +1905,10 @@ class VehicleBluetooth(
             state = await getattr(self, reader_name)()
         except TeslaFleetError:
             return None
-        if executed(state):
+        outcome = executed(state)
+        if outcome is None:
+            return None
+        if outcome:
             return {"response": {"result": True, "reason": ""}}
         raise BluetoothCommandFailed(timeout.data, timeout.status) from timeout
 

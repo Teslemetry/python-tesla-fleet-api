@@ -265,9 +265,12 @@ lost ack rather than treated as a safe-to-retry transport failure.
 keeps emitting unsolicited VCSEC status broadcasts on the same notification
 subscription even when it emits no addressed ack for a lock/unlock actuation.
 `VehicleBluetooth` races the ack wait against a matching broadcast and returns
-success as soon as either confirms - so most ack losses for lock/unlock now
-resolve to a real confirmed success well before the ack-wait ceiling, with no
-extra read. A broadcast showing a different state does not fail fast (a later
+success as soon as either confirms - so most ack losses for lock now resolve
+to a real confirmed success well before the ack-wait ceiling, with no extra
+read. An unlock is never confirmed by a broadcast: `UNLOCKED` is the proto3
+zero value, so any status without a lock field (such as a sleep-only
+broadcast) decodes to it. A broadcast showing the car locked can still prove
+an unlock did not apply, but only the addressed ack confirms one. A broadcast showing a different state does not fail fast (a later
 broadcast in the same window could still confirm success), but if the whole
 window elapses with such a mismatch as the last word and nothing else
 confirming, that is proof the command did not apply and raises
@@ -289,7 +292,8 @@ Verified commands and their provers:
 
 | Command | Prover | Confirmed when |
 | --- | --- | --- |
-| `door_lock()` / `door_unlock()` | `vehicle_state()` | lock state matches |
+| `door_lock()` | `vehicle_state()` | lock state is `LOCKED` |
+| `door_unlock()` | `vehicle_state()` | never confirmed (`UNLOCKED` is the proto3 zero value, so it proves nothing); a `LOCKED` or `INTERNAL_LOCKED` read raises `BluetoothCommandFailed`, any other read stays unresolved |
 | `set_charge_limit(percent)` | `charge_state()` | `charge_limit_soc` matches |
 | `set_charging_amps(amps)` | `charge_state()` | `charging_amps` matches |
 | `adjust_volume(volume)` | `media_state()` | `audio_volume` matches |
