@@ -457,6 +457,91 @@ class CounterAndClockMonotonicityTests(IsolatedAsyncioTestCase):
         self.assertEqual(self.session.epoch, b"\x02" * 16)
 
 
+class VehicleKeyPinningTests(IsolatedAsyncioTestCase):
+    """The vehicle key is trusted at first contact, then pinned for the session.
+
+    ECDH is symmetric, so anyone who has seen the client's public key can tag
+    a ``SessionInfo`` with keys derived from a key of their own: the tag
+    proves nothing about a public key named by the same reply. Once a session
+    has keys, a reply must verify against them, and a different key is refused.
+    """
+
+    def setUp(self) -> None:
+        self.commands = _make_commands()
+        self.domain = Domain.DOMAIN_VEHICLE_SECURITY
+        self.session = self.commands._sessions[self.domain]
+        self.vehicle_public_key = _public_key_bytes(
+            ec.generate_private_key(ec.SECP256R1())
+        )
+
+    def _authenticate(
+        self, public_key: bytes, *, counter: int, epoch: bytes, request_uuid: bytes
+    ) -> None:
+        info = SessionInfo(
+            counter=counter,
+            publicKey=public_key,
+            epoch=epoch,
+            clock_time=int(time.time()),
+            status=Session_Info_Status.SESSION_INFO_STATUS_OK,
+        )
+        reply = _session_info_reply(self.commands, self.domain, info, request_uuid)
+        self.commands.validate_msg(reply, request_uuid)
+
+    def test_reply_naming_a_different_vehicle_key_is_refused(self) -> None:
+        self._authenticate(
+            self.vehicle_public_key,
+            counter=100,
+            epoch=b"\x01" * 16,
+            request_uuid=b"\x01" * 16,
+        )
+        pinned = (
+            self.session.publicKey,
+            self.session.sharedKey,
+            self.session.hmac,
+            self.session.session_info_key,
+            self.session.epoch,
+            self.session.counter,
+        )
+
+        other_key = _public_key_bytes(ec.generate_private_key(ec.SECP256R1()))
+        with self.assertRaises(SessionInfoAuthenticationFault):
+            self._authenticate(
+                other_key, counter=1, epoch=b"\x02" * 16, request_uuid=b"\x02" * 16
+            )
+
+        self.assertEqual(
+            (
+                self.session.publicKey,
+                self.session.sharedKey,
+                self.session.hmac,
+                self.session.session_info_key,
+                self.session.epoch,
+                self.session.counter,
+            ),
+            pinned,
+        )
+
+    def test_same_vehicle_key_refreshes_the_session(self) -> None:
+        self._authenticate(
+            self.vehicle_public_key,
+            counter=100,
+            epoch=b"\x01" * 16,
+            request_uuid=b"\x01" * 16,
+        )
+        hmac_key = self.session.hmac
+
+        self._authenticate(
+            self.vehicle_public_key,
+            counter=3,
+            epoch=b"\x02" * 16,
+            request_uuid=b"\x02" * 16,
+        )
+
+        self.assertEqual(self.session.epoch, b"\x02" * 16)
+        self.assertEqual(self.session.counter, 3)
+        self.assertEqual(self.session.hmac, hmac_key)
+
+
 class ResponseCounterReplayTests(IsolatedAsyncioTestCase):
     """Covers the AES-GCM response-counter dedup check (protocol.md
     "Counter verification"): a response reusing an already-seen counter for
