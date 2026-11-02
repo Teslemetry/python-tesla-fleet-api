@@ -43,7 +43,7 @@ from tesla_protocol.energy_device import (
 from . import queries
 from .exceptions import (
     PowerwallCommandError,
-    PowerwallError,
+    PowerwallEmptyReplyError,
     PowerwallNotSupportedError,
     PowerwallProtocolError,
 )
@@ -126,6 +126,11 @@ _MAX_UINT32: Final = (1 << 32) - 1
 # ``google.rpc.Code.UNIMPLEMENTED``: the gateway answers a command its
 # firmware does not implement with ``common.error_response`` and this code.
 _STATUS_UNIMPLEMENTED: Final = 12
+# ``google.rpc.Code.NOT_FOUND``: the gateway's answer to a manual backup
+# cancel when no event is active.
+_STATUS_NOT_FOUND: Final = 5
+# ``MessageEnvelope`` header fields; every other set field is a category.
+_ENVELOPE_HEADER_FIELDS: Final = frozenset({"delivery_channel", "sender", "recipient"})
 
 # Field numbers within TEGMessages for islanding commands, encoded by hand
 # instead of via teg_api_pb2 to keep this narrow write path independent of
@@ -155,6 +160,18 @@ def _enum_suffix(enum_type: Any, value: int, prefix: str) -> str | int:
     except ValueError:
         return value
     return name.removeprefix(prefix)
+
+
+def _is_empty_reply(response: transport_pb2.MessageEnvelope) -> bool:
+    """True when ``response`` has no category with anything set in it.
+
+    ``{}`` and ``{teg: {}}`` are empty; a reply carrying any response, even a
+    different one, is not.
+    """
+    return all(
+        field.name in _ENVELOPE_HEADER_FIELDS or not value.ListFields()
+        for field, value in response.ListFields()
+    )
 
 
 class PowerwallClient:
@@ -611,7 +628,8 @@ class PowerwallClient:
         din = await self.connect()
 
         # The gateway requires any prior event to be cancelled before a new
-        # one is scheduled — even an expired one.
+        # one is scheduled — even an expired one. A failed cancel raises
+        # before anything is scheduled.
         await self._send_command_request(
             din,
             category="teg",
@@ -619,7 +637,8 @@ class PowerwallClient:
             request_field="cancel_manual_backup_event_request",
             response_field="cancel_manual_backup_event_response",
             populate=lambda req: req.SetInParent(),
-            allow_missing_response=True,
+            allow_empty_reply=True,
+            ignored_status=_STATUS_NOT_FOUND,
         )
 
         def populate(req: Any) -> None:
@@ -640,7 +659,13 @@ class PowerwallClient:
         )
 
     async def cancel_max_backup(self) -> None:
-        """Cancel the active manual backup event (no-op if none active)."""
+        """Cancel the active manual backup event (no-op if none active).
+
+        An empty reply and the gateway's ``NOT_FOUND`` refusal both mean
+        there was nothing to cancel and return ``None``. Every other failure
+        raises: a message fault, a transport error, any other
+        ``common.error_response`` and a reply carrying a different response.
+        """
         din = await self.connect()
         await self._send_command_request(
             din,
@@ -649,7 +674,8 @@ class PowerwallClient:
             request_field="cancel_manual_backup_event_request",
             response_field="cancel_manual_backup_event_response",
             populate=lambda req: req.SetInParent(),
-            allow_missing_response=True,
+            allow_empty_reply=True,
+            ignored_status=_STATUS_NOT_FOUND,
         )
 
     async def dispatch_battery_power(
@@ -1191,7 +1217,8 @@ class PowerwallClient:
         client is signing with will lock it out of the gateway.
 
         The gateway's acknowledgement carries no fields, so a successful call
-        returns ``None``. Faults still raise; call
+        returns ``None``. Message faults, transport errors and every
+        ``common.error_response`` (including ``NOT_FOUND``) raise; call
         :meth:`list_authorized_clients` afterwards if you need positive
         confirmation that the record is gone.
         """
@@ -1216,8 +1243,9 @@ class PowerwallClient:
             response_field="remove_authorized_client_response",
             populate=_populate,
             # The response message is empty, so some firmware omits the oneof
-            # entirely rather than sending a present-but-empty member.
-            allow_missing_response=True,
+            # entirely rather than sending a present-but-empty member. Every
+            # refusal still raises: the key stays paired.
+            allow_empty_reply=True,
         )
 
     # ── Internals: query builders ───────────────────────────────────────────
@@ -1420,7 +1448,8 @@ class PowerwallClient:
         request_field: str,
         response_field: str,
         populate: Callable[[Any], None],
-        allow_missing_response: bool = False,
+        allow_empty_reply: bool = False,
+        ignored_status: int | None = None,
     ) -> transport_pb2.MessageEnvelope:
         """Issue a ``MessageEnvelope.<category>`` command and return the response.
 
@@ -1432,8 +1461,12 @@ class PowerwallClient:
 
         A reply carrying ``common.error_response`` in place of
         ``response_field`` raises :class:`PowerwallCommandError`
-        (:class:`PowerwallNotSupportedError` for ``UNIMPLEMENTED``) unless
-        ``allow_missing_response`` is set.
+        (:class:`PowerwallNotSupportedError` for ``UNIMPLEMENTED``), except
+        for the one ``ignored_status`` code that means there was nothing to
+        do. ``allow_empty_reply`` accepts only an empty reply (no inner
+        message, or an envelope with no response in it) for commands whose
+        success carries no fields. Every other failure raises, so a fault
+        while revoking a key never reports success with the key still paired.
         """
         command = message_cls()
         populate(getattr(command, request_field))
@@ -1450,9 +1483,8 @@ class PowerwallClient:
             inner = await self._transport.post_v1r(
                 envelope.SerializeToString(), din
             )
-        except PowerwallError:
-            if allow_missing_response:
-                # cancel-on-empty: tolerate "nothing to cancel" responses.
+        except PowerwallEmptyReplyError:
+            if allow_empty_reply:
                 return transport_pb2.MessageEnvelope()
             raise
 
@@ -1466,16 +1498,18 @@ class PowerwallClient:
         if not response.HasField(category) or not getattr(
             response, category
         ).HasField(response_field):
-            if allow_missing_response:
-                return response
             if response.common.HasField("error_response"):
                 status = response.common.error_response.status
+                if ignored_status is not None and status.code == ignored_status:
+                    return response
                 error_cls = (
                     PowerwallNotSupportedError
                     if status.code == _STATUS_UNIMPLEMENTED
                     else PowerwallCommandError
                 )
                 raise error_cls(request_field, status.code, status.message)
+            if allow_empty_reply and _is_empty_reply(response):
+                return response
             _LOGGER.warning(
                 "%s response missing %s (request=%s inner len=%d hex=%s parsed=%s)",
                 category,
