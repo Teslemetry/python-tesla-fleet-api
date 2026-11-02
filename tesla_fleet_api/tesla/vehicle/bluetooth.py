@@ -82,6 +82,7 @@ from tesla_protocol.command.vcsec_pb2 import (
     InformationRequestType,
     KeyFormFactor,
     KeyMetadata,
+    OperationStatus_E,
     PermissionChange,
     PublicKey,
     RKEAction_E,
@@ -1907,6 +1908,11 @@ class VehicleBluetooth(
         the user, and the poll re-handshakes on a fresh connection so it
         survives mid-wait reconnects. Raises ``BluetoothTimeout`` if neither
         path confirms before ``timeout`` seconds elapse.
+
+        Success needs positive evidence: a reply that explicitly reports the
+        key added, or a probe answered with authenticated session info. A
+        WAIT, a bare ack or any other reply keeps it waiting; a reply that
+        reports an error raises ``WhitelistOperationStatus``.
         """
 
         if poll_interval <= 0:
@@ -1949,8 +1955,8 @@ class VehicleBluetooth(
                 "protobuf_message_as_bytes",
                 timeout=max(0.0, min(poll_interval, deadline - time.monotonic())),
             )
-            self._raise_for_whitelist_reply(resp)
-            return
+            if self._whitelist_reply_confirms(resp):
+                return
         except BluetoothTimeout:
             pass
 
@@ -1980,11 +1986,23 @@ class VehicleBluetooth(
         ``NotOnWhitelistFault``. Any transport failure mid-poll (a dropped
         session) is treated as 'not yet' so polling keeps running across
         reconnects rather than aborting.
+
+        ``_send`` can also return a bare ack, and the session can be ready
+        from an earlier handshake, so only a reply that carried session info
+        counts: ``validate_msg`` authenticated it against our key. One request
+        per probe; the next poll is the retry.
         """
         try:
-            return await self._handshake(Domain.DOMAIN_VEHICLE_SECURITY)
+            resp = await self._send(
+                self._session_info_request(Domain.DOMAIN_VEHICLE_SECURITY),
+                "session_info",
+            )
         except TeslaFleetError:
             return False
+        return (
+            bool(resp.session_info)
+            and self._sessions[Domain.DOMAIN_VEHICLE_SECURITY].ready
+        )
 
     def _consume_late_whitelist_reply(self) -> bool:
         queue = self._queues[Domain.DOMAIN_VEHICLE_SECURITY]
@@ -2002,8 +2020,7 @@ class VehicleBluetooth(
                 if respMsg.HasField("commandStatus") and respMsg.commandStatus.HasField(
                     "whitelistOperationStatus"
                 ):
-                    self._raise_for_whitelist_reply(resp)
-                    return True
+                    return self._whitelist_reply_confirms(resp)
                 deferred.append(resp)
         except asyncio.QueueEmpty:
             return False
@@ -2011,22 +2028,47 @@ class VehicleBluetooth(
             for resp in deferred:
                 queue.put_nowait(resp)
 
-    def _raise_for_whitelist_reply(self, resp: RoutableMessage) -> None:
-        """Raise the mapped fault if a whitelist-op reply reports one."""
-        respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
-        info = (
-            respMsg.commandStatus.whitelistOperationStatus.whitelistOperationInformation
+    def _whitelist_reply_confirms(self, resp: RoutableMessage) -> bool:
+        """Return whether a whitelist-op reply says the key was added.
+
+        Only an OK carrying a whitelist status that is itself OK does. A WAIT
+        means the vehicle is still waiting for the key card tap, and a bare
+        ack, a vehicle status or an undecodable payload says nothing, so
+        ``pair`` keeps polling. Raises the mapped fault, or
+        ``WhitelistOperationStatus``, if the reply reports a refusal.
+        """
+        try:
+            respMsg = FromVCSECMessage.FromString(resp.protobuf_message_as_bytes)
+        except DecodeError:
+            return False
+        status = respMsg.commandStatus
+        has_whitelist = respMsg.HasField("commandStatus") and status.HasField(
+            "whitelistOperationStatus"
         )
-        if not info:
-            return
-        if info < len(WHITELIST_OPERATION_STATUS):
-            exception = WHITELIST_OPERATION_STATUS[info]
-            if exception:
-                raise exception
-        else:
+        whitelist = status.whitelistOperationStatus
+        info = whitelist.whitelistOperationInformation
+        if info:
+            if info < len(WHITELIST_OPERATION_STATUS):
+                exception = WHITELIST_OPERATION_STATUS[info]
+                if exception:
+                    raise exception
+            else:
+                raise WhitelistOperationStatus(
+                    f"Unknown whitelist operation failure: {info}"
+                )
+        if (
+            respMsg.HasField("nominalError")
+            or status.operationStatus == OperationStatus_E.OPERATIONSTATUS_ERROR
+            or whitelist.operationStatus == OperationStatus_E.OPERATIONSTATUS_ERROR
+        ):
             raise WhitelistOperationStatus(
-                f"Unknown whitelist operation failure: {info}"
+                "The vehicle refused the whitelist operation."
             )
+        return (
+            has_whitelist
+            and status.operationStatus == OperationStatus_E.OPERATIONSTATUS_OK
+            and whitelist.operationStatus == OperationStatus_E.OPERATIONSTATUS_OK
+        )
 
     async def wake_up(
         self, wait: bool = False, timeout: float = DEFAULT_WAKE_TIMEOUT

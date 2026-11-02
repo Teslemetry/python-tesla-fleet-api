@@ -126,7 +126,9 @@ whitelist success reply arrives, but also polls whether the key became effective
 (every `poll_interval` seconds, default 5) up to an overall `timeout` (default
 300 seconds), so it still completes if that one-shot reply is lost to a BLE
 reconnect while you walk to the car. It raises `BluetoothTimeout` if neither
-confirms in time.
+confirms in time. Only positive evidence counts: a WAIT, a bare ack or any reply
+that does not report the key added keeps it waiting, and a reply that reports an
+error raises `WhitelistOperationStatus` or one of its subclasses.
 
 ## Wake Up Vehicle
 
