@@ -29,8 +29,10 @@ from tesla_fleet_api.exceptions import (
 from tesla_fleet_api.tesla.energysite import (
     EnergySite,
     EnergySites,
+    raise_on_island_rejection,
     validate_dispatch_battery_power,
 )
+from tesla_fleet_api.tesla.island import validate_island_mode
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -379,14 +381,17 @@ class TeslemetryEnergySite(EnergySite):
         """
         if self._signer is not None:
             return await super().set_island_mode(mode, force)
+        validate_island_mode(mode, force)
         data: dict[str, Any] = {"mode": int(mode)}
         if force is not None:
             data["force"] = force
-        return await self._request(
+        result = await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command/set_island_mode",
             json=data,
         )
+        raise_on_island_rejection(result)
+        return result
 
     async def get_backup_events(self) -> dict[str, Any]:
         """Get backup events from the energy gateway.

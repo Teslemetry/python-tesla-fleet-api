@@ -25,6 +25,7 @@ from tesla_fleet_api.exceptions import (
     SignedCommandRequired,
 )
 from tesla_fleet_api.tesla.energy_signing import EnergyDeviceSigner
+from tesla_fleet_api.tesla.island import island_mode_rejection, validate_island_mode
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -66,6 +67,24 @@ def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -
 _UNIMPLEMENTED = 12
 
 
+def _reply_envelope(result: Any) -> transport_pb2.MessageEnvelope | None:
+    """The ``MessageEnvelope`` a ``device_command`` reply carries, if it decodes."""
+    if not isinstance(result, dict):
+        return None
+    response = result.get("response")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not isinstance(response, dict):
+        return None
+    encoded = response.get("message_envelope_as_bytes")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not isinstance(encoded, str):
+        return None
+    envelope = transport_pb2.MessageEnvelope()
+    try:
+        envelope.ParseFromString(base64.b64decode(encoded, validate=True))
+    except (binascii.Error, DecodeError):
+        return None
+    return envelope
+
+
 def _raise_on_error_response(result: dict[str, Any]) -> None:
     """Raise if a ``device_command`` reply holds ``common.error_response``.
 
@@ -75,25 +94,42 @@ def _raise_on_error_response(result: dict[str, Any]) -> None:
     Both carry ``{"code", "message"}`` as ``data``. A reply without
     decodable envelope bytes is left alone.
     """
-    response = result.get("response")
-    if not isinstance(response, dict):
-        return
-    encoded = response.get("message_envelope_as_bytes")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    if not isinstance(encoded, str):
-        return
-    envelope = transport_pb2.MessageEnvelope()
-    try:
-        envelope.ParseFromString(base64.b64decode(encoded, validate=True))
-    except (binascii.Error, DecodeError):
-        return
+    envelope = _reply_envelope(result)
     # error_response sits outside CommonMessages' ``message`` oneof.
-    if not envelope.common.HasField("error_response"):
+    if envelope is None or not envelope.common.HasField("error_response"):
         return
     status = envelope.common.error_response.status
     data: dict[str, Any] = {"code": status.code, "message": status.message}
     if status.code == _UNIMPLEMENTED:
         raise InvalidCommand(data)
     raise DeviceUnexpectedResponse(data)
+
+
+def raise_on_island_rejection(result: Any) -> None:
+    """Raise if a ``set_island_mode`` reply reports a ``REJECTED_*`` result.
+
+    The gateway refuses an island request inside an ordinary
+    ``set_island_mode_response``, for example ``REJECTED_LOW_ENERGY``. A
+    signed reply carries it in the envelope; Teslemetry's keyless route
+    decodes that and answers ``{"response": {"result": ...}}``. Raises
+    ``DeviceUnexpectedResponse`` with ``{"code", "message"}`` as ``data``,
+    ``message`` being the result's name, on the same codes as the local
+    Powerwall client. Any other reply is left alone.
+    """
+    envelope = _reply_envelope(result)
+    if envelope is not None:
+        if not envelope.teg.HasField("set_island_mode_response"):
+            return
+        reported: Any = envelope.teg.set_island_mode_response.result
+    else:
+        response = result.get("response") if isinstance(result, dict) else None  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if not isinstance(response, dict):
+            return
+        reported = response.get("result")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    rejection = island_mode_rejection(reported)
+    if rejection is not None:
+        code, name = rejection
+        raise DeviceUnexpectedResponse({"code": code, "message": name})
 
 
 class EnergySite:
@@ -502,18 +538,24 @@ class EnergySite:
         ``SignedCommandRequired`` before any request. For a signed local LAN
         path, compose an aiopowerwall local backend with ``EnergySiteRouter``.
 
-        A success-shaped reply does not prove the contactor moved: confirm
+        A gateway refusal (a ``REJECTED_*`` result such as
+        ``REJECTED_LOW_ENERGY``) raises ``DeviceUnexpectedResponse``. An
+        accepted reply still does not prove the contactor moved: confirm
         ``island_status`` with a status read before relying on it.
 
         Args:
-            mode: ``EnergyIslandMode.OFF_GRID`` (6) or ``ON_GRID`` (1).
+            mode: ``EnergyIslandMode.OFF_GRID`` (6) or ``ON_GRID`` (1). Any
+                  other value raises ``ValueError`` before any request.
             force: Sent when not ``None``. Some gateways need ``True`` to
-                   open the contactor.
+                   open the contactor. Must be a bool when given.
         """
+        validate_island_mode(mode, force)
         params: dict[str, Any] = {"mode": int(mode)}
         if force is not None:
             params["force"] = force
-        return await self._signed_command("teg", "set_island_mode_request", params)
+        result = await self._signed_command("teg", "set_island_mode_request", params)
+        raise_on_island_rejection(result)
+        return result
 
     async def go_off_grid(self) -> dict[str, Any]:
         """Request off-grid mode, with ``force=True`` as aiopowerwall does.

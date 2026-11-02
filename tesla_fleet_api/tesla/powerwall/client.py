@@ -40,6 +40,7 @@ from tesla_protocol.energy_device import (
     transport_pb2,
 )
 
+from ..island import island_mode_rejection
 from . import queries
 from .exceptions import (
     PowerwallCommandError,
@@ -83,15 +84,6 @@ GRID_EXPORT_RULES: Final = ("battery_ok", "pv_only", "never")
 # setIslandModeRequest mode values used by both PW2 and PW3.
 _ISLAND_MODE_OFF_GRID: Final = 6
 _ISLAND_MODE_ON_GRID: Final = 1
-# TEGSetIslandModeResult values meaning the gateway refused the request.
-_SET_ISLAND_MODE_REJECTIONS: Final = frozenset(
-    {
-        teg_api_pb2.TEG_SET_ISLAND_MODE_RESULT_REJECTED_NOT_READY_FOR_ISLANDING,
-        teg_api_pb2.TEG_SET_ISLAND_MODE_RESULT_REJECTED_LOAD_DROP_EXPECTED,
-        teg_api_pb2.TEG_SET_ISLAND_MODE_RESULT_REJECTED_LOW_ENERGY,
-        teg_api_pb2.TEG_SET_ISLAND_MODE_RESULT_REJECTED_EXCESSIVE_SOLAR,
-    }
-)
 
 # Tesla scales the user-facing backup reserve (what the app and Fleet API
 # show, 0-100) into the gateway's raw ``config.json`` value as
@@ -991,9 +983,9 @@ class PowerwallClient:
             return
         result = response.teg.set_island_mode_response.result
         _LOGGER.debug("set_island_mode: gateway result=%d", result)
-        if result in _SET_ISLAND_MODE_REJECTIONS:
-            name = teg_api_pb2.TEGSetIslandModeResult.Name(result)
-            raise PowerwallCommandError("set_island_mode_request", result, name)
+        rejection = island_mode_rejection(result)
+        if rejection is not None:
+            raise PowerwallCommandError("set_island_mode_request", *rejection)
 
     async def go_off_grid(
         self,

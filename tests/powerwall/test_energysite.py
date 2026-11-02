@@ -206,6 +206,21 @@ async def test_set_island_mode_explicit_force_overrides_default() -> None:
     ]
 
 
+@pytest.mark.parametrize("mode", [0, 2, 3, 5, 7, 99, -1, "6", None, True])
+async def test_set_island_mode_rejects_other_modes(mode: Any) -> None:
+    site, fake = _adapter()
+    with pytest.raises(ValueError):
+        await site.set_island_mode(mode)
+    assert fake.calls == []
+
+
+async def test_set_island_mode_rejects_non_bool_force() -> None:
+    site, fake = _adapter()
+    with pytest.raises(ValueError):
+        await site.set_island_mode(ISLAND_MODE_OFF_GRID, force=cast(Any, "yes"))
+    assert fake.calls == []
+
+
 async def test_go_off_grid_maps_to_client() -> None:
     site, fake = _adapter()
     result = await site.go_off_grid()
