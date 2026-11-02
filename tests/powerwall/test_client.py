@@ -18,10 +18,15 @@ from tesla_protocol.energy_device import (
 )
 
 from tesla_fleet_api.tesla.powerwall import (
+    PowerwallAuthenticationError,
     PowerwallClient,
     PowerwallCommandError,
+    PowerwallConnectionError,
+    PowerwallEmptyReplyError,
+    PowerwallFaultError,
     PowerwallNotSupportedError,
     PowerwallProtocolError,
+    PowerwallRateLimitError,
 )
 
 
@@ -452,6 +457,126 @@ async def test_other_error_status_raises_command_error() -> None:
 async def test_error_status_tolerated_when_missing_response_allowed() -> None:
     pw = _client_for(_error_reply(5, "no active event"))
     await pw.cancel_max_backup()
+
+
+# ── tolerated empty replies must not swallow failures ───────────────────────
+
+
+class _RaisingTransport:
+    """A transport whose ``post_v1r`` raises ``error`` on the first call."""
+
+    def __init__(self, error: BaseException) -> None:
+        self._error = error
+        self.sent: list[bytes] = []
+
+    async def post_v1r(self, envelope_bytes: bytes, din: str) -> bytes:
+        self.sent.append(envelope_bytes)
+        raise self._error
+
+
+def _client_raising(error: BaseException) -> PowerwallClient:
+    pw = _client_for(transport_pb2.MessageEnvelope())
+    pw._transport = _RaisingTransport(error)  # type: ignore[attr-defined]
+    return pw
+
+
+def _empty_teg_reply() -> transport_pb2.MessageEnvelope:
+    envelope = transport_pb2.MessageEnvelope()
+    envelope.teg.SetInParent()
+    return envelope
+
+
+def _other_teg_reply() -> transport_pb2.MessageEnvelope:
+    envelope = transport_pb2.MessageEnvelope()
+    envelope.teg.dispatch_battery_power_response.SetInParent()
+    return envelope
+
+
+_TRANSPORT_FAILURES = [
+    PowerwallFaultError("MESSAGEFAULT_ERROR_BUSY"),
+    PowerwallConnectionError("unreachable"),
+    PowerwallAuthenticationError("unknown key"),
+    PowerwallRateLimitError("429"),
+    PowerwallProtocolError("HTTP 500"),
+]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [transport_pb2.MessageEnvelope(), _empty_teg_reply(), _error_reply(5, "none")],
+    ids=["empty-envelope", "empty-teg", "not-found"],
+)
+async def test_cancel_max_backup_tolerates_nothing_to_cancel(
+    reply: transport_pb2.MessageEnvelope,
+) -> None:
+    assert await _client_for(reply).cancel_max_backup() is None
+
+
+async def test_cancel_max_backup_tolerates_empty_inner_message() -> None:
+    pw = _client_raising(PowerwallEmptyReplyError("RoutableMessage response is empty"))
+    assert await pw.cancel_max_backup() is None
+
+
+@pytest.mark.parametrize("error", _TRANSPORT_FAILURES, ids=lambda e: type(e).__name__)
+async def test_cancel_max_backup_raises_transport_failures(error: Exception) -> None:
+    with pytest.raises(type(error)):
+        await _client_raising(error).cancel_max_backup()
+
+
+@pytest.mark.parametrize(
+    ("reply", "error"),
+    [
+        (_error_reply(7, "denied"), PowerwallCommandError),
+        (_error_reply(12, "no"), PowerwallNotSupportedError),
+        (_other_teg_reply(), PowerwallProtocolError),
+    ],
+    ids=["refused", "unimplemented", "other-response"],
+)
+async def test_cancel_max_backup_raises_on_refusal(
+    reply: transport_pb2.MessageEnvelope, error: type[Exception]
+) -> None:
+    with pytest.raises(error):
+        await _client_for(reply).cancel_max_backup()
+
+
+async def test_schedule_max_backup_stops_when_cancel_fails() -> None:
+    pw = _client_raising(PowerwallFaultError("MESSAGEFAULT_ERROR_BUSY"))
+    transport = pw._transport  # type: ignore[attr-defined]
+
+    with pytest.raises(PowerwallFaultError):
+        await pw.schedule_max_backup(3600)
+
+    assert len(transport.sent) == 1
+
+
+async def test_remove_authorized_client_tolerates_empty_inner_message() -> None:
+    pw = _client_raising(PowerwallEmptyReplyError("RoutableMessage response is empty"))
+    assert await pw.remove_authorized_client(b"\x01") is None
+
+
+@pytest.mark.parametrize("error", _TRANSPORT_FAILURES, ids=lambda e: type(e).__name__)
+async def test_remove_authorized_client_raises_transport_failures(
+    error: Exception,
+) -> None:
+    with pytest.raises(type(error)):
+        await _client_raising(error).remove_authorized_client(b"\x01")
+
+
+@pytest.mark.parametrize(
+    ("reply", "error"),
+    [
+        (_error_reply(5, "not found"), PowerwallCommandError),
+        (_error_reply(14, "busy"), PowerwallCommandError),
+        (_error_reply(12, "no"), PowerwallNotSupportedError),
+    ],
+    ids=["not-found", "unavailable", "unimplemented"],
+)
+async def test_remove_authorized_client_raises_on_refusal(
+    reply: transport_pb2.MessageEnvelope, error: type[Exception]
+) -> None:
+    """Any refusal leaves the key paired, so it must not look like success."""
+    with pytest.raises(error):
+        await _client_for(reply).remove_authorized_client(b"\x01")
 
 
 

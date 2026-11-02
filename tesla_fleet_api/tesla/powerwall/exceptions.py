@@ -39,6 +39,15 @@ class PowerwallProtocolError(PowerwallError):
     """The Powerwall returned an unexpected response (bad protobuf, JSON, etc.)."""
 
 
+class PowerwallEmptyReplyError(PowerwallProtocolError):
+    """The gateway answered a v1r request with no inner message.
+
+    Only commands whose success carries no fields
+    (``remove_authorized_client`` and the manual backup cancel) accept this
+    reply; every other request treats it as a protocol error.
+    """
+
+
 class PowerwallFaultError(PowerwallError):
     """A signed v1r request returned a non-NONE message_fault.
 

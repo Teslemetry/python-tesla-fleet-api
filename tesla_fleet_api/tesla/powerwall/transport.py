@@ -29,6 +29,7 @@ from ..energy_signing import EnergyDeviceSigner
 from .exceptions import (
     PowerwallAuthenticationError,
     PowerwallConnectionError,
+    PowerwallEmptyReplyError,
     PowerwallFaultError,
     PowerwallProtocolError,
     PowerwallRateLimitError,
@@ -227,7 +228,7 @@ class V1rTransport:
                 content.hex(),
                 str(response).replace("\n", " | "),
             )
-            raise PowerwallProtocolError("RoutableMessage response is empty")
+            raise PowerwallEmptyReplyError("RoutableMessage response is empty")
         return inner
 
     # ── Internals ───────────────────────────────────────────────────────────

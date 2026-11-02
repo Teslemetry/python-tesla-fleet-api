@@ -16,6 +16,9 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from tesla_protocol.energy_device import signed_message_pb2
 
+import pytest
+
+from tesla_fleet_api.tesla.powerwall.exceptions import PowerwallEmptyReplyError
 from tesla_fleet_api.tesla.powerwall.transport import V1rTransport
 
 # A test key only; it is not registered on any gateway.
@@ -78,13 +81,14 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    def __init__(self) -> None:
+    def __init__(self, reply_envelope: bytes = REPLY_ENVELOPE) -> None:
         self.posted: list[bytes] = []
+        self._reply_envelope = reply_envelope
 
     def post(self, url: str, *, data: bytes, **kwargs: Any) -> _FakeResponse:
         self.posted.append(data)
         reply = signed_message_pb2.RoutableMessage()
-        reply.protobuf_message_as_bytes = REPLY_ENVELOPE
+        reply.protobuf_message_as_bytes = self._reply_envelope
         return _FakeResponse(reply.SerializeToString())
 
 
@@ -142,3 +146,15 @@ async def test_fixed_vector_signature_verifies_with_12_second_ttl() -> None:
         padding.PKCS1v15(),
         hashes.SHA512(),
     )
+
+
+async def test_empty_inner_message_raises_empty_reply_error() -> None:
+    """Only this error is tolerated by commands whose success has no body."""
+    transport = V1rTransport(
+        host="192.168.91.1",
+        password="MyWiFiPassword123",
+        rsa_private_key_pem=TEST_KEY_PEM,
+        session=_FakeSession(b""),  # type: ignore[arg-type]
+    )
+    with pytest.raises(PowerwallEmptyReplyError):
+        await transport.post_v1r(ENVELOPE, DIN)
