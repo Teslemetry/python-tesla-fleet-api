@@ -38,6 +38,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, cast
 
+from ..island import validate_island_mode
 from .authorized_clients import AuthorizedClients, parse_authorized_clients
 from .client import PowerwallClient, battery_level, raw_to_scaled_reserve
 
@@ -176,8 +177,11 @@ class PowerwallEnergySite:
 
         ``mode`` is :data:`ISLAND_MODE_OFF_GRID` (6) to island or
         :data:`ISLAND_MODE_ON_GRID` (1) to reconnect. ``force`` defaults to
-        ``True`` for off-grid, ``False`` otherwise (matching the cloud).
+        ``True`` for off-grid, ``False`` otherwise (matching the cloud). Any
+        other mode, or a ``force`` that is not a bool, raises ``ValueError``
+        before any request.
         """
+        validate_island_mode(mode, force)
         mode_int = int(mode)
         off_grid = mode_int == ISLAND_MODE_OFF_GRID
         if force is None:
