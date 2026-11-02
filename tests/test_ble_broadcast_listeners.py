@@ -211,13 +211,13 @@ class TypedFieldListenerTests(IsolatedAsyncioTestCase):
         vehicle.listen_ui_desire(seen.append)
 
         vehicle._on_message(
-            _status_broadcast(VehicleStatus(uiDesire=UIDesire_E.UI_DESIRE_HAS_DATA))
+            _status_broadcast(VehicleStatus(UIDesire=UIDesire_E.UI_DESIRE_HAS_DATA))
         )
 
         self.assertEqual(seen, [UIDesire_E.UI_DESIRE_HAS_DATA])
 
     async def test_ui_desire_listener_fires_with_default_when_absent(self) -> None:
-        # uiDesire is a scalar proto3 field, so it has no HasField presence -
+        # UIDesire is a scalar proto3 field, so it has no HasField presence -
         # a broadcast that never sets it still fires with the 0 default.
         vehicle = _make_vehicle()
         seen: list[Any] = []

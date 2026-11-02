@@ -204,10 +204,9 @@ async def test_remove_authorized_client_rejects_empty_key(empty: bytes | str) ->
 
 
 async def test_get_backup_events_parses_scheduled_and_manual_events() -> None:
-    """teg_api_pb2.BackupEvent field 3 is published as ``sheduling_info``
+    """teg_api_pb2.BackupEvent field 3 is ``scheduling_info``.
 
-    (missing the first "c") in tesla-protocol 1.3.1 — this pins the client's
-    matching attribute access against that upstream misspelling.
+    tesla-protocol 6.0.0 renamed it from the misspelled ``sheduling_info``.
     """
     envelope = transport_pb2.MessageEnvelope()
     events_resp = envelope.teg.get_backup_events_response
@@ -219,9 +218,9 @@ async def test_get_backup_events_parses_scheduled_and_manual_events() -> None:
     evt = events_resp.backup_events.add()
     evt.id = "evt-1"
     evt.name = "Storm Watch"
-    evt.sheduling_info.start_time.seconds = 1_700_100_000
-    evt.sheduling_info.duration_seconds = 7200
-    evt.sheduling_info.priority = 42
+    evt.scheduling_info.start_time.seconds = 1_700_100_000
+    evt.scheduling_info.duration_seconds = 7200
+    evt.scheduling_info.priority = 42
 
     pw = _client_for(envelope)
     result = await pw.get_backup_events()
@@ -646,8 +645,12 @@ async def test_get_controllable_device_programs_one_program() -> None:
     program.key.device_id = "breaker-1"
     program.key.priority = 5000
     program.settings.contactor_state = 1
-    program.schedule.start.seconds = 1_700_000_000
-    program.schedule.end.seconds = 1_700_003_600
+    program.schedule.start.timestamp.seconds = 1_700_000_000
+    program.schedule.end.timestamp.seconds = 1_700_003_600
+    # A non-timestamp boundary has no time, so it reads as None.
+    program.schedule.expiry.static_condition = (
+        teg_api_pb2.ControllableDeviceProgram_Schedule_Boundary.STATIC_CONDITION_NEVER
+    )
     unknown = resp.inactive_programs.add()
     unknown.key.device_id = "breaker-2"
     unknown.key.priority = 777

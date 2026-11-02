@@ -464,9 +464,9 @@ commands over BLE:
 - `set_low_power_mode(on)`
 
 For the GPS navigation methods, `order` is the Tesla/protobuf remote-nav order
-integer: `1` replaces the trip, `2` prepends a stop, and `3` appends a stop.
-`navigation_gps_request`'s `order` defaults to `0`
-(`REMOTE_NAV_TRIP_ORDER_UNKNOWN`) when omitted, matching the cloud path.
+integer (`RemoteNavTripOrder_E`): `0` replaces the trip, `1` prepends a stop,
+and `2` appends a stop. `navigation_gps_request`'s `order` defaults to `0`
+(replace) when omitted, matching the cloud path.
 These commands are ACK-only over BLE; the library returns the vehicle's command
 acknowledgement, but there is no separate BLE state prover for the navigation
 destination, dashcam clip save, flash-lights action, or power-mode toggle.
