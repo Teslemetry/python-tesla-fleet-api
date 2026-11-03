@@ -8,10 +8,13 @@ Teslemetry, Tessie and vehicle BLE. Published to PyPI as `tesla-fleet-api`.
 ```bash
 uv sync                                 # install
 uv run pyright tesla_fleet_api          # type check (strict)
-uv run ruff check tesla_fleet_api       # lint
-uv run ruff format tesla_fleet_api
+uv run ruff check tesla_fleet_api tests # lint (as CI runs it)
 uv run pytest tests
 ```
+
+CI does not check formatting and the tree is not `ruff format`-clean. Run
+`ruff format` only on the files you change; on a whole directory it rewrites
+unrelated files.
 
 Tests use `unittest.IsolatedAsyncioTestCase` collected by pytest (no
 `pytest-asyncio`), except `tests/powerwall/`, whose plain `async def` tests run
@@ -28,25 +31,27 @@ through its `conftest.py`. BLE command tests build on `MockedBleTransportTestCas
 
 ## Release
 
-No release automation. Bump `version` in `pyproject.toml` and `__version__` in
-`tesla_fleet_api/__init__.py`, run `uv lock` (CI uses `uv sync --locked`), commit
-on `main`, push a `vX.Y.Z` tag. `release.yml` publishes to PyPI via OIDC trusted
-publishing in the `pypi` environment, which has **no required reviewers**:
-merging the version-bump PR is the publish approval. Keep `release.yml` a plain
-top-level workflow, never `workflow_call` — the trusted publisher is bound to
-`release.yml` + `pypi`.
+No release automation; the `release` skill has the steps. Bump `version` in
+`pyproject.toml` and `__version__` in `tesla_fleet_api/__init__.py`, run `uv lock`
+(CI uses `uv sync --locked`), and merge a `Bump version to X.Y.Z` PR that changes
+only those three files. Then push a `vX.Y.Z` tag on the merge commit.
+`release.yml` publishes to PyPI via OIDC trusted publishing in the `pypi`
+environment, which has **no required reviewers**: merging the version-bump PR is
+the publish approval. Keep `release.yml` a plain top-level workflow, never
+`workflow_call` — the trusted publisher is bound to `release.yml` + `pypi`.
 
 ## Dependencies
 
 - Protobuf bindings come from the `tesla-protocol` PyPI package
   (`tesla_protocol.command.<module>_pb2`); `tesla/vehicle/proto/` holds only
-  re-export shims. There is no local regeneration step: bump the floor instead.
+  re-export shims. There is no local regeneration step: bump the pin instead,
+  floor and major cap together (`>=X.Y.Z,<X+1`). A major release renames fields.
 - **Home Assistant pin**: protobuf refuses gencode newer than the runtime. Before
   bumping `tesla-protocol`, check HA core's `protobuf` pin
   (`homeassistant/package_constraints.txt`) and keep our `protobuf` floor in sync.
-- Do not add dependencies on aiopowerwall or `teslemetry-stream`.
-  `EnergySiteRouter` and `BleBroadcastStreamGlue` use local structural
-  `Protocol`s instead.
+- Do not add dependencies on aiopowerwall or `teslemetry-stream`. The Powerwall
+  LAN client lives in `tesla/powerwall/`; `BleBroadcastStreamGlue` writes to the
+  structural `StreamSink` `Protocol`.
 - `firmware_compare`/`firmware_at_least` (`util.py`) must be used for firmware
   strings (`"2025.10" < "2025.9"` as strings). No version-parsing dependency.
 
@@ -63,9 +68,10 @@ top-level workflow, never `workflow_call` — the trusted publisher is bound to
   `TimeoutError` (bleak-esphome raises a bare `TimeoutError`).
 - `exceptions.is_key_rejected` is a positive allowlist verified against each
   fault's proto enum meaning, not its name.
-- Captain directive: full proto coverage. `tests/test_proto_coverage_lock.py`
-  fails on any unwrapped `VehicleAction`/`GetVehicleData` field; keep it in sync
-  on a `tesla-protocol` bump instead of special-casing new fields.
+- Full proto coverage: `tests/test_proto_coverage_lock.py` fails on any
+  unwrapped `VehicleAction`/`GetVehicleData` field. On a `tesla-protocol` bump,
+  wrap each new field. Allowlist a field only with a written reason, in one of
+  the reasoned sets; never special-case it in the test logic.
 - **Seat indexing**: `Seat` is 0-indexed and only for
   `remote_seat_heater_request`. `AutoSeat` is 1-indexed and is the type for
   `remote_auto_seat_climate_request` on both backends. A `Seat` there is off by one.
@@ -98,6 +104,12 @@ top-level workflow, never `workflow_call` — the trusted publisher is bound to
   signing key, Fleet `EnergySite` raises `SignedCommandRequired`, and
   `TeslemetryEnergySite` calls Teslemetry's server-signed route. Only a signed
   path actuates; verify state after.
+- `TeslemetryEnergySite` without a signing key calls only dedicated Teslemetry api
+  routes, never the generic command route. If a route is missing, add it to the
+  api first; do not ship a fallback. With a key, it signs and uses `device_command`.
+- Never route `operation`, `backup` and `grid_import_export` for one site to
+  different backends. All three write the gateway `config.json`, so a split lets
+  one write overwrite the other.
 
 ## ObservationFunnel (`funnel.py`)
 
