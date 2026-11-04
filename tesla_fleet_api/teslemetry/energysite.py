@@ -30,6 +30,7 @@ from tesla_fleet_api.tesla.energysite import (
     EnergySite,
     EnergySites,
     raise_on_island_rejection,
+    validate_config_json_settings,
     validate_dispatch_battery_power,
 )
 from tesla_fleet_api.tesla.island import validate_island_mode
@@ -341,9 +342,9 @@ class TeslemetryEnergySite(EnergySite):
     command except the four pre-pairing reads is signed with that key and
     sent through Teslemetry's ``device_command`` route. Without a key, a
     command uses its Teslemetry route. The ``set_island_mode``,
-    ``backup_events`` and ``config`` routes sign with Teslemetry's own key,
-    which must be verified on the gateway, or the route answers 409
-    ``energy_site_not_paired`` and sends nothing. As of 2026-10-29 the
+    ``backup_events``, ``config`` and ``config_json`` routes sign with
+    Teslemetry's own key, which must be verified on the gateway, or the route
+    answers 409 ``energy_site_not_paired`` and sends nothing. As of 2026-10-29 the
     ``dispatch_battery_power``, ``resume_battery_operation`` and backup-event
     schedule/cancel routes still send unsigned, so Tesla answers HTTP 400:
     keyless dispatch does not work until Teslemetry signs those routes.
@@ -418,6 +419,43 @@ class TeslemetryEnergySite(EnergySite):
             Method.GET,
             f"api/1/energy_sites/{self.energy_site_id}/command/config",
         )
+
+    async def get_config_json(self) -> dict[str, Any]:
+        """Read the gateway's whole config.json as ``{"response": config}``.
+
+        With a signing key this signs the filestore read with that key.
+        Without one it calls the Teslemetry route, which signs it with
+        Teslemetry's key. See :meth:`EnergySite.get_config_json`.
+        """
+        if self._signer is not None:
+            return await super().get_config_json()
+        return await self._get_route("config_json")
+
+    async def set_config_json(
+        self,
+        min_site_meter_power_ac: float | None = None,
+        max_site_meter_power_ac: float | None = None,
+        on_grid_solar_curtailment_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Set any of the grid export limit, grid import limit and on-grid solar curtailment.
+
+        With a signing key this signs the filestore read and update with that
+        key. Without one it calls the Teslemetry route, which does the same
+        read and hash-checked write with Teslemetry's key and answers the same
+        ``applied`` readback. See :meth:`EnergySite.set_config_json`.
+        """
+        if self._signer is not None:
+            return await super().set_config_json(
+                min_site_meter_power_ac,
+                max_site_meter_power_ac,
+                on_grid_solar_curtailment_enabled,
+            )
+        changes = validate_config_json_settings(
+            min_site_meter_power_ac,
+            max_site_meter_power_ac,
+            on_grid_solar_curtailment_enabled,
+        )
+        return await self._post_route("config_json", changes)
 
     async def _get_route(self, route: str) -> dict[str, Any]:
         return await self._request(

@@ -669,6 +669,11 @@ their route. See
 | `schedule_backup_event(...)` | `POST .../command/schedule_backup_event` |
 | `cancel_backup_event()` | `POST .../command/cancel_backup_event` |
 | `get_teg_config()` | `GET .../command/config` |
+| `get_config_json()` | `GET .../command/config_json` |
+| `set_config_json(...)`, `set_export_limit(kilowatts)`, `set_import_limit(kilowatts)`, `set_on_grid_solar_curtailment(enabled)` | `POST .../command/config_json` |
+
+`get_config_json()` and `set_config_json()` are also signed by Teslemetry. `set_config_json(min_site_meter_power_ac=None, max_site_meter_power_ac=None, on_grid_solar_curtailment_enabled=None)` posts only the settings given and answers the values the gateway stores plus `applied`. See
+[Fleet API for Energy Sites](fleet_api_energy_sites.md#available-commands) for units and limits.
 
 ## Energy Site Battery Dispatch
 
