@@ -335,8 +335,14 @@ def battery_units(
         for expansion_din in dins:
             expansion_slot = matched.get(expansion_din)
             if expansion_slot is None:
-                if unclaimed:
-                    expansion_slot = unclaimed.pop(0)
+                # A serialized row that matched no configured DIN is a
+                # different unit; only an unserialized row can be this one.
+                unserialized = [
+                    s for s in unclaimed if not component_serial(components, s)
+                ]
+                if unserialized:
+                    expansion_slot = unserialized[0]
+                    unclaimed.remove(expansion_slot)
                 elif not bms_slots:
                     # No BMS rows at all: keep the config-driven unit list
                     # until the gateway starts returning them.

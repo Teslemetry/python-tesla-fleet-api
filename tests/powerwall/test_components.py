@@ -170,6 +170,48 @@ def test_unconfigured_bms_row_inferred_as_leader_expansion(
     )
 
 
+def test_unmatched_expansion_skips_another_units_serialized_row(
+    sample: dict[str, Any],
+) -> None:
+    # The second configured expansion matches no BMS serial. Slot 2 is
+    # serialized as a different unit, so the unserialized pack in slot 3 is
+    # the one to take.
+    other_din = "1807000-20-B--TG10000000009Z"
+    sample["config"]["battery_blocks"][0]["battery_expansions"][1]["din"] = other_din
+    pack = _bms(sample["components"], 3)
+    _set_signal(pack, "BMS_nominalFullPackEnergy", 14.4)
+    _set_signal(pack, "BMS_nominalEnergyRemaining", 10.0)
+    sample["status"]["control"]["systemStatus"]["nominalFullPackEnergyWh"] = 57600
+
+    units = battery_units(sample["config"], sample["status"], sample["components"])
+    assert [(u.component_slot, u.din, u.serial_number) for u in units] == [
+        (0, LEADER_DIN, "TG10000000001B"),
+        (1, EXP1_DIN, "TG10000000002C"),
+        (3, other_din, None),
+        (2, None, "TG10000000003D"),
+    ]
+
+
+def test_unmatched_expansion_dropped_when_unclaimed_rows_are_serialized(
+    sample: dict[str, Any],
+) -> None:
+    other_din = "1807000-20-B--TG10000000009Z"
+    sample["config"]["battery_blocks"][0]["battery_expansions"][1]["din"] = other_din
+    sample["components"]["components"]["hvp"][3]["serialNumber"] = "TG10000000008Y"
+    pack = _bms(sample["components"], 3)
+    _set_signal(pack, "BMS_nominalFullPackEnergy", 14.4)
+    _set_signal(pack, "BMS_nominalEnergyRemaining", 10.0)
+    sample["status"]["control"]["systemStatus"]["nominalFullPackEnergyWh"] = 57600
+
+    units = battery_units(sample["config"], sample["status"], sample["components"])
+    assert [(u.component_slot, u.din, u.serial_number) for u in units] == [
+        (0, LEADER_DIN, "TG10000000001B"),
+        (1, EXP1_DIN, "TG10000000002C"),
+        (2, None, "TG10000000003D"),
+        (3, None, "TG10000000008Y"),
+    ]
+
+
 def test_no_bms_rows_keeps_config_shape(sample: dict[str, Any]) -> None:
     sample["components"]["components"]["bms"] = []
     units = battery_units(sample["config"], sample["status"], sample["components"])
