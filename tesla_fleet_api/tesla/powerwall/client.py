@@ -208,7 +208,7 @@ class PowerwallClient:
         # Pre-curtailment snapshot, captured by ``curtail`` and consumed
         # by ``restore_from_curtailment``.
         self._saved_real_mode: str | None = None
-        self._saved_reserve_percent: int | None = None
+        self._saved_reserve_percent: float | None = None
         self._curtailment_active = False
 
     @classmethod
@@ -1062,7 +1062,7 @@ class PowerwallClient:
         )
         try:
             self._saved_reserve_percent = (
-                int(saved_reserve) if saved_reserve is not None else 5
+                float(saved_reserve) if saved_reserve is not None else 5
             )
         except (TypeError, ValueError):
             self._saved_reserve_percent = 5
