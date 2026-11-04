@@ -405,6 +405,7 @@ With a key, the site signs every device command except the four pre-pairing read
 |---|---|---|
 | `get_system_info`, `raw_networking_status`, `get_networking_status`, `get_signed_commands_public_key`, `list_authorized_clients` | unsigned | unsigned |
 | `set_island_mode`, `go_off_grid`, `reconnect_grid` | signed | raise `SignedCommandRequired` |
+| `get_config_json`, `set_config_json`, `set_export_limit`, `set_import_limit`, `set_on_grid_solar_curtailment` | signed | raise `SignedCommandRequired` |
 | every other device command | signed | unsigned (Tesla answers 400) |
 
 The fleet REST routes (`backup`, `storm_mode`, `operation`, `grid_import_export` and the other non-device-command methods) are not device commands and never sign.
@@ -441,6 +442,9 @@ and the `PrivateKeyError` raised for an unusable existing key file.
 | `cancel_backup_event()` | TEG | Cancel a scheduled backup event |
 | `dispatch_battery_power(power_watts, duration_seconds)` | TEG | Timed battery power setpoint: watts, positive discharges, negative charges; 1 to 86400 seconds |
 | `resume_battery_operation()` | TEG | Release a `dispatch_battery_power` setpoint |
+| `get_config_json()` | FileStore | The gateway's whole config.json, as `{"response": config}` |
+| `set_config_json(min_site_meter_power_ac, max_site_meter_power_ac, on_grid_solar_curtailment_enabled)` | FileStore | Set any of the grid export limit, grid import limit and on-grid solar curtailment in config.json |
+| `set_export_limit(kilowatts)`, `set_import_limit(kilowatts)`, `set_on_grid_solar_curtailment(enabled)` | FileStore | One `set_config_json` setting each, with `PowerwallClient`'s local names and units |
 
 `dispatch_battery_power` holds the setpoint for `duration_seconds`, then the
 gateway returns to its configured operating mode by itself. Keep durations
@@ -454,6 +458,8 @@ that refusal raises `DeviceUnexpectedResponse` with code 11 (OUT_OF_RANGE).
 The method has the same name,
 arguments, units, sign and limits as `PowerwallClient`'s local
 `dispatch_battery_power`, so `EnergySiteRouter` can send it on either path.
+
+`set_config_json` reads config.json, changes only the given `site_info` keys and writes it back with the hash from that read, so the gateway refuses the write if the file changed in between. `min_site_meter_power_ac` is the export limit in kW as negative site-meter power (-1000 to 0) and `max_site_meter_power_ac` is the import limit in kW (0 to 1000); other values raise `ValueError` before any request. The reply is `{"response": {<the three settings as stored>, "applied": bool}}`, read back from the gateway's answer to the write; when `applied` is false, read `get_config_json()` again before retrying. These are signed filestore commands only: the signed cloud path has not yet been tried on a live gateway.
 
 ### Example
 

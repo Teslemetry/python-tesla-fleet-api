@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from google.protobuf.message import DecodeError
 from tesla_protocol.energy_device import transport_pb2
@@ -22,6 +23,7 @@ from tesla_fleet_api.const import (
 from tesla_fleet_api.exceptions import (
     DeviceUnexpectedResponse,
     InvalidCommand,
+    InvalidResponse,
     SignedCommandRequired,
 )
 from tesla_fleet_api.tesla.energy_signing import EnergyDeviceSigner
@@ -130,6 +132,84 @@ def raise_on_island_rejection(result: Any) -> None:
     if rejection is not None:
         code, name = rejection
         raise DeviceUnexpectedResponse({"code": code, "message": name})
+
+
+# The config.json ``site_info`` keys ``set_config_json`` may change, with the
+# bounds of Teslemetry's ``config_json`` route, in kW. The gateway stores export
+# as negative site-meter power.
+CONFIG_JSON_BOUNDS = {
+    "min_site_meter_power_ac": (-1000.0, 0.0),
+    "max_site_meter_power_ac": (0.0, 1000.0),
+}
+
+
+def validate_config_json_settings(
+    min_site_meter_power_ac: float | None,
+    max_site_meter_power_ac: float | None,
+    on_grid_solar_curtailment_enabled: bool | None,
+) -> dict[str, Any]:
+    """Return the given settings as ``site_info`` changes, or raise ``ValueError``."""
+    changes: dict[str, Any] = {}
+    for key, value in (
+        ("min_site_meter_power_ac", min_site_meter_power_ac),
+        ("max_site_meter_power_ac", max_site_meter_power_ac),
+    ):
+        if value is None:
+            continue
+        low, high = CONFIG_JSON_BOUNDS[key]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))  # pyright: ignore[reportUnnecessaryIsInstance]
+            or not low <= value <= high
+        ):
+            raise ValueError(f"{key} must be a number from {low:g} to {high:g}")
+        changes[key] = value
+    if on_grid_solar_curtailment_enabled is not None:
+        if not isinstance(on_grid_solar_curtailment_enabled, bool):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError("on_grid_solar_curtailment_enabled must be a bool")
+        changes["on_grid_solar_curtailment_enabled"] = on_grid_solar_curtailment_enabled
+    if not changes:
+        raise ValueError("Pass at least one config.json setting")
+    return changes
+
+
+def _stored_settings(site_info: dict[str, Any]) -> dict[str, Any]:
+    """The ``set_config_json`` settings as ``site_info`` holds them."""
+    settings: dict[str, Any] = {
+        key: value
+        if isinstance(value := site_info.get(key), (int, float))
+        and not isinstance(value, bool)
+        else None
+        for key in CONFIG_JSON_BOUNDS
+    }
+    # The gateway drops this key rather than storing false.
+    settings["on_grid_solar_curtailment_enabled"] = (
+        site_info.get("on_grid_solar_curtailment_enabled") is True
+    )
+    return settings
+
+
+def _config_from_reply(result: Any, field: str) -> tuple[dict[str, Any], bytes]:
+    """config.json and its hash from a signed filestore ``read_file``/``update_file`` reply.
+
+    Both answers carry the whole stored file. Raises ``InvalidResponse`` on any
+    other shape, or an empty hash, which would send ``update_file`` unchecked.
+    """
+    envelope = _reply_envelope(result)
+    if envelope is None or not envelope.filestore.HasField(field):
+        raise InvalidResponse
+    reply = getattr(envelope.filestore, field)
+    try:
+        config: Any = json.loads(reply.file.blob)
+    except ValueError:
+        config = None
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("site_info"), dict)  # pyright: ignore[reportUnknownMemberType]
+        or not reply.hash
+    ):
+        raise InvalidResponse
+    return cast("dict[str, Any]", config), reply.hash
 
 
 class EnergySite:
@@ -468,6 +548,109 @@ class EnergySite:
     async def get_teg_config(self) -> dict[str, Any]:
         """Get Tesla Energy Gateway configuration from the TEG service."""
         return await self._command("teg", "get_config_request")
+
+    async def _read_config_json(self) -> tuple[dict[str, Any], bytes]:
+        result = await self._signed_command(
+            "filestore",
+            "read_file_request",
+            {"domain": "FILE_STORE_API_DOMAIN_CONFIG_JSON", "name": "config.json"},
+        )
+        return _config_from_reply(result, "read_file_response")
+
+    async def get_config_json(self) -> dict[str, Any]:
+        """Read the gateway's whole config.json as ``{"response": config}``.
+
+        Includes ``site_info`` with the grid export limit
+        (``min_site_meter_power_ac``), grid import limit
+        (``max_site_meter_power_ac``) and on-grid solar curtailment
+        (``on_grid_solar_curtailment_enabled``, absent when disabled). Signed
+        filestore read only: without a signing key it raises
+        ``SignedCommandRequired`` before any request. Raises
+        ``InvalidResponse`` when the reply holds no readable config.json.
+        """
+        config, _hash = await self._read_config_json()
+        return {"response": config}
+
+    async def set_config_json(
+        self,
+        min_site_meter_power_ac: float | None = None,
+        max_site_meter_power_ac: float | None = None,
+        on_grid_solar_curtailment_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Set any of the grid export limit, grid import limit and on-grid solar curtailment.
+
+        ``min_site_meter_power_ac`` is the export limit in kW as negative
+        site-meter power, -1000 to 0 (-5 lets the site export at most 5 kW).
+        ``max_site_meter_power_ac`` is the import limit in kW, 0 to 1000.
+        Pass at least one; any other value raises ``ValueError`` before any
+        request.
+
+        Reads config.json, changes only the given ``site_info`` keys and writes
+        it back with the hash from that read, so the gateway refuses the write
+        if the file changed in between. Returns ``{"response": {<the three
+        settings as stored>, "applied": bool}}`` read back from the gateway's
+        answer; when ``applied`` is false, read the config again before
+        retrying. Nothing is written when the gateway already holds the values.
+
+        Signed only, like :meth:`get_config_json`. CAUTION: this writes gateway
+        configuration that limits grid power.
+        """
+        changes = validate_config_json_settings(
+            min_site_meter_power_ac,
+            max_site_meter_power_ac,
+            on_grid_solar_curtailment_enabled,
+        )
+        config, current_hash = await self._read_config_json()
+        held = _stored_settings(config["site_info"])
+        if all(held[key] == value for key, value in changes.items()):
+            return {"response": {**held, "applied": True}}
+        config["site_info"] = {**config["site_info"], **changes}
+        result = await self._signed_command(
+            "filestore",
+            "update_file_request",
+            {
+                "domain": "FILE_STORE_API_DOMAIN_CONFIG_JSON",
+                "file": {
+                    "name": "config.json",
+                    "blob": base64.b64encode(json.dumps(config).encode()).decode(),
+                },
+                "hash": base64.b64encode(current_hash).decode(),
+            },
+        )
+        stored = _stored_settings(
+            _config_from_reply(result, "update_file_response")[0]["site_info"]
+        )
+        return {
+            "response": {
+                **stored,
+                "applied": all(stored[key] == value for key, value in changes.items()),
+            }
+        }
+
+    async def set_export_limit(self, kilowatts: float) -> dict[str, Any]:
+        """Set the grid export limit to ``kilowatts`` (a positive magnitude).
+
+        Writes ``-kilowatts`` to ``min_site_meter_power_ac`` through
+        :meth:`set_config_json`; same name, argument and unit as the local
+        ``PowerwallClient.set_export_limit``.
+        """
+        return await self.set_config_json(min_site_meter_power_ac=-kilowatts)
+
+    async def set_import_limit(self, kilowatts: float) -> dict[str, Any]:
+        """Set the grid import limit to ``kilowatts`` through :meth:`set_config_json`.
+
+        Same name, argument and unit as the local
+        ``PowerwallClient.set_import_limit``.
+        """
+        return await self.set_config_json(max_site_meter_power_ac=kilowatts)
+
+    async def set_on_grid_solar_curtailment(self, enabled: bool) -> dict[str, Any]:
+        """Allow or stop on-grid solar curtailment through :meth:`set_config_json`.
+
+        Same name and argument as the local
+        ``PowerwallClient.set_on_grid_solar_curtailment``.
+        """
+        return await self.set_config_json(on_grid_solar_curtailment_enabled=enabled)
 
     async def dispatch_battery_power(
         self, power_watts: float, duration_seconds: int
