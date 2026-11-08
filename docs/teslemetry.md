@@ -753,3 +753,27 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Teslemetry for Business: Consented Products
+
+`TeslemetryBusiness` calls the Teslemetry for Business api (`https://api.teslemetry.pro`) with a business token. Its `products` method returns one page of the vehicles and energy sites customers have consented to share with the business, optionally filtered by `type`, `ref` and `since`. Pass the page's `next_cursor` as `cursor` to get the next page; it is `None` on the last page.
+
+```python
+import aiohttp
+from tesla_fleet_api.teslemetry import TeslemetryBusiness
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        business = TeslemetryBusiness(session, access_token="<business_token>")
+
+        cursor = None
+        while True:
+            page = await business.products(limit=200, cursor=cursor)
+            for product in page["response"]:
+                print(product["type"], product.get("vin") or product.get("energy_site_id"))
+            cursor = page["next_cursor"]
+            if cursor is None:
+                break
+
+asyncio.run(main())
+```
