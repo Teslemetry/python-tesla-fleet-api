@@ -17,7 +17,7 @@ All four must be in place. Setting the preference alone (step 4) stores a settin
 
 | Step | Must be signed by | Will not work with | Sent through |
 |---|---|---|---|
-| 1. Add the gateway key to the vehicle | A vehicle key that was added with a key card tap (for example a Bluetooth key you paired yourself, see [Bluetooth for Vehicles](bluetooth_vehicles.md#pair-vehicle)). The vehicle checks the signer's role, not the transport, so this key can be sent through the cloud. | A Fleet API virtual key: the vehicle answers `WhitelistOperationNoPermissionToAdd`. | `POST /api/1/vehicles/{vin}/signed_command` |
+| 1. Add the gateway key to the vehicle | A vehicle key with the owner role, which is what a key card tap gives it; a driver key cannot add keys (for example a Bluetooth key you paired yourself, see [Bluetooth for Vehicles](bluetooth_vehicles.md#pair-vehicle)). The vehicle checks the signer's role, not the transport, so this key can be sent through the cloud. | A Fleet API virtual key: the vehicle answers `WhitelistOperationNoPermissionToAdd`. | `POST /api/1/vehicles/{vin}/signed_command` |
 | 2. Register the vehicle on the gateway | An RSA key that is already a VERIFIED client on your gateway (for example the key a local Powerwall client enrolled). | An unverified key: the gateway requires a trusted signature. | `POST /api/1/energy_sites/{site_id}/device_command` |
 | 3. Add the managed charging site | Teslemetry (server-signed). | | `POST /api/1/vehicles/{vin}/custom_command/add_managed_charging_site` |
 | 4. Enable the preference | Teslemetry (server-signed). | | `POST /api/1/vehicles/{vin}/custom_command/charge_on_solar` |
@@ -63,7 +63,7 @@ RoutableMessage {
         description: "Vehicle"
         key_type: ECC
         public_key: <vehicle ECC key, raw point>
-        roles: [...]
+        roles: [AUTHORIZATION_ROLE_VEHICLE]
         identifier: <VIN>
       }
     }
@@ -113,5 +113,5 @@ POST /api/1/vehicles/{vin}/custom_command/charge_on_solar
 
 - Do steps 1 and 2 first. Steps 3 and 4 can be repeated safely.
 - The app's "charge on solar capable" flag is only checked by the app. A site that reports no such flag can still use the feature once the four steps are in place.
-- To start over, turn the preference off, remove the managed charging site(s) from the vehicle, and remove the VEHICLE client from the gateway. Leave your phone's own gateway client and vehicle key alone. Then repeat steps 1 to 4.
+- To start over, turn the preference off, remove the managed charging site(s) from the vehicle, and remove the VEHICLE client from the gateway. Leave your phone's own gateway client and vehicle key alone. The gateway key stays on the vehicle, so skip step 1 if it is still there with the `ROLE_CHARGING_MANAGER` role. Then repeat steps 2 to 4.
 - These commands write to your vehicle and gateway. Only run them against your own account, and keep your private keys off shared machines.
