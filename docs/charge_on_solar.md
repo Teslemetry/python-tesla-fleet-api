@@ -47,7 +47,7 @@ UnsignedMessage {
 }
 ```
 
-Read the result from `commandStatus.whitelistOperationStatus` in the reply. With `python-tesla-fleet-api`, use version 1.14.1 or later, which decodes it correctly.
+Read the result from `commandStatus.whitelistOperationStatus` in the reply.
 
 ## Step 2: register the vehicle on the gateway
 
@@ -75,7 +75,7 @@ RoutableMessage {
 }
 ```
 
-Signature: build a TLV of signature type (RSA), domain, personalization (the gateway DIN), `expires_at`, then the envelope bytes, and sign it with RSA PKCS#1 v1.5 + SHA-512. `tesla_fleet_api.tesla.energy_signing` implements this scheme.
+Signature: build a TLV of signature type (RSA), domain, personalization (the gateway DIN) and `expires_at`, then a `TAG_END` byte (`0xFF`), then the envelope bytes, and sign it with RSA PKCS#1 v1.5 + SHA-512. `tesla_fleet_api.tesla.energy_signing` implements this scheme.
 
 Request body to Teslemetry:
 
@@ -97,7 +97,7 @@ POST /api/1/vehicles/{vin}/custom_command/add_managed_charging_site
 { "public_key": "<pubKeyEcc from step 'gather the inputs'>", "din": "<gateway DIN>", "latitude": <lat>, "longitude": <lon> }
 ```
 
-Teslemetry converts the base64 DER key to the raw point. Confirm with `GET /api/1/vehicles/{vin}/custom_command/managed_charging_sites`. With `python-tesla-fleet-api`, use 1.15.0 or later, which accepts the DIN.
+Teslemetry converts the base64 DER key to the raw point. Confirm with `GET /api/1/vehicles/{vin}/custom_command/managed_charging_sites`. `python-tesla-fleet-api` has no helper for this route, so call it directly.
 
 ## Step 4: enable the preference
 
