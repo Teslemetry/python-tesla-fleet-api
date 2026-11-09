@@ -340,6 +340,8 @@ asyncio.run(main())
 
 For more detailed examples, see [Teslemetry](docs/teslemetry.md).
 
+To set up Charge on Solar by hand, see [Charge on Solar](docs/charge_on_solar.md).
+
 ### Tessie
 
 The `Tessie` class provides methods to interact with the Tessie service. Here's a basic example:
