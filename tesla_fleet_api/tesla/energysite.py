@@ -173,7 +173,7 @@ def validate_config_json_settings(
     return changes
 
 
-def _stored_settings(site_info: dict[str, Any]) -> dict[str, Any]:
+def stored_config_json_settings(site_info: dict[str, Any]) -> dict[str, Any]:
     """The ``set_config_json`` settings as ``site_info`` holds them."""
     settings: dict[str, Any] = {
         key: value
@@ -601,7 +601,7 @@ class EnergySite:
             on_grid_solar_curtailment_enabled,
         )
         config, current_hash = await self._read_config_json()
-        held = _stored_settings(config["site_info"])
+        held = stored_config_json_settings(config["site_info"])
         if all(held[key] == value for key, value in changes.items()):
             return {"response": {**held, "applied": True}}
         config["site_info"] = {**config["site_info"], **changes}
@@ -617,7 +617,7 @@ class EnergySite:
                 "hash": base64.b64encode(current_hash).decode(),
             },
         )
-        stored = _stored_settings(
+        stored = stored_config_json_settings(
             _config_from_reply(result, "update_file_response")[0]["site_info"]
         )
         return {

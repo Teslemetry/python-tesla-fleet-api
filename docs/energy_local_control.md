@@ -239,6 +239,9 @@ asyncio.run(main())
 ```
 
 Locally implemented commands go over the LAN when the gateway is reachable,
+including `set_export_limit()`, `set_import_limit()`,
+`set_on_grid_solar_curtailment()` and `set_config_json()`, which take the cloud
+`EnergySite`'s arguments and limits and answer its `applied` readback,
 and fail over to the Teslemetry cloud otherwise - the same
 local-primary/cloud-fallback pattern `VehicleRouter` uses for vehicles. Calls
 that `PowerwallEnergySite` does not implement locally yet, including `get_system_info()`
@@ -310,7 +313,10 @@ merged = merge_live_status(cloud_status, local_status)
 
 - `merge_live_status` overlays the `live_status()` fields the local gateway can
   actually serve; `merge_site_info` does the same for `site_info()`
-  (`backup_reserve_percent`, `default_real_mode`).
+  (`backup_reserve_percent`, `default_real_mode`, the grid limits
+  `min_site_meter_power_ac`/`max_site_meter_power_ac` in kW, and
+  `on_grid_solar_curtailment_enabled`, which `local_config()` reports as
+  `False` when the gateway has dropped the key).
 - Only keys the wrapper owns **and** present in `local` are overlaid onto a
   copy of `cloud`; every other key keeps its cloud value.
 - If the local read failed entirely (`local is None`, e.g. the LAN call
