@@ -19,7 +19,13 @@ LOCAL_LIVE_STATUS_KEYS: frozenset[str] = frozenset(
     }
 )
 LOCAL_SITE_INFO_KEYS: frozenset[str] = frozenset(
-    {"backup_reserve_percent", "default_real_mode"}
+    {
+        "backup_reserve_percent",
+        "default_real_mode",
+        "min_site_meter_power_ac",
+        "max_site_meter_power_ac",
+        "on_grid_solar_curtailment_enabled",
+    }
 )
 
 

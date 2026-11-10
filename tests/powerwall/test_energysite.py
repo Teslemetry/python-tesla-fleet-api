@@ -12,11 +12,19 @@ mocked local data.
 from __future__ import annotations
 
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
+from tesla_fleet_api.const import Method
+from tesla_fleet_api.router import EnergySiteRouter
+from tesla_fleet_api.router.energysite import merge_site_info
 from tesla_fleet_api.tesla.powerwall import AuthorizedClients, AuthorizedClientState, PowerwallClient
 from tesla_fleet_api.tesla.powerwall.client import raw_to_scaled_reserve
+from tesla_fleet_api.tesla.powerwall.exceptions import (
+    PowerwallConnectionError,
+    PowerwallProtocolError,
+)
 from tesla_fleet_api.tesla.powerwall.energysite import (
     ISLAND_MODE_OFF_GRID,
     ISLAND_MODE_ON_GRID,
@@ -33,11 +41,25 @@ class FakeClient:
             "site_info": {"backup_reserve_percent": 25.0},
             "default_real_mode": "self_consumption",
         }
+        self.write_error: BaseException | None = None
 
     # writes / commands -----------------------------------------------------
     async def connect(self) -> str:
         self.calls.append(("connect",))
         return "1234567-00-A--CJ2000000000"
+
+    async def write_config(self, updates: dict[str, Any]) -> None:
+        """Apply dotted ``site_info.`` updates the way the gateway stores them."""
+        self.calls.append(("write_config", updates))
+        if self.write_error is not None:
+            raise self.write_error
+        site_info = self.config.setdefault("site_info", {})
+        for path, value in updates.items():
+            key = path.removeprefix("site_info.")
+            if value is False and key == "on_grid_solar_curtailment_enabled":
+                site_info.pop(key, None)  # the gateway drops it rather than storing false
+            else:
+                site_info[key] = value
 
     async def set_operation_mode(self, mode: str) -> None:
         self.calls.append(("set_operation_mode", mode))
@@ -433,7 +455,160 @@ async def test_live_status_unknown_grid_status_falls_back() -> None:
     assert payload["island_status"] == "island_status_unknown"
 
 
+# ── grid limits and curtailment ──────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("method", "arg", "write", "stored"),
+    [
+        (
+            "set_export_limit",
+            5,
+            {"site_info.min_site_meter_power_ac": -5},
+            {"min_site_meter_power_ac": -5},
+        ),
+        (
+            "set_import_limit",
+            2.5,
+            {"site_info.max_site_meter_power_ac": 2.5},
+            {"max_site_meter_power_ac": 2.5},
+        ),
+        (
+            "set_on_grid_solar_curtailment",
+            True,
+            {"site_info.on_grid_solar_curtailment_enabled": True},
+            {"on_grid_solar_curtailment_enabled": True},
+        ),
+    ],
+)
+async def test_grid_limit_setters_write_and_read_back(
+    method: str, arg: Any, write: dict[str, Any], stored: dict[str, Any]
+) -> None:
+    site, fake = _adapter()
+    result = await getattr(site, method)(arg)
+    assert fake.calls == [("write_config", write), ("get_config",)]
+    assert result == {
+        "response": {
+            "min_site_meter_power_ac": None,
+            "max_site_meter_power_ac": None,
+            "on_grid_solar_curtailment_enabled": False,
+            **stored,
+            "applied": True,
+        }
+    }
+
+
+async def test_curtailment_off_reads_back_dropped_key_as_applied() -> None:
+    site, fake = _adapter()
+    fake.config["site_info"]["on_grid_solar_curtailment_enabled"] = True
+    result = await site.set_on_grid_solar_curtailment(False)
+    assert result["response"]["on_grid_solar_curtailment_enabled"] is False
+    assert result["response"]["applied"] is True
+
+
+async def test_set_config_json_reports_not_applied_when_readback_differs() -> None:
+    site, fake = _adapter()
+
+    async def _no_op_write(updates: dict[str, Any]) -> None:
+        fake.calls.append(("write_config", updates))
+
+    fake.write_config = _no_op_write  # type: ignore[method-assign]
+    result = await site.set_config_json(max_site_meter_power_ac=14)
+    assert result["response"]["applied"] is False
+
+
+@pytest.mark.parametrize(
+    ("method", "arg"),
+    [
+        ("set_export_limit", -1),
+        ("set_export_limit", 1001),
+        ("set_import_limit", -1),
+        ("set_import_limit", 1001),
+        ("set_import_limit", True),
+        ("set_on_grid_solar_curtailment", 1),
+    ],
+)
+async def test_grid_limit_setters_validate_like_cloud(method: str, arg: Any) -> None:
+    site, fake = _adapter()
+    with pytest.raises(ValueError):
+        await getattr(site, method)(arg)
+    assert fake.calls == []
+
+
+async def test_set_config_json_requires_a_setting() -> None:
+    site, fake = _adapter()
+    with pytest.raises(ValueError):
+        await site.set_config_json()
+    assert fake.calls == []
+
+
+def _router() -> tuple[EnergySiteRouter[Any, Any], FakeClient, AsyncMock]:
+    from tesla_fleet_api.teslemetry.energysite import TeslemetryEnergySite
+
+    site, fake = _adapter()
+    request_mock = AsyncMock(return_value={"response": {}})
+    parent = AsyncMock()
+    parent._request = request_mock
+    return EnergySiteRouter(site, TeslemetryEnergySite(parent, 12345)), fake, request_mock
+
+
+async def test_router_sends_grid_limits_to_local_first() -> None:
+    router, fake, request_mock = _router()
+    await router.set_export_limit(5)
+    await router.set_import_limit(14)
+    await router.set_on_grid_solar_curtailment(True)
+    assert [c[0] for c in fake.calls if c[0] == "write_config"] == ["write_config"] * 3
+    request_mock.assert_not_called()
+
+
+async def test_router_fails_over_to_cloud_when_gateway_unreachable() -> None:
+    router, fake, request_mock = _router()
+    fake.write_error = PowerwallConnectionError("unreachable")
+    await router.set_export_limit(5)
+    request_mock.assert_awaited_once_with(
+        Method.POST,
+        "api/1/energy_sites/12345/command/config_json",
+        json={"min_site_meter_power_ac": -5},
+    )
+
+
+async def test_router_does_not_fail_over_when_gateway_rejects() -> None:
+    router, fake, request_mock = _router()
+    fake.write_error = PowerwallProtocolError("rejected")
+    with pytest.raises(PowerwallProtocolError):
+        await router.set_import_limit(14)
+    request_mock.assert_not_called()
+
+
 # ── local_config ─────────────────────────────────────────────────────────────
+
+
+async def test_local_config_reads_grid_limits_and_curtailment() -> None:
+    site, fake = _adapter()
+    fake.config = {
+        "site_info": {
+            "min_site_meter_power_ac": -5,
+            "max_site_meter_power_ac": 14,
+            "on_grid_solar_curtailment_enabled": True,
+        }
+    }
+    assert await site.local_config() == {
+        "min_site_meter_power_ac": -5,
+        "max_site_meter_power_ac": 14,
+        "on_grid_solar_curtailment_enabled": True,
+    }
+
+
+async def test_local_config_grid_limits_merge_over_cloud_site_info() -> None:
+    site, fake = _adapter()
+    fake.config = {"site_info": {"min_site_meter_power_ac": -3}}
+    cloud = {"min_site_meter_power_ac": -5, "max_site_meter_power_ac": 14}
+    assert merge_site_info(cloud, await site.local_config()) == {
+        "min_site_meter_power_ac": -3,
+        "max_site_meter_power_ac": 14,
+        "on_grid_solar_curtailment_enabled": False,
+    }
+
 
 
 async def test_local_config_returns_both_keys_scaled() -> None:
@@ -446,8 +621,8 @@ async def test_local_config_returns_both_keys_scaled() -> None:
     assert result == {
         "backup_reserve_percent": raw_to_scaled_reserve(25.0),
         "default_real_mode": "self_consumption",
+        "on_grid_solar_curtailment_enabled": False,
     }
-    assert set(result) == {"backup_reserve_percent", "default_real_mode"}
 
 
 async def test_local_config_omits_missing_backup_reserve_percent() -> None:
@@ -457,7 +632,10 @@ async def test_local_config_omits_missing_backup_reserve_percent() -> None:
         "default_real_mode": "self_consumption",
     }
     result = await site.local_config()
-    assert result == {"default_real_mode": "self_consumption"}
+    assert result == {
+        "default_real_mode": "self_consumption",
+        "on_grid_solar_curtailment_enabled": False,
+    }
 
 
 async def test_local_config_omits_missing_default_real_mode() -> None:

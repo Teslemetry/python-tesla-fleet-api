@@ -26,8 +26,8 @@ Design notes:
 * :meth:`site_info` is deliberately **absent** — the router should always fall
   through to the cloud for it (we do not try to replicate it locally).
   :meth:`local_config` is a separate, additive accessor that surfaces just the
-  ``backup_reserve_percent``/``default_real_mode`` subset of the local config
-  document that already has a faithful cloud mapping.
+  subset of the local config document that already has a faithful cloud
+  mapping (backup reserve, operation mode, grid limits and curtailment).
 * :meth:`connect_if_needed` is a router health signal (not part of the cloud
   ``EnergySite`` surface): the router's default health check feature-detects it
   to decide whether the local primary is reachable.
@@ -38,9 +38,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, cast
 
+from ..energysite import stored_config_json_settings, validate_config_json_settings
 from ..island import validate_island_mode
 from .authorized_clients import AuthorizedClients, parse_authorized_clients
 from .client import PowerwallClient, battery_level, raw_to_scaled_reserve
+from .exceptions import PowerwallProtocolError
 
 # Island-mode wire values (mirror ``tesla_fleet_api.const.EnergyIslandMode`` by
 # convention — we do not import it). Mode 6 opens the grid contactor
@@ -168,6 +170,57 @@ class PowerwallEnergySite:
             ),
         )
         return _ok_response()
+
+    async def set_config_json(
+        self,
+        min_site_meter_power_ac: float | None = None,
+        max_site_meter_power_ac: float | None = None,
+        on_grid_solar_curtailment_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Set any of the grid export limit, grid import limit and on-grid solar curtailment.
+
+        Same arguments, limits and reply as the cloud ``EnergySite.set_config_json``:
+        ``min_site_meter_power_ac`` is the export limit in kW as negative
+        site-meter power (-1000 to 0), ``max_site_meter_power_ac`` the import
+        limit in kW (0 to 1000); any other value raises ``ValueError`` before
+        any request. Writes the given ``site_info`` keys with
+        :meth:`PowerwallClient.write_config`, then reads config.json back and
+        returns ``{"response": {<the three settings as stored>, "applied":
+        bool}}``.
+        """
+        changes = validate_config_json_settings(
+            min_site_meter_power_ac,
+            max_site_meter_power_ac,
+            on_grid_solar_curtailment_enabled,
+        )
+        await self._client.write_config(
+            {f"site_info.{key}": value for key, value in changes.items()}
+        )
+        site_info = (await self._client.get_config()).get("site_info")
+        if not isinstance(site_info, dict):
+            raise PowerwallProtocolError("config.json has no site_info")
+        stored = stored_config_json_settings(cast(dict[str, Any], site_info))
+        return {
+            "response": {
+                **stored,
+                "applied": all(stored[key] == value for key, value in changes.items()),
+            }
+        }
+
+    async def set_export_limit(self, kilowatts: float) -> dict[str, Any]:
+        """Set the grid export limit to ``kilowatts`` (a positive magnitude)
+        through :meth:`set_config_json`, as the cloud ``EnergySite`` does."""
+        return await self.set_config_json(min_site_meter_power_ac=-kilowatts)
+
+    async def set_import_limit(self, kilowatts: float) -> dict[str, Any]:
+        """Set the grid import limit to ``kilowatts`` through
+        :meth:`set_config_json`, as the cloud ``EnergySite`` does."""
+        return await self.set_config_json(max_site_meter_power_ac=kilowatts)
+
+    async def set_on_grid_solar_curtailment(self, enabled: bool) -> dict[str, Any]:
+        """Allow or stop on-grid solar curtailment through
+        :meth:`set_config_json`, as the cloud ``EnergySite`` does."""
+        return await self.set_config_json(on_grid_solar_curtailment_enabled=enabled)
 
     async def set_island_mode(
         self, mode: int, force: bool | None = None
@@ -324,18 +377,31 @@ class PowerwallEnergySite:
 
         Maps to :meth:`PowerwallClient.get_config`. Unlike :meth:`site_info`
         (deliberately absent — see the module docstring), this exposes only
-        the two fields that already have a faithful cloud mapping:
+        the fields that already have a faithful cloud mapping:
         ``backup_reserve_percent`` (scaled via
-        :func:`~tesla_fleet_api.tesla.powerwall.client.raw_to_scaled_reserve`) and
-        ``default_real_mode``. A key is omitted, never guessed, when its
-        source is absent from the local config document.
+        :func:`~tesla_fleet_api.tesla.powerwall.client.raw_to_scaled_reserve`),
+        ``default_real_mode``, and the grid limits in kW
+        ``min_site_meter_power_ac`` (export, negative) and
+        ``max_site_meter_power_ac`` (import), which cloud ``site_info``
+        reports in the same unit. A key is omitted, never guessed, when its
+        source is absent from the local config document. The exception is
+        ``on_grid_solar_curtailment_enabled``: the gateway drops that key
+        rather than storing false, so it is ``False`` when ``site_info`` lacks
+        it.
         """
         config = await self._client.get_config()
         result: dict[str, Any] = {}
         site_info = config.get("site_info")
-        if isinstance(site_info, Mapping) and "backup_reserve_percent" in site_info:
-            result["backup_reserve_percent"] = raw_to_scaled_reserve(
-                cast(Mapping[str, Any], site_info)["backup_reserve_percent"]
+        if isinstance(site_info, dict):
+            site_info = cast(dict[str, Any], site_info)
+            if "backup_reserve_percent" in site_info:
+                result["backup_reserve_percent"] = raw_to_scaled_reserve(
+                    site_info["backup_reserve_percent"]
+                )
+            result.update(
+                (key, value)
+                for key, value in stored_config_json_settings(site_info).items()
+                if value is not None
             )
         if "default_real_mode" in config:
             result["default_real_mode"] = config["default_real_mode"]
