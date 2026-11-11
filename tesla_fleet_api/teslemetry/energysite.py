@@ -341,8 +341,9 @@ class TeslemetryEnergySite(EnergySite):
     With a signing ``private_key`` (see :class:`EnergySite`), every device
     command except the four pre-pairing reads is signed with that key and
     sent through Teslemetry's ``device_command`` route. Without a key, a
-    command uses its Teslemetry route, which signs with Teslemetry's own key.
-    That key must be verified on the gateway, or the route answers 409
+    command uses its Teslemetry route. Apart from the pre-pairing reads and the
+    authorized-client routes, that route signs with Teslemetry's own key, which
+    must be verified on the gateway, or it answers 409
     ``energy_site_not_paired`` and sends nothing.
     """
 
