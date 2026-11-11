@@ -341,13 +341,9 @@ class TeslemetryEnergySite(EnergySite):
     With a signing ``private_key`` (see :class:`EnergySite`), every device
     command except the four pre-pairing reads is signed with that key and
     sent through Teslemetry's ``device_command`` route. Without a key, a
-    command uses its Teslemetry route. The ``set_island_mode``,
-    ``backup_events``, ``config`` and ``config_json`` routes sign with
-    Teslemetry's own key, which must be verified on the gateway, or the route
-    answers 409 ``energy_site_not_paired`` and sends nothing. As of 2026-10-29 the
-    ``dispatch_battery_power``, ``resume_battery_operation`` and backup-event
-    schedule/cancel routes still send unsigned, so Tesla answers HTTP 400:
-    keyless dispatch does not work until Teslemetry signs those routes.
+    command uses its Teslemetry route, which signs with Teslemetry's own key.
+    That key must be verified on the gateway, or the route answers 409
+    ``energy_site_not_paired`` and sends nothing.
     """
 
     async def _device_command(
@@ -749,8 +745,9 @@ class TeslemetryEnergySite(EnergySite):
         (1 to 86400). See :meth:`EnergySite.dispatch_battery_power`.
 
         With a signing key this signs the command with that key. Without one
-        it calls the Teslemetry route, which still sends unsigned and gets
-        Tesla's HTTP 400 (2026-10-29).
+        it calls the Teslemetry route, which signs with Teslemetry's own key
+        and answers 409 ``energy_site_not_paired`` until that key is verified
+        on the gateway.
         """
         if self._signer is not None:
             return await super().dispatch_battery_power(power_watts, duration_seconds)
@@ -768,8 +765,9 @@ class TeslemetryEnergySite(EnergySite):
         """Release a :meth:`dispatch_battery_power` setpoint.
 
         With a signing key this signs the command with that key. Without one
-        it calls the Teslemetry route, which still sends unsigned and gets
-        Tesla's HTTP 400 (2026-10-29).
+        it calls the Teslemetry route, which signs with Teslemetry's own key
+        and answers 409 ``energy_site_not_paired`` until that key is verified
+        on the gateway.
         """
         if self._signer is not None:
             return await super().resume_battery_operation()
