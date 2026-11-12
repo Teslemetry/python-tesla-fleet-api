@@ -43,6 +43,10 @@ logging.getLogger("tesla_fleet_api").setLevel(logging.DEBUG)
 Responses that are valid JSON but not objects, such as `null`, lists, or
 scalars, are returned unchanged and log as `result=success`.
 
+`vehicle.map()` is the one method that returns raw bytes (a PNG image). Every
+other method decodes JSON, so `format="csv"` on `drives`, `charges`, `idles`,
+`states` and `charging_invoices` is not supported.
+
 ## Top-Level Client Methods
 
 These methods exist on `Tessie` itself.
@@ -148,11 +152,17 @@ async def main():
         response = await vehicle.location()
         print(response)
 
-        response = await vehicle.firmware_alerts()
+        response = await vehicle.firmware_alerts(start=1700000000, end=1700100000)
         print(response)
 
-        response = await vehicle.map(width=800, height=600, zoom=15)
+        # Release notes for a version; leave it blank for the current (or staged) one
+        response = await vehicle.tessie_release_notes(language="en", staged=True)
         print(response)
+
+        # map() returns the PNG image as bytes, not JSON
+        image = await vehicle.map(width=800, height=600, zoom=15, marker_size=75)
+        with open("map.png", "wb") as f:
+            f.write(image)
 
         response = await vehicle.consumption_since_charge()
         print(response)
@@ -418,6 +428,9 @@ async def main():
         print(response)
 
         response = await vehicle.delete_driver(id=1)
+        print(response)
+
+        response = await vehicle.roles()
         print(response)
 
         response = await vehicle.set_roles(role="SUBSCRIPTION", account_id="555555555")

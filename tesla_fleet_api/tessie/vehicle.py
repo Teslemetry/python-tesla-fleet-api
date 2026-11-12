@@ -844,7 +844,10 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         exclude: str | None = None,
         fields: str | None = None,
     ) -> dict[str, Any]:
-        """Get historical vehicle states within timeframe."""
+        """Get historical vehicle states within timeframe.
+
+        ``format="csv"`` is not supported: the client only decodes JSON replies.
+        """
         return await self._request(
             Method.GET,
             f"{self.vin}/states",
@@ -868,21 +871,43 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         """Get coordinates, address, and saved location."""
         return await self._request(Method.GET, f"{self.vin}/location")
 
-    async def firmware_alerts(self) -> dict[str, Any]:
-        """Get list of firmware-generated alerts."""
-        return await self._request(Method.GET, f"{self.vin}/firmware_alerts")
+    async def firmware_alerts(
+        self, start: int | None = None, end: int | None = None
+    ) -> dict[str, Any]:
+        """Get list of firmware-generated alerts, optionally within a time range."""
+        return await self._request(
+            Method.GET,
+            f"{self.vin}/firmware_alerts",
+            params={"from": start, "to": end},
+        )
+
+    async def tessie_release_notes(
+        self,
+        version: str = "",
+        language: str | None = None,
+        staged: bool | None = None,
+    ) -> dict[str, Any]:
+        """Get release notes for a software version from Tessie's own endpoint.
+
+        A blank version returns the current (or, with staged, the staged) version.
+        The inherited ``release_notes()`` is the Fleet API proxy variant.
+        """
+        return await self._request(
+            Method.GET,
+            f"{self.vin}/release_notes/{version}",
+            params={"language": language, "staged": staged},
+        )
 
     async def map(
         self,
         width: int | None = None,
         height: int | None = None,
         zoom: int | None = None,
-        marker_size: str | None = None,
+        marker_size: int | None = None,
         style: str | None = None,
-    ) -> dict[str, Any]:
-        """Get map image of vehicle location."""
-        return await self._request(
-            Method.GET,
+    ) -> bytes:
+        """Get map image of vehicle location as PNG bytes."""
+        return await self.parent._request_bytes(  # pyright: ignore[reportPrivateUsage]
             f"{self.vin}/map",
             params={
                 "width": width,
@@ -917,16 +942,19 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         destination_radius: int | None = None,
         exclude_destination: bool | None = None,
         tag: str | None = None,
-        exclude_tag: str | None = None,
+        exclude_tag: bool | None = None,
         driver_profile: str | None = None,
-        exclude_driver_profile: str | None = None,
+        exclude_driver_profile: bool | None = None,
         format: str | None = None,
         minimum_distance: float | None = None,
         limit: int | None = None,
         results: int | None = None,
         page: int | None = None,
     ) -> dict[str, Any]:
-        """Get historical drive records."""
+        """Get historical drive records.
+
+        ``format="csv"`` is not supported: the client only decodes JSON replies.
+        """
         return await self._request(
             Method.GET,
             f"{self.vin}/drives",
@@ -995,7 +1023,10 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         results: int | None = None,
         page: int | None = None,
     ) -> dict[str, Any]:
-        """Get charging history."""
+        """Get charging history.
+
+        ``format="csv"`` is not supported: the client only decodes JSON replies.
+        """
         return await self._request(
             Method.GET,
             f"{self.vin}/charges",
@@ -1031,7 +1062,10 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         results: int | None = None,
         page: int | None = None,
     ) -> dict[str, Any]:
-        """Get idle periods when vehicle inactive."""
+        """Get idle periods when vehicle inactive.
+
+        ``format="csv"`` is not supported: the client only decodes JSON replies.
+        """
         return await self._request(
             Method.GET,
             f"{self.vin}/idles",
@@ -1106,6 +1140,10 @@ class TessieVehicle(VehicleFleet["Tessie"]):
             payload["federation_id"] = federation_id
         return await self._request(Method.POST, f"{self.vin}/roles", json=payload)
 
+    async def roles(self) -> dict[str, Any]:
+        """Get the owner, driver and payer roles (requires a Tesla Business account)."""
+        return await self._request(Method.GET, f"{self.vin}/roles")
+
     # Fleet Telemetry
     async def get_fleet_telemetry_config(self) -> dict[str, Any]:
         """Retrieve telemetry configuration."""
@@ -1141,14 +1179,14 @@ class TessieVehicle(VehicleFleet["Tessie"]):
         tag: str | None = None,
         drives: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Assign tag to drives."""
+        """Assign tag to drives, by drive ids or by a start/end time range."""
         if tag is None:
             raise ValueError("tag is required")
         if drives is not None:
             return await self._request(
                 Method.POST,
                 f"{self.vin}/drives/set_tag",
-                json={"drives": drives, "tag": tag},
+                json={"drives": ",".join(str(d) for d in drives), "tag": tag},
             )
         if start is None or end is None:
             raise ValueError("Provide drives or both start and end")

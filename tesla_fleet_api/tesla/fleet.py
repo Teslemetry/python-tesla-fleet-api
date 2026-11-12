@@ -223,6 +223,32 @@ class TeslaFleetApi(Tesla):
         _log_request_result(command, self._transport_name, data)
         return data
 
+    async def _request_bytes(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> bytes:
+        """GET a path whose body is binary (e.g. an image) and return the raw bytes."""
+
+        if not self.server:
+            raise ValueError("Server was not set at init. Call find_server() first.")
+
+        headers = {
+            "Authorization": f"Bearer {await self.access_token()}",
+            "X-Library": f"python tesla_fleet_api {VERSION}",
+        }
+        if params:
+            params = {
+                k: _normalize_query_value(v) for k, v in params.items() if v is not None
+            }
+        async with self.session.request(
+            Method.GET, f"{self.server}/{path}", headers=headers, params=params
+        ) as resp:
+            LOGGER.debug("Status %s from %s", resp.status, resp.url)
+            if not resp.ok:
+                await raise_for_status(resp)
+            return await resp.read()
+
     async def status(self) -> str:
         """This endpoint returns the string "ok" if the API is operating normally. No HTTP headers are required."""
         if not self.server:
