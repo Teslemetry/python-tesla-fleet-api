@@ -4,6 +4,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
 
 from tesla_fleet_api.const import Method
+from tesla_fleet_api.tessie.tessie import Tessie
 from tesla_fleet_api.tessie.vehicle import TessieVehicle
 
 
@@ -360,4 +361,157 @@ class TessieVehicleParameterTests(IsolatedAsyncioTestCase):
                 "max_attempts": 2,
                 "wait_for_completion": False,
             },
+        )
+
+    async def test_firmware_alerts_sends_time_range(self) -> None:
+        """firmware_alerts should map start/end to the documented from/to."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.firmware_alerts(start=1700000000, end=1700100000)
+
+        request.assert_awaited_once_with(
+            Method.GET,
+            f"{self.VIN}/firmware_alerts",
+            params={"from": 1700000000, "to": 1700100000},
+        )
+
+    async def test_firmware_alerts_range_is_optional(self) -> None:
+        """Existing no-argument calls keep working."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.firmware_alerts()
+
+        request.assert_awaited_once_with(
+            Method.GET,
+            f"{self.VIN}/firmware_alerts",
+            params={"from": None, "to": None},
+        )
+
+    async def test_tessie_release_notes_uses_documented_parameters(self) -> None:
+        """release_notes should put the version in the path and send the query."""
+
+        vehicle, request = self.create_vehicle()
+
+        response = await vehicle.tessie_release_notes(
+            "2025.44.1", language="de", staged=True
+        )
+
+        self.assertEqual(response, {"result": True})
+        request.assert_awaited_once_with(
+            Method.GET,
+            f"{self.VIN}/release_notes/2025.44.1",
+            params={"language": "de", "staged": True},
+        )
+
+    async def test_tessie_release_notes_blank_version_targets_current(self) -> None:
+        """A blank version keeps the trailing slash the API documents."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.tessie_release_notes()
+
+        request.assert_awaited_once_with(
+            Method.GET,
+            f"{self.VIN}/release_notes/",
+            params={"language": None, "staged": None},
+        )
+
+    async def test_roles_gets_roles(self) -> None:
+        """roles should GET the roles endpoint."""
+
+        vehicle, request = self.create_vehicle()
+
+        response = await vehicle.roles()
+
+        self.assertEqual(response, {"result": True})
+        request.assert_awaited_once_with(Method.GET, f"{self.VIN}/roles")
+
+    async def test_set_drive_tag_sends_drives_as_comma_separated_string(
+        self,
+    ) -> None:
+        """The documented body is a comma-separated string, not a JSON array."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.set_drive_tag(drives=[10000, 10001, 10002], tag="Business")
+
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"{self.VIN}/drives/set_tag",
+            json={"drives": "10000,10001,10002", "tag": "Business"},
+        )
+
+    async def test_drives_passes_boolean_exclude_flags(self) -> None:
+        """exclude_tag and exclude_driver_profile are booleans in the reference."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.drives(
+            tag="Work",
+            exclude_tag=True,
+            driver_profile="Alex",
+            exclude_driver_profile=False,
+        )
+
+        params = request.await_args.kwargs["params"]  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(params["tag"], "Work")
+        self.assertIs(params["exclude_tag"], True)
+        self.assertEqual(params["driver_profile"], "Alex")
+        self.assertIs(params["exclude_driver_profile"], False)
+
+    async def test_map_returns_raw_image_bytes(self) -> None:
+        """map should return the PNG bytes through the raw request path."""
+
+        parent = MagicMock()
+        png = b"\x89PNG\r\n\x1a\n"
+        request_bytes = AsyncMock(return_value=png)
+        parent._request_bytes = request_bytes  # pyright: ignore[reportAttributeAccessIssue]
+        vehicle = TessieVehicle(parent, self.VIN)
+
+        response = await vehicle.map(width=800, height=600, zoom=15, marker_size=75)
+
+        self.assertEqual(response, png)
+        request_bytes.assert_awaited_once_with(
+            f"{self.VIN}/map",
+            params={
+                "width": 800,
+                "height": 600,
+                "zoom": 15,
+                "marker_size": 75,
+                "style": None,
+            },
+        )
+
+
+class TessieRequestBytesTests(IsolatedAsyncioTestCase):
+    """The raw-bytes request path used by map()."""
+
+    async def test_request_bytes_returns_body_without_json_decoding(self) -> None:
+        """A non-JSON body is returned as bytes with the usual auth headers."""
+
+        png = b"\x89PNG\r\n\x1a\n\xff"
+        resp = MagicMock()
+        resp.ok = True
+        resp.status = 200
+        resp.read = AsyncMock(return_value=png)
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=resp)
+        context.__aexit__ = AsyncMock(return_value=False)
+        session = MagicMock()
+        session.request = MagicMock(return_value=context)
+
+        client = Tessie(session, "token")
+        result = await client._request_bytes(  # pyright: ignore[reportPrivateUsage]
+            "VIN/map", params={"zoom": 15, "style": None}
+        )
+
+        self.assertEqual(result, png)
+        _, kwargs = session.request.call_args
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer token")
+        self.assertEqual(kwargs["params"], {"zoom": 15})
+        self.assertEqual(session.request.call_args.args[0], Method.GET)
+        self.assertEqual(
+            session.request.call_args.args[1], "https://api.tessie.com/VIN/map"
         )

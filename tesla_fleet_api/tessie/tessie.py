@@ -78,7 +78,10 @@ class Tessie(TeslaFleetApi):
         format: str | None = None,
         only_active: bool | None = None,
     ) -> Any:
-        """Get charging costs for all vehicles (fleet)."""
+        """Get charging costs for all vehicles (fleet).
+
+        ``format="csv"`` is not supported: the client only decodes JSON replies.
+        """
         return await self._request(
             Method.GET,
             "charging_invoices",
