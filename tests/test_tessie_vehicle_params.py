@@ -93,6 +93,51 @@ class TessieVehicleParameterTests(IsolatedAsyncioTestCase):
                 self.assertEqual(response, {"result": True})
                 request.assert_awaited_once_with(Method.POST, path, params=params)
 
+    async def test_set_temperatures_sends_driver_and_passenger_separately(
+        self,
+    ) -> None:
+        """set_temperatures should pass per-seat temperatures to the Tessie API."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.set_temperatures(
+            driver_temperature=21.0,
+            passenger_temperature=19.5,
+            max_attempts=2,
+            wait_for_completion=False,
+        )
+
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"{self.VIN}/command/set_temperatures",
+            params={
+                "temperature": None,
+                "driver_temperature": 21.0,
+                "passenger_temperature": 19.5,
+                "max_attempts": 2,
+                "wait_for_completion": False,
+            },
+        )
+
+    async def test_set_temperatures_keeps_positional_arguments(self) -> None:
+        """Existing positional calls must still map to temperature and flags."""
+
+        vehicle, request = self.create_vehicle()
+
+        await vehicle.set_temperatures(21.0, False, 2)
+
+        request.assert_awaited_once_with(
+            Method.POST,
+            f"{self.VIN}/command/set_temperatures",
+            params={
+                "temperature": 21.0,
+                "driver_temperature": None,
+                "passenger_temperature": None,
+                "max_attempts": 2,
+                "wait_for_completion": False,
+            },
+        )
+
     async def test_misc_command_parameters_match_tessie_reference(self) -> None:
         """Other corrected Tessie commands should send the documented query params."""
 
