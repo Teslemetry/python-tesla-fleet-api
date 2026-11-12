@@ -144,16 +144,26 @@ class TessieVehicle(VehicleFleet["Tessie"]):
 
     async def set_temperatures(
         self,
-        temperature: float,
+        temperature: float | None = None,
         wait_for_completion: bool | None = None,
         max_attempts: int | None = None,
+        driver_temperature: float | None = None,
+        passenger_temperature: float | None = None,
     ) -> dict[str, Any]:
-        """Set cabin temperature."""
+        """Set cabin temperature.
+
+        `temperature` sets driver and passenger together; give
+        `driver_temperature` and `passenger_temperature` to set them separately.
+        """
         return await self._request(
             Method.POST,
             f"{self.vin}/command/set_temperatures",
             params=self._command_params(
-                wait_for_completion, max_attempts, temperature=temperature
+                wait_for_completion,
+                max_attempts,
+                temperature=temperature,
+                driver_temperature=driver_temperature,
+                passenger_temperature=passenger_temperature,
             ),
         )
 

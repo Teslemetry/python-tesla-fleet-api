@@ -238,6 +238,11 @@ async def main():
         response = await vehicle.set_temperatures(temperature=21.0)
         print(response)
 
+        response = await vehicle.set_temperatures(
+            driver_temperature=21.0, passenger_temperature=19.0
+        )
+        print(response)
+
         response = await vehicle.set_seat_heat(seat="front_left", level=3)
         print(response)
 
