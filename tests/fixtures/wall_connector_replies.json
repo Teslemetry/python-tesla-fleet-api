@@ -1,0 +1,90 @@
+{
+  "get_config_request": {
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "message": {
+        "Payload": {
+          "Wc": {
+            "Message": {
+              "GetConfigResponse": {
+                "settings": {
+                  "max_output_current_amps": 32,
+                  "gmi_mode": 1,
+                  "country": "GB",
+                  "third_party_vehicle_mode": 1
+                },
+                "wifi_config": {},
+                "wifi": {},
+                "charge_schedule": {
+                  "config": {
+                    "enable_schedule": true,
+                    "schedule": {
+                      "day_time_periods": [
+                        {
+                          "day_bitmask": 127,
+                          "time_periods": [
+                            {"start_seconds": 84600, "end_seconds": 86400},
+                            {"end_seconds": 19800}
+                          ]
+                        }
+                      ]
+                    },
+                    "delay": {}
+                  }
+                },
+                "time_source": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "get_recent_vehicles_request": {
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "message": {
+        "Payload": {
+          "Wc": {
+            "Message": {
+              "GetRecentVehiclesResponse": {
+                "recent_vehicles": [
+                  {"value": "5YJ3E1EA0KF000001"},
+                  {"value": "LRW3F7EK0NC000002"}
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "configure_charge_schedule_request": {
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "message": {
+        "Payload": {
+          "Wc": {"Message": {"ConfigureChargeScheduleResponse": {"error": 1}}}
+        }
+      }
+    }
+  },
+  "push_charge_command_request": {
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "message": {
+        "Payload": {"Wc": {"Message": {"PushChargeCommandResponse": {}}}}
+      }
+    }
+  },
+  "configure_third_party_vehicle_mode_request": {
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000000",
+      "message": {
+        "Payload": {
+          "Wc": {"Message": {"ConfigureThirdPartyVehicleModeResponse": {}}}
+        }
+      }
+    }
+  }
+}

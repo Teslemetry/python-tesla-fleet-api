@@ -461,6 +461,20 @@ arguments, units, sign and limits as `PowerwallClient`'s local
 
 `set_config_json` reads config.json, changes only the given `site_info` keys and writes it back with the hash from that read, so the gateway refuses the write if the file changed in between. `min_site_meter_power_ac` is the export limit in kW as negative site-meter power (-1000 to 0) and `max_site_meter_power_ac` is the import limit in kW (0 to 1000); other values raise `ValueError` before any request. The reply is `{"response": {<the three settings as stored>, "applied": bool}}`, read back from the gateway's answer to the write; when `applied` is false, read `get_config_json()` again before retrying. These are signed filestore commands only: the signed cloud path has not yet been tried on a live gateway.
 
+### Wall Connector commands
+
+These methods address a Gen 3 Wall Connector on the site by its DIN (`din` in `site_info()`'s `components.wall_connectors`). Each is an unsigned `grpc_command` with `identifier_type` 4 and the DIN as `target_id`, even when the site has a signing key, and returns the body of the connector's reply. `TeslemetryEnergySite` has no Wall Connector routes yet and raises `NotImplementedError` without sending anything.
+
+| Method | Description |
+|--------|-------------|
+| `get_wall_connector_config(din)` | `GetConfigResponse`: settings, Wi-Fi, charge schedule, time source |
+| `get_wall_connector_recent_vehicles(din)` | VINs of recently connected vehicles |
+| `set_wall_connector_charge_schedule(din, enabled, start_seconds, end_seconds, time_zone_id, utc_offset_seconds, day_bitmask=127)` | Charge only inside the window (seconds since local midnight) on the given days (Sunday 1 ... Saturday 64). A window crossing midnight is sent as two periods, the one after midnight on the following days |
+| `start_wall_connector_charging(din)`, `stop_wall_connector_charging(din)` | Start or stop the current session. Start overrides the schedule for that session |
+| `set_wall_connector_third_party_vehicle_mode(din, mode)` | Which vehicles may charge (`WallConnectorThirdPartyVehicleMode`) |
+
+The schedule applies to every vehicle and can stop an active charge. The connector stores one UTC offset, so send the schedule again after a daylight saving change. `set_wall_connector_charge_schedule` raises `DeviceUnexpectedResponse` with `{"code", "message"}` as `data` unless the connector answers `WC_CHARGE_SCHEDULE_ERROR_NONE`. A changed third-party vehicle mode may not stop a vehicle that is already charging.
+
 ### Example
 
 ```python
