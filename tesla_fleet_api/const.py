@@ -202,6 +202,16 @@ class TeslaEnergyPeriod(StrEnum):
     LIFETIME = "lifetime"
 
 
+class WallConnectorThirdPartyVehicleMode(IntEnum):
+    """Which vehicles a Wall Connector may charge (``WCThirdPartyVehicleMode``)."""
+
+    ENABLED = 1  # any vehicle
+    DISABLED = 2  # Tesla vehicles only
+    DISABLED_NO_ROADSTER = 3
+    VIN_ALLOW_LIST = 4
+    COMPATIBILITY = 5
+
+
 class EnergyIslandMode(IntEnum):
     """Island mode values for setIslandModeRequest.
 

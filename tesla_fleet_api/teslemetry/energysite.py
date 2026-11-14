@@ -347,6 +347,22 @@ class TeslemetryEnergySite(EnergySite):
     ``energy_site_not_paired`` and sends nothing.
     """
 
+    async def _unsigned_command(
+        self,
+        category: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+        identifier_type: EnergyDeviceIdentifierType
+        | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
+        target_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Teslemetry rejects the ``grpc_command`` body, so nothing is sent.
+
+        This covers the Wall Connector methods, which have no Teslemetry
+        route yet.
+        """
+        raise NotImplementedError(f"Teslemetry has no route for {category}.{command}")
+
     async def _device_command(
         self,
         routable_message: bytes,

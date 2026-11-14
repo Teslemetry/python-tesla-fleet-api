@@ -8,7 +8,7 @@ import math
 from typing import TYPE_CHECKING, Any, cast
 
 from google.protobuf.message import DecodeError
-from tesla_protocol.energy_device import transport_pb2
+from tesla_protocol.energy_device import transport_pb2, wall_connector_pb2
 
 from tesla_fleet_api.const import (
     AuthorizedClientKeyType,
@@ -19,6 +19,7 @@ from tesla_fleet_api.const import (
     EnergyOperationMode,
     Method,
     TeslaEnergyPeriod,
+    WallConnectorThirdPartyVehicleMode,
 )
 from tesla_fleet_api.exceptions import (
     DeviceUnexpectedResponse,
@@ -67,6 +68,14 @@ def validate_dispatch_battery_power(power_watts: float, duration_seconds: int) -
 
 # google.rpc.Code UNIMPLEMENTED: the gateway firmware has no handler.
 _UNIMPLEMENTED = 12
+
+
+def _enum_name(enum: Any, value: Any) -> str:
+    """The proto name of ``value`` in ``enum``, or its ``repr`` when unknown."""
+    try:
+        return enum.Name(value)
+    except (TypeError, ValueError):
+        return repr(value)
 
 
 def _reply_envelope(result: Any) -> transport_pb2.MessageEnvelope | None:
@@ -275,19 +284,24 @@ class EnergySite:
         params: dict[str, Any] | None = None,
         identifier_type: EnergyDeviceIdentifierType
         | int = EnergyDeviceIdentifierType.GATEWAY_DIN,
+        target_id: str | None = None,
     ) -> dict[str, Any]:
-        """Send an unsigned ``grpc_command`` to the energy device gateway."""
-        message: dict[str, Any] = {category: {command: params or {}}}
+        """Send an unsigned ``grpc_command`` to an energy device.
+
+        Without ``target_id`` the site gateway answers. Pass a device DIN and
+        its ``identifier_type`` to address another device on the site, such
+        as a Wall Connector.
+        """
+        properties: dict[str, Any] = {
+            "message": {category: {command: params or {}}},
+            "identifier_type": int(identifier_type),
+        }
+        if target_id is not None:
+            properties["target_id"] = target_id
         return await self._request(
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/command",
-            json={
-                "command_type": "grpc_command",
-                "command_properties": {
-                    "message": message,
-                    "identifier_type": int(identifier_type),
-                },
-            },
+            json={"command_type": "grpc_command", "command_properties": properties},
         )
 
     def _device_command_body(
@@ -885,6 +899,178 @@ class EnergySite:
             Method.POST,
             f"api/1/energy_sites/{self.energy_site_id}/time_of_use_settings",
             json={"tou_settings": {"tariff_content_v2": settings}},
+        )
+
+    async def _wall_connector_command(
+        self, din: str, command: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Send an unsigned ``wc`` command to the Wall Connector ``din``.
+
+        Returns the body of its reply. The reply nests it under
+        ``Payload.Wc.Message``, keyed by the message name in PascalCase with
+        ``Response`` in place of ``_request``. Raises ``InvalidResponse`` on
+        any other shape.
+        """
+        result = await self._unsigned_command(
+            "wc",
+            command,
+            params,
+            EnergyDeviceIdentifierType.WALL_CONNECTOR_DIN,
+            target_id=din,
+        )
+        name = (
+            "".join(part.capitalize() for part in command.split("_")[:-1]) + "Response"
+        )
+        body: Any = result
+        for key in ("response", "message", "Payload", "Wc", "Message", name):
+            if not isinstance(body, dict) or key not in body:
+                raise InvalidResponse
+            body = cast("dict[str, Any]", body)[key]
+        if not isinstance(body, dict):
+            raise InvalidResponse
+        return cast("dict[str, Any]", body)
+
+    async def get_wall_connector_config(self, din: str) -> dict[str, Any]:
+        """Read the configuration of the Wall Connector ``din``.
+
+        Returns its ``GetConfigResponse``: ``settings``, ``wifi``,
+        ``charge_schedule``, ``time_source`` and so on.
+        """
+        return await self._wall_connector_command(din, "get_config_request")
+
+    async def get_wall_connector_recent_vehicles(self, din: str) -> list[str]:
+        """List the VINs of the vehicles recently seen by the Wall Connector ``din``."""
+        body = await self._wall_connector_command(din, "get_recent_vehicles_request")
+        if "recent_vehicles" not in body:
+            return []
+        vehicles: Any = body["recent_vehicles"]
+        if not isinstance(vehicles, list):
+            raise InvalidResponse
+        vins: list[str] = []
+        # Tesla's cloud renders each entry as a VIN message, {"value": "<VIN>"}.
+        for vehicle in cast("list[Any]", vehicles):
+            if not isinstance(vehicle, dict) or not isinstance(
+                vin := cast("dict[str, Any]", vehicle).get("value"), str
+            ):
+                raise InvalidResponse
+            vins.append(vin)
+        return vins
+
+    async def set_wall_connector_charge_schedule(
+        self,
+        din: str,
+        enabled: bool,
+        start_seconds: int,
+        end_seconds: int,
+        time_zone_id: str,
+        utc_offset_seconds: int,
+        day_bitmask: int = 127,
+    ) -> dict[str, Any]:
+        """Set the charge schedule of the Wall Connector ``din``.
+
+        The connector charges only between ``start_seconds`` and
+        ``end_seconds`` (seconds since local midnight) on the days in
+        ``day_bitmask`` (Sunday 1, Monday 2, ... Saturday 64), while
+        ``enabled``. The schedule applies to every vehicle and can stop an
+        active charge. A window that crosses midnight is sent as two periods,
+        as the connector rejects a single period ending before it starts.
+        ``time_zone_id`` is an IANA name and ``utc_offset_seconds`` its
+        current offset; the connector keeps that one offset, so send the
+        schedule again after a daylight saving change.
+
+        Raises ``DeviceUnexpectedResponse`` with ``{"code", "message"}`` as
+        ``data`` unless the connector answers ``WC_CHARGE_SCHEDULE_ERROR_NONE``.
+        """
+        day = 86400
+        if not 0 <= start_seconds < day or not 0 <= end_seconds <= day:
+            raise ValueError("start_seconds and end_seconds must be within one day")
+        if start_seconds == end_seconds:
+            raise ValueError("start_seconds and end_seconds must differ")
+        if not 1 <= day_bitmask <= 127:
+            raise ValueError("day_bitmask must be from 1 to 127")
+        if start_seconds < end_seconds:
+            periods = [{"start_seconds": start_seconds, "end_seconds": end_seconds}]
+        else:
+            periods = [{"start_seconds": start_seconds, "end_seconds": day}]
+            if end_seconds:
+                periods.append({"start_seconds": 0, "end_seconds": end_seconds})
+        body = await self._wall_connector_command(
+            din,
+            "configure_charge_schedule_request",
+            {
+                "config": {
+                    "enable_schedule": enabled,
+                    "schedule": {
+                        "day_time_periods": [
+                            {"day_bitmask": day_bitmask, "time_periods": periods}
+                        ]
+                    },
+                    "delay": {"max_delay_seconds": 0},
+                },
+                "time_zone": {
+                    "time_zone_id": time_zone_id,
+                    "time_zone_info": {
+                        "transitions": [
+                            {
+                                "timestamp": {"seconds": 0, "nanos": 0},
+                                "local_time_utc_offset": utc_offset_seconds,
+                            }
+                        ]
+                    },
+                },
+            },
+        )
+        # proto3 JSON omits a zero enum, so a missing error is INVALID.
+        error: Any = body.get(
+            "error", wall_connector_pb2.WC_CHARGE_SCHEDULE_ERROR_INVALID
+        )
+        if error != wall_connector_pb2.WC_CHARGE_SCHEDULE_ERROR_NONE:
+            raise DeviceUnexpectedResponse(
+                {
+                    "code": error,
+                    "message": _enum_name(
+                        wall_connector_pb2.WCChargeScheduleError, error
+                    ),
+                }
+            )
+        return body
+
+    async def start_wall_connector_charging(self, din: str) -> dict[str, Any]:
+        """Start charging on the Wall Connector ``din``, overriding its schedule for this session."""
+        return await self._wall_connector_command(
+            din,
+            "push_charge_command_request",
+            {
+                "charge_command": {
+                    "charging_command": wall_connector_pb2.WC_CHARGING_COMMAND_START
+                }
+            },
+        )
+
+    async def stop_wall_connector_charging(self, din: str) -> dict[str, Any]:
+        """Stop charging on the Wall Connector ``din``."""
+        return await self._wall_connector_command(
+            din,
+            "push_charge_command_request",
+            {
+                "charge_command": {
+                    "charging_command": wall_connector_pb2.WC_CHARGING_COMMAND_STOP
+                }
+            },
+        )
+
+    async def set_wall_connector_third_party_vehicle_mode(
+        self, din: str, mode: WallConnectorThirdPartyVehicleMode | int
+    ) -> dict[str, Any]:
+        """Set which vehicles the Wall Connector ``din`` may charge.
+
+        The connector stores the mode at once, but a vehicle already charging
+        may carry on until it is unplugged.
+        """
+        return await self._wall_connector_command(
+            din,
+            "configure_third_party_vehicle_mode_request",
+            {"third_party_vehicle_mode": int(mode)},
         )
 
 
