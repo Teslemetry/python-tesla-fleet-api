@@ -469,7 +469,7 @@ These methods address a Gen 3 Wall Connector on the site by its DIN (`din` in `s
 |--------|-------------|
 | `get_wall_connector_config(din)` | `GetConfigResponse`: settings, Wi-Fi, charge schedule, time source |
 | `get_wall_connector_recent_vehicles(din)` | VINs of recently connected vehicles |
-| `set_wall_connector_charge_schedule(din, enabled, start_seconds, end_seconds, time_zone_id, utc_offset_seconds, day_bitmask=127)` | Charge only inside the window (seconds since local midnight) on the given days (Sunday 1 ... Saturday 64). A window crossing midnight is sent as two periods |
+| `set_wall_connector_charge_schedule(din, enabled, start_seconds, end_seconds, time_zone_id, utc_offset_seconds, day_bitmask=127)` | Charge only inside the window (seconds since local midnight) on the given days (Sunday 1 ... Saturday 64). A window crossing midnight is sent as two periods, the one after midnight on the following days |
 | `start_wall_connector_charging(din)`, `stop_wall_connector_charging(din)` | Start or stop the current session. Start overrides the schedule for that session |
 | `set_wall_connector_third_party_vehicle_mode(din, mode)` | Which vehicles may charge (`WallConnectorThirdPartyVehicleMode`) |
 

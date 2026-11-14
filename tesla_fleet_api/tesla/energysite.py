@@ -947,13 +947,14 @@ class EnergySite:
         if not isinstance(vehicles, list):
             raise InvalidResponse
         vins: list[str] = []
-        # Tesla's cloud renders each entry as a VIN message, {"value": "<VIN>"}.
+        # The proto declares plain strings, but a published capture of Tesla's
+        # cloud shows VIN messages, {"value": "<VIN>"}. Accept both.
         for vehicle in cast("list[Any]", vehicles):
-            if not isinstance(vehicle, dict) or not isinstance(
-                vin := cast("dict[str, Any]", vehicle).get("value"), str
-            ):
+            if isinstance(vehicle, dict):
+                vehicle = cast("dict[str, Any]", vehicle).get("value")
+            if not isinstance(vehicle, str):
                 raise InvalidResponse
-            vins.append(vin)
+            vins.append(vehicle)
         return vins
 
     async def set_wall_connector_charge_schedule(
@@ -973,7 +974,8 @@ class EnergySite:
         ``day_bitmask`` (Sunday 1, Monday 2, ... Saturday 64), while
         ``enabled``. The schedule applies to every vehicle and can stop an
         active charge. A window that crosses midnight is sent as two periods,
-        as the connector rejects a single period ending before it starts.
+        as the connector rejects a single period ending before it starts; the
+        one after midnight runs on the following days.
         ``time_zone_id`` is an IANA name and ``utc_offset_seconds`` its
         current offset; the connector keeps that one offset, so send the
         schedule again after a daylight saving change.
@@ -988,23 +990,37 @@ class EnergySite:
             raise ValueError("start_seconds and end_seconds must differ")
         if not 1 <= day_bitmask <= 127:
             raise ValueError("day_bitmask must be from 1 to 127")
-        if start_seconds < end_seconds:
-            periods = [{"start_seconds": start_seconds, "end_seconds": end_seconds}]
-        else:
-            periods = [{"start_seconds": start_seconds, "end_seconds": day}]
-            if end_seconds:
-                periods.append({"start_seconds": 0, "end_seconds": end_seconds})
+        days: list[dict[str, Any]] = [
+            {
+                "day_bitmask": day_bitmask,
+                "time_periods": [
+                    {
+                        "start_seconds": start_seconds,
+                        "end_seconds": end_seconds
+                        if start_seconds < end_seconds
+                        else day,
+                    }
+                ],
+            }
+        ]
+        if end_seconds < start_seconds and end_seconds:
+            # The morning after belongs to the next day: rotate the mask one
+            # day forward, Saturday wrapping to Sunday.
+            next_days = ((day_bitmask << 1) | (day_bitmask >> 6)) & 127
+            after_midnight = {"start_seconds": 0, "end_seconds": end_seconds}
+            if next_days == day_bitmask:
+                days[0]["time_periods"].append(after_midnight)
+            else:
+                days.append(
+                    {"day_bitmask": next_days, "time_periods": [after_midnight]}
+                )
         body = await self._wall_connector_command(
             din,
             "configure_charge_schedule_request",
             {
                 "config": {
                     "enable_schedule": enabled,
-                    "schedule": {
-                        "day_time_periods": [
-                            {"day_bitmask": day_bitmask, "time_periods": periods}
-                        ]
-                    },
+                    "schedule": {"day_time_periods": days},
                     "delay": {"max_delay_seconds": 0},
                 },
                 "time_zone": {

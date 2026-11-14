@@ -114,8 +114,18 @@ class ReadTests(IsolatedAsyncioTestCase):
         ] = {}
         self.assertEqual(await site.get_wall_connector_recent_vehicles(WC_DIN), [])
 
+    async def test_get_recent_vehicles_plain_strings(self) -> None:
+        site, request_mock = _site("get_recent_vehicles_request")
+        request_mock.return_value["response"]["message"]["Payload"]["Wc"]["Message"][
+            "GetRecentVehiclesResponse"
+        ] = {"recent_vehicles": ["5YJ3E1EA0KF000001", "LRW3F7EK0NC000002"]}
+        self.assertEqual(
+            await site.get_wall_connector_recent_vehicles(WC_DIN),
+            ["5YJ3E1EA0KF000001", "LRW3F7EK0NC000002"],
+        )
+
     async def test_get_recent_vehicles_rejects_unknown_entries(self) -> None:
-        for entries in (["5YJ3E1EA0KF000001"], [{"vin": "x"}], {"value": "x"}):
+        for entries in ([1], [{"vin": "x"}], [{"value": 1}], {"value": "x"}):
             with self.subTest(entries=entries):
                 site, request_mock = _site("get_recent_vehicles_request")
                 request_mock.return_value["response"]["message"]["Payload"]["Wc"][
@@ -173,6 +183,34 @@ class ScheduleTests(IsolatedAsyncioTestCase):
                 ),
             ),
         )
+
+    async def test_overnight_window_moves_morning_to_next_day(self) -> None:
+        for days, next_days in ((2, 4), (64, 1), (2 | 64, 4 | 1), (65, 3)):
+            with self.subTest(days=days):
+                site, request_mock = _site("configure_charge_schedule_request")
+                await site.set_wall_connector_charge_schedule(
+                    WC_DIN, True, 84600, 19800, "Australia/Brisbane", 36000, days
+                )
+                sent = _sent(request_mock)["command_properties"]["message"]["wc"][
+                    "configure_charge_schedule_request"
+                ]["config"]["schedule"]["day_time_periods"]
+                self.assertEqual(
+                    sent,
+                    [
+                        {
+                            "day_bitmask": days,
+                            "time_periods": [
+                                {"start_seconds": 84600, "end_seconds": 86400}
+                            ],
+                        },
+                        {
+                            "day_bitmask": next_days,
+                            "time_periods": [
+                                {"start_seconds": 0, "end_seconds": 19800}
+                            ],
+                        },
+                    ],
+                )
 
     async def test_window_ending_at_midnight_is_one_period(self) -> None:
         for end in (0, 86400):
