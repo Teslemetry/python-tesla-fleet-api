@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import re
 import socket
 import struct
 import warnings
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -233,6 +234,9 @@ def _parse_authorized_clients(  # pyright: ignore[reportUnusedFunction]
 
 
 _GATEWAY_INTERFACES = ("eth", "wifi")
+# The Powerwall's own hotspot and inter-Powerwall network; the LAN rarely
+# routes to it, even when Tesla reports it as the active route.
+_POWERWALL_INTERNAL_NETWORK = ipaddress.IPv4Network("192.168.90.0/24")
 
 _DOTTED_QUAD_OCTET = r"(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
 _DOTTED_QUAD_RE = re.compile(
@@ -306,33 +310,34 @@ def _networking_status_body(payload: Any) -> dict[str, Any]:
     return body
 
 
-def _parse_gateway_address(payload: Any) -> str | None:
+def _parse_gateway_address(
+    payload: Any, networks: Iterable[ipaddress.IPv4Network] = ()
+) -> str | None:
     """Pick the gateway's LAN IPv4 from a ``networking_status`` response.
 
     Considers only ``eth``/``wifi`` (never ``gsm`` - cellular isn't a LAN
-    path): prefers whichever of those has ``active_route`` set and a
-    decodable address, then falls back to the first of the two (in
-    ``eth``, ``wifi`` order) that has any decodable address. Returns
-    ``None`` when neither yields one - a well-formed response can simply
-    lack a usable interface.
+    path), in that order, and picks the first decodable address that is
+    inside one of ``networks``, else the first outside 192.168.90.0/24,
+    else the first. ``active_route`` is ignored: Tesla has reported it on
+    an unreachable 192.168.90.x ``eth``. Returns ``None`` when neither
+    interface yields an address - a well-formed response can simply lack a
+    usable interface.
     """
     body = _networking_status_body(payload)
-    interfaces = [body.get(name) for name in _GATEWAY_INTERFACES]
+    candidates = [
+        ipaddress.IPv4Address(address)
+        for name in _GATEWAY_INTERFACES
+        if (address := _interface_address(body.get(name))) is not None
+    ]
+    local_networks = tuple(networks)
 
-    for interface in interfaces:
-        if (
-            isinstance(interface, dict)
-            and cast("dict[str, Any]", interface).get("active_route")
-            and (address := _interface_address(interface)) is not None
-        ):
-            return address
-
-    for interface in interfaces:
-        address = _interface_address(interface)
-        if address is not None:
-            return address
-
-    return None
+    for address in candidates:
+        if any(address in network for network in local_networks):
+            return str(address)
+    for address in candidates:
+        if address not in _POWERWALL_INTERNAL_NETWORK:
+            return str(address)
+    return str(candidates[0]) if candidates else None
 
 
 class TeslemetryEnergySite(EnergySite):
@@ -678,7 +683,9 @@ class TeslemetryEnergySite(EnergySite):
             f"api/1/energy_sites/{self.energy_site_id}/command/networking_status",
         )
 
-    async def find_gateway_address(self) -> str | None:
+    async def find_gateway_address(
+        self, networks: Iterable[ipaddress.IPv4Network] = ()
+    ) -> str | None:
         """Discover the gateway's LAN IPv4 address, for pre-filling a local
         control host.
 
@@ -689,10 +696,14 @@ class TeslemetryEnergySite(EnergySite):
         :class:`~tesla_fleet_api.exceptions.InvalidResponse` on a null
         response body or an unrecognized response shape; returns ``None``
         when the response is well-formed but no interface yields an
-        address. See :func:`_parse_gateway_address` for the exact selection
-        rule.
+        address.
+
+        Pass the caller's own IPv4 ``networks`` to prefer an address that is
+        reachable from them; otherwise ethernet is preferred over Wi-Fi, and
+        a 192.168.90.x address is used only when there is no other. See
+        :func:`_parse_gateway_address` for the exact selection rule.
         """
-        return _parse_gateway_address(await self.get_networking_status())
+        return _parse_gateway_address(await self.get_networking_status(), networks)
 
     async def list_authorized_clients(self) -> dict[str, Any]:
         """List authorized clients on the energy gateway via the Teslemetry
