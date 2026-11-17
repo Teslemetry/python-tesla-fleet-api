@@ -1,0 +1,20 @@
+{
+  "vin": "1707000-00-A--TG000000000000",
+  "site_info": {
+    "net_meter_mode": "battery_ok",
+    "customer_preferred_export_rule": "battery_ok",
+    "backup_reserve_percent": 20,
+    "nominal_system_energy_ac": 13.5,
+    "nominal_system_power_ac": 5.8,
+    "grid_code": "50Hz_230V_1_SMC_ASNZS4777.2_2020_AUS_A",
+    "country": "Australia",
+    "state": "Queensland",
+    "distributor": "Energex",
+    "utility": "*",
+    "retailer": "*",
+    "region": "ASNZS4777.2:2020_AUS_A",
+    "site_name": "Energy Site",
+    "timezone": "Australia/Brisbane"
+  },
+  "default_real_mode": "self_consumption"
+}

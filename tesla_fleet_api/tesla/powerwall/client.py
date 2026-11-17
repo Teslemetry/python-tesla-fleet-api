@@ -27,7 +27,8 @@ import math
 import time
 from collections.abc import Callable, Mapping
 from types import TracebackType
-from typing import Any, Final, cast
+from dataclasses import dataclass
+from typing import Any, Final, Literal, cast
 
 import aiohttp
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -1702,6 +1703,61 @@ def current_power(status: StatusPayload) -> dict[str, float | None]:
     }
 
 
+IslanderPhase = Literal[1, 2, 3]
+IslanderSide = Literal["main", "load"]
+"""``main`` is the grid side of the islanding contactor, ``load`` the home side."""
+
+
+def _islander_measurement(status: StatusPayload, field: str) -> float | None:
+    value = _lookup(status, "esCan", "bus", "ISLANDER", "ISLAND_AcMeasurements", field)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def islander_frequency(
+    status: StatusPayload, phase: IslanderPhase, side: IslanderSide
+) -> float | None:
+    """Return the islander's measured frequency in Hz for ``phase`` and ``side``."""
+    return _islander_measurement(status, f"ISLAND_FreqL{phase}_{side.capitalize()}")
+
+
+def islander_voltage(
+    status: StatusPayload, phase: IslanderPhase, side: IslanderSide
+) -> float | None:
+    """Return the islander's measured line-to-neutral voltage for ``phase`` and ``side``.
+
+    A single phase site reports near zero on phases 2 and 3.
+    """
+    return _islander_measurement(status, f"ISLAND_VL{phase}N_{side.capitalize()}")
+
+
+@dataclass(frozen=True, slots=True)
+class SiteInfo:
+    """The grid connection settings in the gateway's ``config.json`` ``site_info``.
+
+    Each value is None when the gateway does not report it as text.
+    """
+
+    grid_code: str | None
+    country: str | None
+    distributor: str | None
+
+
+def site_info(config: ConfigPayload) -> SiteInfo:
+    """Return the grid connection settings from a :meth:`PowerwallClient.get_config` payload."""
+
+    def text(key: str) -> str | None:
+        value = _lookup(config, "site_info", key)
+        return value if isinstance(value, str) else None
+
+    return SiteInfo(
+        grid_code=text("grid_code"),
+        country=text("country"),
+        distributor=text("distributor"),
+    )
+
+
 def backup_time_remaining(status: StatusPayload) -> float | None:
     """Estimated backup runtime in hours at current load, or None if unknown."""
     remaining = _lookup(
@@ -1717,13 +1773,19 @@ __all__ = [
     "DEFAULT_GATEWAY_HOST",
     "GRID_EXPORT_RULES",
     "OPERATION_MODES",
+    "IslanderPhase",
+    "IslanderSide",
     "PowerwallClient",
+    "SiteInfo",
     "backup_time_remaining",
     "battery_level",
     "battery_level_raw",
     "current_power",
+    "islander_frequency",
+    "islander_voltage",
     "raw_to_scaled_reserve",
     "raw_to_scaled_soc",
     "scaled_to_raw_reserve",
     "scaled_to_raw_soc",
+    "site_info",
 ]
