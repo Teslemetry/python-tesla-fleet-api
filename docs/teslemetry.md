@@ -606,15 +606,21 @@ fields in a `networking_status` response have been observed as either raw
 big-endian uint32 integers or dotted-quad strings; the helper decodes either
 form and selects an interface for you. Only the `eth` and `wifi` interfaces
 are considered (never `gsm` -
-cellular is not a LAN path): the helper prefers whichever has `active_route`
-set and a decodable address, then falls back to the first of the two (in
-`eth`, `wifi` order) with any decodable address. A null response body or an
+cellular is not a LAN path). Pass the caller's own IPv4 networks to prefer an
+address inside one of them; otherwise ethernet is preferred over Wi-Fi. An
+address in `192.168.90.0/24` (the Powerwall's own hotspot and inter-Powerwall
+network) is used only when there is no other. `active_route` is ignored,
+because Tesla has reported it on an unreachable `192.168.90.x` ethernet
+address. A null response body or an
 unrecognized response shape raises
 `tesla_fleet_api.exceptions.InvalidResponse`, so malformed data is never
 mistaken for "no address"; a well-formed response where no interface yields a
 usable address returns `None` instead.
 
 ```python
+from ipaddress import IPv4Network
+
+
 async def main():
     async with aiohttp.ClientSession() as session:
         teslemetry = Teslemetry(
@@ -624,7 +630,9 @@ async def main():
 
         energy_site = teslemetry.energySites.create(12345)
 
-        address = await energy_site.find_gateway_address()
+        address = await energy_site.find_gateway_address(
+            [IPv4Network("192.168.1.0/24")]
+        )
         print(address)  # e.g. "192.168.1.138", or None
 
         # The untyped response is still available when callers need the exact

@@ -2,8 +2,8 @@
 over the Teslemetry ``command/networking_status`` endpoint.
 
 Only ``eth``/``wifi`` are considered (never ``gsm`` - cellular isn't a LAN
-path). An interface with ``active_route`` set wins; otherwise the first of
-``eth``, ``wifi`` (in that order) with a decodable address is used. Address
+path), in ``eth``, ``wifi`` order: an address inside a caller-supplied
+network wins, then one outside 192.168.90.0/24, then any. Address
 fields on the wire have been observed as both raw big-endian uint32 integers
 and dotted-quad strings - see ``GatewayAddressRealCaptureTests`` and
 ``GatewayAddressStringFormatTests`` for the real captured samples this
@@ -18,6 +18,7 @@ response that simply has no usable interface returns ``None``.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from ipaddress import IPv4Network
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock
@@ -124,7 +125,7 @@ class GatewayAddressRealCaptureTests(IsolatedAsyncioTestCase):
 
 
 class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
-    async def test_eth_preferred_when_eth_has_active_route(self) -> None:
+    async def test_eth_preferred_over_wifi(self) -> None:
         site = _make_site(
             {
                 "response": {
@@ -144,7 +145,7 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "192.168.1.1")
 
-    async def test_no_active_route_falls_back_to_eth_first(self) -> None:
+    async def test_powerwall_internal_eth_skipped_for_wifi(self) -> None:
         site = _make_site(
             {
                 "response": {
@@ -156,9 +157,9 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
 
         result = await site.find_gateway_address()
 
-        self.assertEqual(result, "192.168.90.2")
+        self.assertEqual(result, "192.168.1.138")
 
-    async def test_no_active_route_falls_back_to_wifi_when_eth_has_no_address(
+    async def test_falls_back_to_wifi_when_eth_has_no_address(
         self,
     ) -> None:
         site = _make_site(
@@ -257,6 +258,129 @@ class GatewayAddressSelectionTests(IsolatedAsyncioTestCase):
         result = await site.find_gateway_address()
 
         self.assertEqual(result, "192.168.1.138")
+
+
+class GatewayAddressNetworkPreferenceTests(IsolatedAsyncioTestCase):
+    """Two Powerwall 3s (leader + follower): Tesla reported the leader's
+    ``eth`` as 192.168.90.2 with ``active_route`` set and a 192.168.1.254
+    gateway, while the home network is 192.168.1.0/24 and only ``wifi`` is
+    reachable from it.
+    """
+
+    TWO_POWERWALL_RESPONSE = {
+        "response": {
+            "eth": {
+                "enabled": True,
+                "active_route": True,
+                "ipv4_config": {
+                    "address": "192.168.90.2",
+                    "subnet_mask": "255.255.255.0",
+                    "gateway": "192.168.1.254",
+                },
+            },
+            "wifi": {
+                "enabled": True,
+                "ipv4_config": {
+                    "address": "192.168.1.252",
+                    "subnet_mask": "255.255.255.0",
+                    "gateway": "192.168.1.254",
+                },
+            },
+        }
+    }
+
+    async def test_two_powerwalls_without_networks_skips_internal_eth(
+        self,
+    ) -> None:
+        site = _make_site(self.TWO_POWERWALL_RESPONSE)
+
+        result = await site.find_gateway_address()
+
+        self.assertEqual(result, "192.168.1.252")
+
+    async def test_two_powerwalls_with_caller_network_picks_wifi(self) -> None:
+        site = _make_site(self.TWO_POWERWALL_RESPONSE)
+
+        result = await site.find_gateway_address([IPv4Network("192.168.1.0/24")])
+
+        self.assertEqual(result, "192.168.1.252")
+
+    async def test_caller_network_beats_ethernet_preference(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"ipv4_config": {"address": "10.0.0.5"}},
+                    "wifi": {"ipv4_config": {"address": "192.168.1.252"}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address(
+            [IPv4Network("172.16.0.0/12"), IPv4Network("192.168.1.0/24")]
+        )
+
+        self.assertEqual(result, "192.168.1.252")
+
+    async def test_no_caller_network_match_prefers_ethernet(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"ipv4_config": {"address": "10.0.0.5"}},
+                    "wifi": {"ipv4_config": {"address": "192.168.1.252"}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address([IPv4Network("172.16.0.0/12")])
+
+        self.assertEqual(result, "10.0.0.5")
+
+    async def test_single_powerwall_on_ethernet(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"ipv4_config": {"address": "192.168.1.20"}},
+                    "wifi": {"enabled": False},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address([IPv4Network("192.168.1.0/24")])
+
+        self.assertEqual(result, "192.168.1.20")
+
+    async def test_wifi_only(self) -> None:
+        site = _make_site(
+            {"response": {"wifi": {"ipv4_config": {"address": "192.168.1.138"}}}}
+        )
+
+        result = await site.find_gateway_address([IPv4Network("192.168.1.0/24")])
+
+        self.assertEqual(result, "192.168.1.138")
+
+    async def test_only_internal_address_is_last_resort(self) -> None:
+        site = _make_site(
+            {"response": {"eth": {"ipv4_config": {"address": "192.168.90.2"}}}}
+        )
+
+        result = await site.find_gateway_address([IPv4Network("192.168.1.0/24")])
+
+        self.assertEqual(result, "192.168.90.2")
+
+    async def test_no_usable_address_returns_none(self) -> None:
+        site = _make_site(
+            {
+                "response": {
+                    "eth": {"ipv4_config": {"address": "0.0.0.0"}},
+                    "wifi": {"enabled": True},
+                    "gsm": {"ipv4_config": {"address": "10.17.123.246"}},
+                }
+            }
+        )
+
+        result = await site.find_gateway_address([IPv4Network("10.0.0.0/8")])
+
+        self.assertIsNone(result)
 
 
 class GatewayAddressStringFormatTests(IsolatedAsyncioTestCase):
