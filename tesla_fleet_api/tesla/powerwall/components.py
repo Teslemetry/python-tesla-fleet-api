@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 from .models import ComponentsPayload, ConfigPayload, StatusPayload
 
@@ -25,6 +25,19 @@ SignalValue = float | str | bool
 _PV_CURRENT_NOISE_FLOOR_A = 1e-3
 
 BatteryRole = Literal["leader", "follower", "expansion"]
+
+PV_STRINGS: Final = ("A", "B", "C", "D", "E", "F")
+"""The PV string inputs of a Powerwall 3 PCH."""
+
+PvStringState = Literal["active", "active_parallel", "standby"]
+
+_PV_STRING_STATES: Final[dict[str, PvStringState]] = {
+    "Pv_Active": "active",
+    "Pv_Active_Parallel": "active_parallel",
+    "Pv_Standby": "standby",
+}
+PV_STRING_STATES: Final[tuple[PvStringState, ...]] = tuple(_PV_STRING_STATES.values())
+"""Every value :func:`pv_string_state` can return."""
 
 
 def _path(data: Any, *keys: str | int) -> Any:
@@ -106,6 +119,37 @@ def pv_string_current(
     return value
 
 
+def pv_string_voltage(
+    components: ComponentsPayload, string: str, slot: int = 0
+) -> float | None:
+    """Return PCH PV string ``string`` (``"A"``-``"F"``) voltage in volts."""
+    return component_float(components, "pch", f"PCH_PvVoltage{string}", slot)
+
+
+def pv_string_state(
+    components: ComponentsPayload, string: str, slot: int = 0
+) -> PvStringState | None:
+    """Return the state of PCH PV string ``string`` (``"A"``-``"F"``).
+
+    Only the states in :data:`PV_STRING_STATES` are returned; any other
+    gateway value returns None.
+    """
+    value = component_signal(components, "pch", f"PCH_PvState_{string}", slot)
+    return _PV_STRING_STATES.get(value) if isinstance(value, str) else None
+
+
+def pv_power(components: ComponentsPayload, slot: int = 0) -> float | None:
+    """Return the total PV power of the PCH at ``slot`` in watts."""
+    return component_float(components, "pch", "PCH_SlowPvPowerSum", slot)
+
+
+def _component_text(
+    components: ComponentsPayload, kind: str, name: str, slot: int
+) -> str | None:
+    value = component_signal(components, kind, name, slot)
+    return value if isinstance(value, str) else None
+
+
 def component_serial(components: ComponentsPayload, slot: int) -> str | None:
     """Return the first non-empty serial number reported for component ``slot``."""
     for kind in ("hvp", "bms", "pch", "baggr"):
@@ -143,6 +187,15 @@ class BatteryUnit:
     din: str | None
     serial_number: str | None
     part_number: str | None
+
+    @property
+    def unit_id(self) -> str | None:
+        """Return a stable id for this unit: its serial number for an expansion, else its DIN.
+
+        An expansion's DIN is only in ``config.json``, so its serial number is
+        the id that is known from the status and components payloads alone.
+        """
+        return self.serial_number if self.role == "expansion" else self.din
 
 
 def _din(item: Mapping[str, Any]) -> str | None:
@@ -386,15 +439,142 @@ def battery_units(
     return tuple(units)
 
 
+@dataclass(frozen=True, slots=True)
+class PvString:
+    """One PV string input of a Powerwall 3."""
+
+    voltage: float | None
+    """Volts."""
+    current: float | None
+    """Amps, with idle noise read as 0.0 (see :func:`pv_string_current`)."""
+    state: PvStringState | None
+
+
+def pv_strings(components: ComponentsPayload, slot: int = 0) -> dict[str, PvString]:
+    """Return every PV string of the PCH at ``slot``, keyed by :data:`PV_STRINGS`."""
+    return {
+        string: PvString(
+            voltage=pv_string_voltage(components, string, slot),
+            current=pv_string_current(components, string, slot),
+            state=pv_string_state(components, string, slot),
+        )
+        for string in PV_STRINGS
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class BatteryUnitReadings:
+    """The components-payload readings of one :class:`BatteryUnit`.
+
+    Every value is None when the gateway does not report it for the unit.
+    An expansion has no PCH or PWS, so its PCH and PWS readings are always
+    None and its PV strings are all None, rather than another unit's row at
+    the same slot.
+    """
+
+    energy_remaining: float | None
+    """BMS nominal energy remaining, kWh."""
+    full_pack_energy: float | None
+    """BMS nominal full pack energy, kWh."""
+    percentage_charged: float | None
+    """``energy_remaining / full_pack_energy * 100``.
+
+    This is the raw pack ratio, including the bottom buffer that
+    :func:`~tesla_fleet_api.tesla.powerwall.battery_level` scales out, so it
+    reads slightly above the site percentage. None while either value is
+    missing or the full pack energy is 0.
+    """
+    hvp_state: str | None
+    """The gateway's own text, such as ``HVP_ACTIVE``."""
+    hvp_firmware: str | None
+    battery_connection_status: str | None
+    """The battery aggregator's status for this slot, such as ``CONNECTED``."""
+    battery_power: float | None
+    """PCH battery power, W."""
+    ac_power: float | None
+    """PCH AC real power, W."""
+    ac_voltage_ab: float | None
+    ac_voltage_an: float | None
+    ac_voltage_bn: float | None
+    ac_frequency: float | None
+    """Hz."""
+    pch_state: str | None
+    """The gateway's own text, such as ``Pch_Active``."""
+    pch_firmware: str | None
+    pws_firmware: str | None
+    pv_strings: dict[str, PvString]
+    """Keyed by :data:`PV_STRINGS`."""
+
+
+def battery_unit_readings(
+    components: ComponentsPayload, unit: BatteryUnit
+) -> BatteryUnitReadings:
+    """Return the readings of ``unit`` from a components payload."""
+    slot = unit.component_slot
+    powerwall = unit.role != "expansion"
+
+    def number(kind: str, name: str) -> float | None:
+        return component_float(components, kind, name, slot)
+
+    def text(kind: str, name: str) -> str | None:
+        return _component_text(components, kind, name, slot)
+
+    def powerwall_number(name: str) -> float | None:
+        return number("pch", name) if powerwall else None
+
+    def powerwall_text(kind: str, name: str) -> str | None:
+        return text(kind, name) if powerwall else None
+
+    remaining = number("bms", "BMS_nominalEnergyRemaining")
+    full = number("bms", "BMS_nominalFullPackEnergy")
+    return BatteryUnitReadings(
+        energy_remaining=remaining,
+        full_pack_energy=full,
+        percentage_charged=(
+            remaining / full * 100 if remaining is not None and full else None
+        ),
+        hvp_state=text("hvp", "HVP_State"),
+        hvp_firmware=text("hvp", "HVP_appGitHash"),
+        # The battery aggregator reports one connection status per slot.
+        battery_connection_status=_component_text(
+            components, "baggr", f"BAGGR_LOG_BattConnectionStatus{slot}", 0
+        ),
+        battery_power=powerwall_number("PCH_BatteryPower"),
+        ac_power=powerwall_number("PCH_AcRealPowerAB"),
+        ac_voltage_ab=powerwall_number("PCH_AcVoltageAB"),
+        ac_voltage_an=powerwall_number("PCH_AcVoltageAN"),
+        ac_voltage_bn=powerwall_number("PCH_AcVoltageBN"),
+        ac_frequency=powerwall_number("PCH_AcFrequency"),
+        pch_state=powerwall_text("pch", "PCH_State"),
+        pch_firmware=powerwall_text("pch", "PCH_appGitHash"),
+        pws_firmware=powerwall_text("pws", "PWS_appGitHash"),
+        pv_strings=(
+            pv_strings(components, slot)
+            if powerwall
+            else dict.fromkeys(PV_STRINGS, PvString(None, None, None))
+        ),
+    )
+
+
 __all__ = [
+    "PV_STRINGS",
+    "PV_STRING_STATES",
     "BatteryRole",
     "BatteryUnit",
+    "BatteryUnitReadings",
+    "PvString",
+    "PvStringState",
     "SignalValue",
+    "battery_unit_readings",
     "battery_units",
     "component",
     "component_float",
     "component_part_number",
     "component_serial",
     "component_signal",
+    "pv_power",
     "pv_string_current",
+    "pv_string_state",
+    "pv_string_voltage",
+    "pv_strings",
 ]

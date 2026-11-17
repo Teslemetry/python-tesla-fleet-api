@@ -1,0 +1,95 @@
+{
+  "control": {
+    "islanding": {
+      "contactorClosed": true,
+      "customerIslandMode": "BACKUP",
+      "gridOK": true,
+      "microGridOK": true
+    },
+    "meterAggregates": [
+      {
+        "location": "BATTERY",
+        "realPowerW": -1250
+      },
+      {
+        "location": "SITE",
+        "realPowerW": 20
+      },
+      {
+        "location": "LOAD",
+        "realPowerW": 1630
+      },
+      {
+        "location": "SOLAR",
+        "realPowerW": 2860
+      },
+      {
+        "location": "SOLAR_RGM",
+        "realPowerW": 2840
+      },
+      {
+        "location": "GENERATOR",
+        "realPowerW": 0
+      },
+      {
+        "location": "CONDUCTOR",
+        "realPowerW": 0
+      }
+    ],
+    "siteShutdown": {
+      "isShutDown": false,
+      "reasons": []
+    },
+    "batteryBlocks": [
+      {
+        "din": "1707000-30-L--TG10000000000A",
+        "disableReasons": []
+      }
+    ],
+    "systemStatus": {
+      "nominalEnergyRemainingWh": 33650,
+      "nominalFullPackEnergyWh": 43200
+    }
+  },
+  "esCan": {
+    "bus": {
+      "ISLANDER": {
+        "ISLAND_AcMeasurements": {
+          "ISLAND_FreqL1_Load": 50.01,
+          "ISLAND_FreqL1_Main": 50.01,
+          "ISLAND_FreqL2_Load": 50.01,
+          "ISLAND_FreqL2_Main": 50.01,
+          "ISLAND_FreqL3_Load": 50.01,
+          "ISLAND_FreqL3_Main": 50.03,
+          "ISLAND_GridState": "ISLAND_GridState_Grid_Compliant",
+          "ISLAND_VL1N_Load": 239.5,
+          "ISLAND_VL1N_Main": 240.5,
+          "ISLAND_VL2N_Load": 7.5,
+          "ISLAND_VL2N_Main": 7.5,
+          "ISLAND_VL3N_Load": 1.5,
+          "ISLAND_VL3N_Main": 0.5,
+          "isComplete": true,
+          "isMIA": false
+        }
+      }
+    },
+    "firmwareUpdate": {
+      "isUpdating": false,
+      "msa": null,
+      "powerwalls": null,
+      "pvInverters": null,
+      "sync": null
+    }
+  },
+  "pw3Can": {
+    "firmwareUpdate": {
+      "isUpdating": false,
+      "progress": null
+    }
+  },
+  "system": {
+    "sitemanagerStatus": {
+      "isRunning": true
+    }
+  }
+}
