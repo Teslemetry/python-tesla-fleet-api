@@ -59,6 +59,11 @@ def _gateway(part_number: str) -> dict[str, Any]:
             {"id": GATEWAY_1_DIN, "components": {}}, True, id="no_gateways_key"
         ),
         pytest.param({"id": GATEWAY_2_DIN}, False, id="gateway_2_site_din"),
+        pytest.param(
+            {"id": GATEWAY_1_DIN, "components": {"gateways": [{"part_number": None}]}},
+            True,
+            id="gateway_without_part_number_falls_back_to_id",
+        ),
     ],
 )
 def test_is_legacy_gateway(site_info: dict[str, Any], expected: bool) -> None:
@@ -71,6 +76,10 @@ def test_is_legacy_gateway(site_info: dict[str, Any], expected: bool) -> None:
         pytest.param(None, id="null_body"),
         pytest.param({}, id="empty_body"),
         pytest.param({"components": {"gateways": []}}, id="no_gateways_no_id"),
+        pytest.param(
+            {"components": {"gateways": [{"din": GATEWAY_1_DIN}]}},
+            id="no_part_number_no_id",
+        ),
     ],
 )
 def test_is_legacy_gateway_unknown_shape(site_info: Any) -> None:

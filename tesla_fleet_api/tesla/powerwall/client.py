@@ -1771,29 +1771,29 @@ def is_legacy_gateway(site_info: Any) -> bool:
     ``site_info`` is the body of the cloud ``site_info`` response (the
     ``"response"`` object). A Gateway 1 has part number ``1118431-``; it is
     read from ``components.gateways[].part_number``, or from the site ``id``
-    (the gateway DIN, which starts with the part number) when no gateways are
-    listed. A True result means the site needs
+    (the gateway DIN, which starts with the part number) when no listed
+    gateway has a part number. A True result means the site needs
     :meth:`PowerwallClient.legacy_gateway`, which logs in with the full
     gateway password. Raises :class:`InvalidResponse` when ``site_info`` is
-    not a mapping or carries neither gateways nor an ``id``.
+    not a mapping or carries neither a gateway part number nor an ``id``.
     """
     if not isinstance(site_info, Mapping):
         raise InvalidResponse(repr(site_info))
     body = cast(Mapping[str, Any], site_info)
     gateways = _lookup(body, "components", "gateways")
-    if isinstance(gateways, list) and gateways:
-        part_numbers = [
-            _lookup(gateway, "part_number")
-            for gateway in cast(list[Any], gateways)
-        ]
-    elif "id" in body:
-        part_numbers = [body["id"]]
-    else:
-        raise InvalidResponse("site_info has no gateways and no id")
+    part_numbers: list[str] = []
+    if isinstance(gateways, list):
+        for gateway in cast(list[Any], gateways):
+            part_number = _lookup(gateway, "part_number")
+            if isinstance(part_number, str):
+                part_numbers.append(part_number)
+    if not part_numbers:
+        site_id = body.get("id")
+        if not isinstance(site_id, str):
+            raise InvalidResponse("site_info has no gateway part number and no id")
+        part_numbers = [site_id]
     return any(
-        isinstance(part_number, str)
-        and part_number.startswith(_GATEWAY_1_PART_NUMBER)
-        for part_number in part_numbers
+        part_number.startswith(_GATEWAY_1_PART_NUMBER) for part_number in part_numbers
     )
 
 
