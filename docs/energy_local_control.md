@@ -108,8 +108,9 @@ async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEner
     return PowerwallEnergySite(powerwall_client)
 ```
 
-An early Tesla Backup Gateway 1 (Powerwall 2) rejects the last-5-characters
-login `PowerwallClient` sends and needs the full gateway password. Build its
+A Tesla Backup Gateway 1 (Powerwall 2) rejects the last-5-characters login
+`PowerwallClient` sends and needs the customer (Legacy) password set in the
+Tesla One app, sent unchanged. Build its
 client with `PowerwallClient.legacy_gateway(...)`, which takes the same
 arguments. `is_legacy_gateway(site_info)` tells you which one a site needs: pass
 it the body of the cloud `site_info()` response (`response`), and it returns

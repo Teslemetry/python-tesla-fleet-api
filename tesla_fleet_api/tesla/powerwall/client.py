@@ -227,10 +227,11 @@ class PowerwallClient:
         session: aiohttp.ClientSession | None = None,
         timeout: float = 5.0,
     ) -> PowerwallClient:
-        """Create a client for an early Gateway 1 (Powerwall 2) unit.
+        """Create a client for a Backup Gateway 1 (Powerwall 2) unit.
 
         These units reject the last-5-characters login that the default
-        constructor sends, and need the full ``gateway_password`` instead.
+        constructor sends. Pass the customer (Legacy) password set in the
+        Tesla One app as ``gateway_password``; it is sent unchanged.
         Everything else is the same as the default constructor. Use
         :func:`is_legacy_gateway` on the site's cloud ``site_info`` to tell
         which constructor a site needs.
@@ -1773,8 +1774,8 @@ def is_legacy_gateway(site_info: Any) -> bool:
     read from ``components.gateways[].part_number``, or from the site ``id``
     (the gateway DIN, which starts with the part number) when no listed
     gateway has a part number. A True result means the site needs
-    :meth:`PowerwallClient.legacy_gateway`, which logs in with the full
-    gateway password. Raises :class:`InvalidResponse` when ``site_info`` is
+    :meth:`PowerwallClient.legacy_gateway`, which sends the password
+    unchanged. Raises :class:`InvalidResponse` when ``site_info`` is
     not a mapping or carries neither a gateway part number nor an ``id``.
     """
     if not isinstance(site_info, Mapping):
