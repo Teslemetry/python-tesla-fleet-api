@@ -42,6 +42,7 @@ from tesla_protocol.energy_device import (
     transport_pb2,
 )
 
+from ...exceptions import InvalidResponse
 from ..island import island_mode_rejection
 from . import queries
 from .exceptions import (
@@ -131,6 +132,10 @@ _ENVELOPE_HEADER_FIELDS: Final = frozenset({"delivery_channel", "sender", "recip
 # the full oneof surface (which carries dozens of unrelated commands).
 _TEG_FIELD_SET_ISLAND_MODE_REQUEST: Final = 3
 _TEG_FIELD_TRIGGER_ISLANDING_REQUEST: Final = 5
+
+# Backup Gateway 1 part number prefix, as in a gateway's ``part_number`` and
+# at the start of its DIN.
+_GATEWAY_1_PART_NUMBER: Final = "1118431-"
 
 def _lookup(data: Any, *keys: str) -> Any:
     """Walk a nested mapping; return None if any key is missing."""
@@ -226,7 +231,9 @@ class PowerwallClient:
 
         These units reject the last-5-characters login that the default
         constructor sends, and need the full ``gateway_password`` instead.
-        Everything else is the same as the default constructor.
+        Everything else is the same as the default constructor. Use
+        :func:`is_legacy_gateway` on the site's cloud ``site_info`` to tell
+        which constructor a site needs.
         """
         return cls(
             host=host,
@@ -1758,6 +1765,38 @@ def site_info(config: ConfigPayload) -> SiteInfo:
     )
 
 
+def is_legacy_gateway(site_info: Any) -> bool:
+    """Return True when a site's gateway is a Backup Gateway 1.
+
+    ``site_info`` is the body of the cloud ``site_info`` response (the
+    ``"response"`` object). A Gateway 1 has part number ``1118431-``; it is
+    read from ``components.gateways[].part_number``, or from the site ``id``
+    (the gateway DIN, which starts with the part number) when no gateways are
+    listed. A True result means the site needs
+    :meth:`PowerwallClient.legacy_gateway`, which logs in with the full
+    gateway password. Raises :class:`InvalidResponse` when ``site_info`` is
+    not a mapping or carries neither gateways nor an ``id``.
+    """
+    if not isinstance(site_info, Mapping):
+        raise InvalidResponse(repr(site_info))
+    body = cast(Mapping[str, Any], site_info)
+    gateways = _lookup(body, "components", "gateways")
+    if isinstance(gateways, list) and gateways:
+        part_numbers = [
+            _lookup(gateway, "part_number")
+            for gateway in cast(list[Any], gateways)
+        ]
+    elif "id" in body:
+        part_numbers = [body["id"]]
+    else:
+        raise InvalidResponse("site_info has no gateways and no id")
+    return any(
+        isinstance(part_number, str)
+        and part_number.startswith(_GATEWAY_1_PART_NUMBER)
+        for part_number in part_numbers
+    )
+
+
 def backup_time_remaining(status: StatusPayload) -> float | None:
     """Estimated backup runtime in hours at current load, or None if unknown."""
     remaining = _lookup(
@@ -1783,6 +1822,7 @@ __all__ = [
     "current_power",
     "islander_frequency",
     "islander_voltage",
+    "is_legacy_gateway",
     "raw_to_scaled_reserve",
     "raw_to_scaled_soc",
     "scaled_to_raw_reserve",

@@ -108,6 +108,14 @@ async def make_local_energysite(session: aiohttp.ClientSession) -> PowerwallEner
     return PowerwallEnergySite(powerwall_client)
 ```
 
+An early Tesla Backup Gateway 1 (Powerwall 2) rejects the last-5-characters
+login `PowerwallClient` sends and needs the full gateway password. Build its
+client with `PowerwallClient.legacy_gateway(...)`, which takes the same
+arguments. `is_legacy_gateway(site_info)` tells you which one a site needs: pass
+it the body of the cloud `site_info()` response (`response`), and it returns
+True when a listed gateway, or the site DIN when none is listed, has the
+Gateway 1 part number `1118431-`.
+
 The example uses `192.168.91.1`, the gateway's own WiFi access point. When
 your client connects over your own LAN instead, you can discover the
 gateway's LAN IP over the cloud with
