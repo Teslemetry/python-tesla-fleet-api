@@ -415,6 +415,7 @@ commands send over BLE:
 - `charge_stop()`
 - `charge_standard()`
 - `charge_max_range()`
+- `manual_preconditioning_start()` / `manual_preconditioning_stop()`
 - `charge_port_door_open()`
 - `charge_port_door_close()`
 - `set_charge_limit(percent)`

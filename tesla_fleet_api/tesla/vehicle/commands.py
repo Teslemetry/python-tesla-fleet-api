@@ -107,6 +107,7 @@ from tesla_protocol.command.car_server_pb2 import (
     HvacSeatHeaterActions,
     HvacSeatCoolerActions,
     HvacSetPreconditioningMaxAction,
+    ManualPreconditioningAction,
     HvacSteeringWheelHeaterAction,
     HvacTemperatureAdjustmentAction,
     GetNearbyChargingSites,
@@ -1485,6 +1486,34 @@ class Commands(ABC, Vehicle[CommandParentT], Generic[CommandParentT]):
             Action(
                 vehicleAction=VehicleAction(
                     vehicleControlHonkHornAction=VehicleControlHonkHornAction()
+                )
+            )
+        )
+
+    async def manual_preconditioning_start(self) -> dict[str, Any]:
+        """Starts preconditioning the battery for fast charging.
+
+        The vehicle rejects this with a ``START_MANUAL_PRECON_*`` reason when
+        the battery is low, a DC charger is connected, navigation to a
+        Supercharger is active, or the vehicle does not support it. Not yet
+        confirmed on a live vehicle.
+        """
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    manualPreconditioningAction=ManualPreconditioningAction(
+                        start=Void()
+                    )
+                )
+            )
+        )
+
+    async def manual_preconditioning_stop(self) -> dict[str, Any]:
+        """Stops manual battery preconditioning. Not yet confirmed on a live vehicle."""
+        return await self._sendInfotainment(
+            Action(
+                vehicleAction=VehicleAction(
+                    manualPreconditioningAction=ManualPreconditioningAction(stop=Void())
                 )
             )
         )
