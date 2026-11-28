@@ -408,3 +408,24 @@ class ChargePortDoorTests(MockedBleTransportTestCase):
             unsigned.closureMoveRequest.chargePort,
             ClosureMoveType_E.CLOSURE_MOVE_TYPE_CLOSE,
         )
+
+
+class ManualPreconditioningTests(MockedBleTransportTestCase):
+    async def test_manual_preconditioning_start_sends_start_void(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        result = await vehicle.manual_preconditioning_start()
+
+        self.assertEqual(result, {"response": {"result": True, "reason": ""}})
+        action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        self.assertTrue(action.manualPreconditioningAction.HasField("start"))
+
+    async def test_manual_preconditioning_stop_sends_stop_void(self) -> None:
+        vehicle, send = self.make_vehicle()
+        send.return_value = infotainment_action_ok_reply()
+
+        await vehicle.manual_preconditioning_stop()
+
+        action = _decode_vehicle_action(vehicle, send.await_args.args[0])
+        self.assertTrue(action.manualPreconditioningAction.HasField("stop"))

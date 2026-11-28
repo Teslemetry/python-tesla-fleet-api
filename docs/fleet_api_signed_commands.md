@@ -162,6 +162,12 @@ Signed commands also include `charge_standard()`, `charge_max_range()`,
 door commands. These methods share the same signatures as the Fleet API vehicle
 commands, but are sent through the signed-command protocol.
 
+`manual_preconditioning_start()` and `manual_preconditioning_stop()` start and
+stop battery preconditioning for fast charging. They are signed-only: the
+Fleet API has no REST endpoint for them. Over Bluetooth, `charge_state()`
+carries `manual_precon_supported`, `manual_precon_allowed` and
+`manual_precon_status`. The command is not yet confirmed on a live vehicle.
+
 `set_scheduled_charging()` and `set_scheduled_departure()` both update the
 vehicle's shared `scheduled_charging_mode`. Disabling one mode while the other
 is active can turn scheduled charging/departure off entirely, so callers that
